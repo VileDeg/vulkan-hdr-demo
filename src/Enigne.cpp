@@ -9,8 +9,11 @@ void Engine::Init()
 {
     initWindow();
     initInstance();
+    initDebugMessenger();
+    initSurface();
     initPhysicalDevice();
     initLogicalDevice();
+    initSwapchain();
 }
 
 void Engine::Draw()
@@ -41,9 +44,9 @@ void Engine::initWindow()
 
 void Engine::initInstance()
 {
-    instanceExtensions = get_required_extensions();
+    _instanceExtensions = get_required_extensions();
 
-    ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(enabledValidationLayers),
+    ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
     
     VKASSERT(vkCreateInstance(
@@ -54,47 +57,52 @@ void Engine::initInstance()
                 .applicationVersion = 1,
                 .apiVersion = VK_MAKE_VERSION(1, 0, 0)
             },
-            .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)enabledValidationLayers.size() : 0,
-            .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? enabledValidationLayers.data() : nullptr,
-            .enabledExtensionCount = (uint32_t)instanceExtensions.size(),
-            .ppEnabledExtensionNames = instanceExtensions.data()
+            .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
+            .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+            .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
+            .ppEnabledExtensionNames = _instanceExtensions.data()
         }, 
         nullptr, &_instance)
     );
 
+    
+}
+
+void Engine::initDebugMessenger()
+{
     DYNAMIC_LOAD(cdum, _instance, vkCreateDebugUtilsMessengerEXT);
 
     if (ENABLE_VALIDATION_LAYERS) {
         VKASSERT(cdum(_instance,
             HCCP(VkDebugUtilsMessengerCreateInfoEXT){
-                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
                 .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
                 .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
                 .pfnUserCallback = debug_callback
-            }, 
-            nullptr, &_debugMessenger)
+        },
+            nullptr, & _debugMessenger)
         );
     }
 }
 
-
-void Engine::initPhysicalDevice()
+void Engine::initSurface()
 {
     VKASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
         "GLFW: Failed to create window surface");
+}
 
-    deviceExtensions.emplace_back("VK_KHR_swapchain");
-
-    auto result = pickPhysicalDevice(_instance, _surface);
+void Engine::initPhysicalDevice()
+{
+    auto result = pickPhysicalDevice();
     ASSERTMSG(result.has_value(), "No compatible devices found.");
 
     auto&& [pd, gqf, pqf] = result.value();
     _physicalDevice = pd;
     _graphicsQueueFamily = gqf;
-    _presentationQueueFamily = pqf;
+    _presentQueueFamily = pqf;
 }
 
 void Engine::initLogicalDevice()
@@ -108,7 +116,7 @@ void Engine::initLogicalDevice()
         },
         VkDeviceQueueCreateInfo{
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = _presentationQueueFamily,
+            .queueFamilyIndex = _presentQueueFamily,
             .queueCount = 1,
             .pQueuePriorities = &(const float&)1.0f
         },
@@ -116,15 +124,20 @@ void Engine::initLogicalDevice()
 
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = _graphicsQueueFamily == _presentationQueueFamily ? uint32_t(1) : static_cast<uint32_t>(queueCreateInfos.size()),
+        .queueCreateInfoCount = _graphicsQueueFamily == _presentQueueFamily ? uint32_t(1) : static_cast<uint32_t>(queueCreateInfos.size()),
         .pQueueCreateInfos = queueCreateInfos.data(),
-        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)enabledValidationLayers.size() : 0,
-        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? enabledValidationLayers.data() : nullptr,
-        .enabledExtensionCount = (uint32_t)deviceExtensions.size(),
-        .ppEnabledExtensionNames = deviceExtensions.data()
+        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
+        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+        .enabledExtensionCount = (uint32_t)_deviceExtensions.size(),
+        .ppEnabledExtensionNames = _deviceExtensions.data()
     };
 
     VKASSERT(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_device));
+}
+
+void Engine::initSwapchain()
+{
+    pickSurfaceFormat();
 }
 
 

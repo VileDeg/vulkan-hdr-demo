@@ -10,37 +10,52 @@ public:
 private:
     void initWindow();
     void initInstance();
+    void initDebugMessenger();
+    void initSurface();
     void initPhysicalDevice();
     void initLogicalDevice();
+    void initSwapchain();
+
+
+    void pickSurfaceFormat();
 
     std::vector<
         std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-    findCompatibleDevices(const VkInstance& instance, const VkSurfaceKHR& surface);
+    findCompatibleDevices();
 
     std::optional<
         std::tuple<VkPhysicalDevice, uint32_t, uint32_t>>
-    pickPhysicalDevice(const VkInstance& instance, const VkSurfaceKHR& surface);
+    pickPhysicalDevice();
 
     bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers);
 
     bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions);
     std::vector<const char*> get_required_extensions();
 
+    bool checkDeviceExtensionSupport(VkPhysicalDevice pd);
+
 private:
     VkInstance _instance;
     VkPhysicalDevice _physicalDevice;
     uint32_t _graphicsQueueFamily;
-    uint32_t _presentationQueueFamily;
+    uint32_t _presentQueueFamily;
     VkSurfaceKHR _surface;
+    VkQueue _graphicsQueue;
+    VkQueue _presentQueue;
     VkDevice _device;
+    VkSurfaceFormatKHR _surfaceFormat;
+    
     GLFWwindow* _window;
     VkDebugUtilsMessengerEXT _debugMessenger;
-    const std::vector<const char*> enabledValidationLayers{
+
+
+
+    const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"
     };
 
-    std::vector<const char*> instanceExtensions{};
-    std::vector<const char*> deviceExtensions{};
+    std::vector<const char*> _instanceExtensions{};
+    std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 private:
 #ifdef NDEBUG

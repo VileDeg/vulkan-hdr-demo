@@ -1,41 +1,47 @@
 #include "stdafx.h"
 #include "Enigne.h"
 
+
+bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
+{
+    uint32_t extensionCount = 0;
+    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
+    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
+
+    bool allSupported = true;
+    for (const auto& de : _deviceExtensions) {
+        bool found = false;
+        for (VkExtensionProperties& property : availableExtensionProperties) {
+            if (strcmp(property.extensionName, de) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            allSupported = false;
+    }
+
+    return allSupported;
+}
+
 std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-Engine::findCompatibleDevices(const VkInstance& instance, const VkSurfaceKHR& surface)
+Engine::findCompatibleDevices()
 {
     // find compatible devices
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
     std::vector<VkPhysicalDevice> deviceList(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, deviceList.data());
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, deviceList.data());
 
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>> compatibleDevices;
     for (VkPhysicalDevice pd : deviceList) {
+        
+        if (!checkDeviceExtensionSupport(pd))
+            continue;
+
         VkPhysicalDeviceProperties deviceProperties;
         vkGetPhysicalDeviceProperties(pd, &deviceProperties);
-        
-        // skip devices without VK_KHR_swapchain
-        uint32_t extensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
-        std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
-        vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
-
-        bool allSupported = true;
-        for (const auto& de : deviceExtensions) {
-            bool found = false;
-            for (VkExtensionProperties& property : availableExtensionProperties) {
-                if (strcmp(property.extensionName, de) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-                allSupported = false;
-        }
-        
-        if (!allSupported)
-            continue;
 
         // select queues for graphics rendering and for presentation
         uint32_t queueFamilyCount = 0;
@@ -44,26 +50,26 @@ Engine::findCompatibleDevices(const VkInstance& instance, const VkSurfaceKHR& su
         vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilyList.data());
 
         uint32_t graphicsQueueFamily = UINT32_MAX;
-        uint32_t presentationQueueFamily = UINT32_MAX;
+        uint32_t presentQueueFamily = UINT32_MAX;
         for (uint32_t i = 0, c = uint32_t(queueFamilyList.size()); i < c; i++) {
 
             // test for presentation support
             VkBool32 presentationSupported = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
+            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, _surface, &presentationSupported);
             if (presentationSupported) {
 
                 // test for graphics operations support
                 if (queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                     // if presentation and graphics operations are supported on the same queue,
                     // we will use single queue
-                    
+
                     compatibleDevices.emplace_back(pd, i, i, deviceProperties);
                     goto nextDevice;
                 }
                 else
                     // if only presentation is supported, we store the first such queue
-                    if (presentationQueueFamily == UINT32_MAX)
-                        presentationQueueFamily = i;
+                    if (presentQueueFamily == UINT32_MAX)
+                        presentQueueFamily = i;
             }
             else {
                 if (queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -73,19 +79,19 @@ Engine::findCompatibleDevices(const VkInstance& instance, const VkSurfaceKHR& su
             }
         }
 
-        if (graphicsQueueFamily != UINT32_MAX && presentationQueueFamily != UINT32_MAX)
+        if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX)
             // presentation and graphics operations are supported on the different queues
-            compatibleDevices.emplace_back(pd, graphicsQueueFamily, presentationQueueFamily, deviceProperties);
+            compatibleDevices.emplace_back(pd, graphicsQueueFamily, presentQueueFamily, deviceProperties);
     nextDevice:;
     }
 
     return compatibleDevices;
 }
 
-std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhysicalDevice(const VkInstance& instance, const VkSurfaceKHR& surface)
+std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhysicalDevice()
 {
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-        compatibleDevices = findCompatibleDevices(instance, surface);
+        compatibleDevices = findCompatibleDevices();
     if (compatibleDevices.empty())
         return std::nullopt;
 
@@ -104,8 +110,7 @@ std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhys
         return std::nullopt;
     }
 
-    constexpr const int ns = 6; //number of type of scores
-    constexpr const int deviceTypeScore[ns] = {
+    constexpr const std::array deviceTypeScore = {
         10, // VK_PHYSICAL_DEVICE_TYPE_OTHER         - lowest score
         40, // VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU - high score
         50, // VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU   - highest score
@@ -113,11 +118,11 @@ std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhys
         20, // VK_PHYSICAL_DEVICE_TYPE_CPU           - low score
         10, // unknown VkPhysicalDeviceType
     };
-    int bestScore = deviceTypeScore[std::clamp(int(get<3>(*bestDevice).deviceType), 0, ns - 1)];
+    int bestScore = deviceTypeScore[std::clamp(int(get<3>(*bestDevice).deviceType), 0, int(deviceTypeScore.size()) - 1)];
     if (get<1>(*bestDevice) == get<2>(*bestDevice))
         bestScore++;
     for (auto it = compatibleDevices.begin() + 1; it != compatibleDevices.end(); it++) {
-        int score = deviceTypeScore[std::clamp(int(get<3>(*it).deviceType), 0, ns - 1)];
+        int score = deviceTypeScore[std::clamp(int(get<3>(*it).deviceType), 0, int(deviceTypeScore.size()) - 1)];
         if (get<1>(*it) == get<2>(*it))
             score++;
         if (score > bestScore) {
@@ -131,7 +136,7 @@ std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhys
 #endif // NDEBUG
     VkPhysicalDevice physicalDevice = get<0>(*bestDevice);
     uint32_t graphicsQueueFamily = get<1>(*bestDevice);
-    uint32_t presentationQueueFamily = get<2>(*bestDevice);
+    uint32_t presentQueueFamily = get<2>(*bestDevice);
 
-    return std::make_tuple(physicalDevice, graphicsQueueFamily, presentationQueueFamily);
+    return std::make_tuple(physicalDevice, graphicsQueueFamily, presentQueueFamily);
 }
