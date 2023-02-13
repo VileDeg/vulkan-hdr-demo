@@ -3,32 +3,7 @@
 #include "Enigne.h"
 #include "utils.h"
 
-#ifdef NDEBUG
-#define BRK abort()
-#else
-#define BRK __debugbreak()
-#endif // !NDEBUG
-
-#define HASSERT(_x, _tru) do{ if ((_x) != _tru) { BRK; } }while(0)
-#define HASSERTMSG(_x, _tru, _msg) do{ if ((_x) != _tru) { fprintf(stderr, "Error: %s\n", _msg); BRK; } }while(0)
-
-#define ASSERT(_x) HASSERT(_x, true)
-#define ASSERTMSG(_x, _msg) HASSERTMSG(_x, true, _msg)
-
-//Assert macros for functions returning VkResult
-#define VKASSERT(_x) HASSERT(_x, VK_SUCCESS)
-#define VKASSERTMSG(_x, _msg) HASSERTMSG(_x, VK_SUCCESS, _msg)
-
-//Assert macros for functions returning GLFWbool
-#define GLFWASSERTMSG(_x, _msg) HASSERTMSG(_x, GLFW_TRUE, _msg)
-
-//Handy macro for reducing code in aggregate initialization of CreateInfoXXX structs
-#define HCCP(_type) &(const _type&)_type
-
-//Macro for dynamic load of extension functions
-#define DYNAMIC_LOAD(_varname, _instance, _func)\
-        PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
-        if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
+#include "defs.h"
 
 void Engine::Init()
 {
@@ -126,11 +101,13 @@ void Engine::initLogicalDevice()
 {
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos = {
         VkDeviceQueueCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .queueFamilyIndex = _graphicsQueueFamily,
             .queueCount = 1,
             .pQueuePriorities = &(const float&)1.0f
         },
         VkDeviceQueueCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .queueFamilyIndex = _presentationQueueFamily,
             .queueCount = 1,
             .pQueuePriorities = &(const float&)1.0f

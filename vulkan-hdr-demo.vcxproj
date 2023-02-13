@@ -34,6 +34,7 @@
     <ClCompile Include="src\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\Enigne.h" />
     <ClInclude Include="src\utils.h" />
     <ClInclude Include="src\stdafx.h" />
