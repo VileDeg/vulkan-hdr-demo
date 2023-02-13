@@ -3,7 +3,11 @@
 #include "Enigne.h"
 
 bool Engine::checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
-    const auto& availableLayerProperties = vk::enumerateInstanceLayerProperties();
+
+    uint32_t propertyCount = 0;
+    vkEnumerateInstanceLayerProperties(&propertyCount, nullptr);
+    std::vector<VkLayerProperties> availableLayerProperties(propertyCount);
+    vkEnumerateInstanceLayerProperties(&propertyCount, availableLayerProperties.data());
 
     for (const char* requiredLayerName : requiredLayers) {
         bool layerFound = false;
@@ -24,11 +28,19 @@ bool Engine::checkValidationLayerSupport(const std::vector<const char*>& require
 }
 
 bool Engine::checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) {
-    const auto& availableExtensionProperties = vk::enumerateInstanceExtensionProperties();
+    uint32_t propertyCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensionProperties(propertyCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
+
 #ifndef NDEBUG
     std::cout << "Available extensions: " << std::endl;
     for (const auto& extensionProperty : availableExtensionProperties) {
         std::cout << "\t" << extensionProperty.extensionName << std::endl;
+    }
+    std::cout << "Required extensions: " << std::endl;
+    for (const auto& reqExt : requiredExtensions) {
+        std::cout << "\t" << reqExt << std::endl;
     }
 #endif // NDEBUG
 
@@ -69,4 +81,3 @@ std::vector<const char*> Engine::get_required_extensions() {
 
     return requiredExtensions;
 }
-
