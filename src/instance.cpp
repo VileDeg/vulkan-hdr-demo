@@ -2,6 +2,30 @@
 
 #include "Enigne.h"
 
+void Engine::createInstance()
+{
+    _instanceExtensions = get_required_extensions();
+
+    ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
+        "Not all requested validation layers are available!");
+
+    VKASSERT(vkCreateInstance(
+        HCCP(VkInstanceCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            .pApplicationInfo = HCCP(VkApplicationInfo) {
+                .pApplicationName = "Demo",
+                .applicationVersion = 1,
+                .apiVersion = VK_MAKE_VERSION(1, 0, 0)
+            },
+            .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
+            .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+            .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
+            .ppEnabledExtensionNames = _instanceExtensions.data()
+        },
+        nullptr, & _instance)
+    );
+}
+
 bool Engine::checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
 
     uint32_t propertyCount = 0;

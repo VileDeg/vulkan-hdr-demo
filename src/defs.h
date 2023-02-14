@@ -26,3 +26,4 @@
 #define DYNAMIC_LOAD(_varname, _instance, _func)\
         PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
         if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
+

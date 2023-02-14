@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Enigne.h"
 
-
 bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
 {
     uint32_t extensionCount = 0;
@@ -40,7 +39,7 @@ Engine::findCompatibleDevices()
         if (!checkDeviceExtensionSupport(pd))
             continue;
 
-        VkPhysicalDeviceProperties deviceProperties;
+        VkPhysicalDeviceProperties deviceProperties{};
         vkGetPhysicalDeviceProperties(pd, &deviceProperties);
 
         // select queues for graphics rendering and for presentation
@@ -88,12 +87,11 @@ Engine::findCompatibleDevices()
     return compatibleDevices;
 }
 
-std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhysicalDevice()
+void Engine::pickPhysicalDevice()
 {
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
         compatibleDevices = findCompatibleDevices();
-    if (compatibleDevices.empty())
-        return std::nullopt;
+    ASSERTMSG(!compatibleDevices.empty(), "No compatible devices found");
 
     // print compatible devices
 #ifndef NDEBUG
@@ -106,9 +104,7 @@ std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhys
 
     // choose the best device
     auto bestDevice = compatibleDevices.begin();
-    if (bestDevice == compatibleDevices.end()) {
-        return std::nullopt;
-    }
+    ASSERTMSG(bestDevice != compatibleDevices.end(), "No compatible devices found");
 
     constexpr const std::array deviceTypeScore = {
         10, // VK_PHYSICAL_DEVICE_TYPE_OTHER         - lowest score
@@ -134,9 +130,8 @@ std::optional<std::tuple<VkPhysicalDevice, uint32_t, uint32_t>> Engine::pickPhys
     std::cout << "Using device:\n"
         "   " << get<3>(*bestDevice).deviceName << std::endl;
 #endif // NDEBUG
-    VkPhysicalDevice physicalDevice = get<0>(*bestDevice);
-    uint32_t graphicsQueueFamily = get<1>(*bestDevice);
-    uint32_t presentQueueFamily = get<2>(*bestDevice);
 
-    return std::make_tuple(physicalDevice, graphicsQueueFamily, presentQueueFamily);
+    _physicalDevice = get<0>(*bestDevice);
+    _graphicsQueueFamily = get<1>(*bestDevice);
+    _presentQueueFamily = get<2>(*bestDevice);
 }

@@ -13,5 +13,6 @@
 #include <algorithm>
 #include <set>
 #include <array>
+#include <fstream>
 
 #include "defs.h"

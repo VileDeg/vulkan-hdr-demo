@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!-- Copyright (c) 2015-2019 LunarG, Inc. -->
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
@@ -20,24 +20,35 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\command_buffer.cpp" />
+    <ClCompile Include="src\debug.cpp" />
+    <ClCompile Include="src\device.cpp" />
+    <ClCompile Include="src\draw.cpp" />
     <ClCompile Include="src\Enigne.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\framebuffer.cpp" />
+    <ClCompile Include="src\image_view.cpp" />
     <ClCompile Include="src\main.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\physical_device.cpp" />
+    <ClCompile Include="src\pipeline.cpp" />
+    <ClCompile Include="src\render_pass.cpp" />
+    <ClCompile Include="src\shader.cpp" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\initialization.cpp" />
+    <ClCompile Include="src\instance.cpp" />
+    <ClCompile Include="src\surface.cpp" />
     <ClCompile Include="src\swapchain.cpp" />
-    <ClCompile Include="src\utils.cpp" />
+    <ClCompile Include="src\sychronization.cpp" />
+    <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\Enigne.h" />
-    <ClInclude Include="src\utils.h" />
+    <ClInclude Include="src\swapchain.h" />
     <ClInclude Include="src\stdafx.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -133,7 +144,12 @@
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;$(VULKAN_SDK)\Third-Party\Bin;C:\dev\libs\gl\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <AdditionalOptions>
+      </AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <Command>compile_shaders.bat</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
