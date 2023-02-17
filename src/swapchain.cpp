@@ -82,7 +82,7 @@ void Engine::createSwapchain()
     const auto support = querySwapchainPropertiesSupport(_physicalDevice, _surface);
     auto surfaceFormat = pickSurfaceFormat(support.formats);
     auto presentMode = pickPresentMode(support.presentModes);
-    auto extent = pickExtent(support.capabilities, _window);
+    auto windowExtent = pickExtent(support.capabilities, _window);
 
     auto caps = support.capabilities;
     uint32_t imageCount = caps.minImageCount + 1;
@@ -96,7 +96,7 @@ void Engine::createSwapchain()
         .minImageCount = imageCount,
         .imageFormat = surfaceFormat.format,
         .imageColorSpace = surfaceFormat.colorSpace,
-        .imageExtent = extent,
+        .imageExtent = windowExtent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .preTransform = caps.currentTransform,
@@ -127,7 +127,7 @@ void Engine::createSwapchain()
     vkGetSwapchainImagesKHR(_device, _swapchain, &imageCount, _swapchainImages.data());
 
     _swapchainImageFormat = surfaceFormat.format;
-    _swapchainExtent = extent;
+    _swapchainExtent = windowExtent;
 }
 
 void Engine::recreateSwapchain()
@@ -141,7 +141,6 @@ void Engine::recreateSwapchain()
 
     vkDeviceWaitIdle(_device);
 
-    //cleanupSwapchain();
     for (auto& framebuffer : _swapchainFramebuffers) {
         vkDestroyFramebuffer(_device, framebuffer, nullptr);
     }
@@ -150,15 +149,9 @@ void Engine::recreateSwapchain()
         vkDestroyImageView(_device, imageView, nullptr);
     }
 
-    //vkDestroySwapchainKHR(_device, _swapchain, nullptr);
-
     createSwapchain();
     createImageViews();
     createFramebuffers();
-
-    cleanupPipeline();
-
-    createGraphicsPipeline();
 }
 
 void Engine::cleanupSwapchain()

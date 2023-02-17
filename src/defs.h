@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef NDEBUG
-#define BRK abort()
+#define BRK do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__) abort(); }while(0)
 #else
 #define BRK __debugbreak()
 #endif // !NDEBUG

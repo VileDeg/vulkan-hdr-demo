@@ -30,9 +30,7 @@ void Engine::createGraphicsPipeline()
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 0,
-        .pVertexBindingDescriptions = nullptr,
         .vertexAttributeDescriptionCount = 0,
-        .pVertexAttributeDescriptions = nullptr
     };
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -41,7 +39,7 @@ void Engine::createGraphicsPipeline()
         .primitiveRestartEnable = VK_FALSE
     };
 
-    VkViewport viewport{
+   /* VkViewport viewport{
         .x = 0.0f,
         .y = 0.0f,
         .width = (float)_swapchainExtent.width,
@@ -53,14 +51,12 @@ void Engine::createGraphicsPipeline()
     VkRect2D scissor{
         .offset = { 0, 0 },
         .extent = _swapchainExtent
-    };
+    };*/
 
     VkPipelineViewportStateCreateInfo viewportState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
-        .pViewports = &viewport,
         .scissorCount = 1,
-        .pScissors = &scissor
     };
 
     VkPipelineRasterizationStateCreateInfo rasterizer{
@@ -94,12 +90,21 @@ void Engine::createGraphicsPipeline()
         .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
+    std::vector<VkDynamicState> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicState{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };  
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 0,
-        .pSetLayouts = nullptr,
         .pushConstantRangeCount = 0,
-        .pPushConstantRanges = nullptr
     };
 
     VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout));
@@ -114,6 +119,7 @@ void Engine::createGraphicsPipeline()
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
         .pColorBlendState = &colorBlending,
+        .pDynamicState = &dynamicState,
         .layout = _pipelineLayout,
         .renderPass = _renderPass,
         .subpass = 0,

@@ -3,23 +3,22 @@
 
 void Engine::createFramebuffers()
 {
-    _swapchainFramebuffers.resize(_swapchainImageViews.size());
+    size_t viewCount = _swapchainImageViews.size();
+    _swapchainFramebuffers.resize(viewCount);
 
-    for (size_t i = 0; i < _swapchainImageViews.size(); i++)
+    VkFramebufferCreateInfo framebufferInfo{
+           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+           .renderPass = _renderPass,
+           .attachmentCount = 1,
+           
+           .width = _swapchainExtent.width,
+           .height = _swapchainExtent.height,
+           .layers = 1
+    };
+
+    for (size_t i = 0; i < viewCount; i++)
     {
-        VkImageView attachments[] = {
-            _swapchainImageViews[i]
-        };
-
-        VkFramebufferCreateInfo framebufferInfo{
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = _renderPass,
-            .attachmentCount = 1,
-            .pAttachments = attachments,
-            .width = _swapchainExtent.width,
-            .height = _swapchainExtent.height,
-            .layers = 1
-        };
+        framebufferInfo.pAttachments = &_swapchainImageViews[i];
 
         VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_swapchainFramebuffers[i]));
     }

@@ -3,7 +3,8 @@
 
 void Engine::drawFrame()
 {
-    vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+    VKASSERT(vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX));
+    VKASSERT(vkResetFences(_device, 1, &_inFlightFences[_currentFrame]));
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -11,12 +12,12 @@ void Engine::drawFrame()
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapchain();
         return;
+    } else {
+        ASSERTMSG(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR, "failed to acquire swap chain image!");
     }
-    ASSERTMSG(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR, "failed to acquire swap chain image!");
 
-    vkResetFences(_device, 1, &_inFlightFences[_currentFrame]);
-    vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
-    recordCommandBuffer();
+    VKASSERT(vkResetCommandBuffer(_commandBuffers[_currentFrame], 0));
+    recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
 
     VkSemaphore waitSemaphores[] = { _imageAvailableSemaphores[_currentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -25,15 +26,15 @@ void Engine::drawFrame()
     VkSubmitInfo submitInfo{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &waitSemaphores[_currentFrame],
+        .pWaitSemaphores = waitSemaphores,
         .pWaitDstStageMask = waitStages,
         .commandBufferCount = 1,
-        .pCommandBuffers = &_commandBuffers[imageIndex],
+        .pCommandBuffers = &_commandBuffers[_currentFrame],
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = signalSemaphores
     };
 
-    vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]);
+    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]));
 
     VkSwapchainKHR swapchains[] = { _swapchain };
     VkPresentInfoKHR presentInfo{
@@ -54,4 +55,65 @@ void Engine::drawFrame()
     else {
         VKASSERTMSG(result, "failed to present swap chain image!");
     }
+
+    _currentFrame = (++_frameNumber) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    VkCommandBufferBeginInfo beginInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    };
+
+    VKASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    //Clear-color from frame number. This will flash with a 120*pi frame period.
+    VkClearValue clearValue;
+
+    auto flash = [](uint32_t frame, float t) { return abs(sin(frame / t)); };
+    float val = 0.1f;
+    glm::vec3 color = { 
+        flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
+    color *= val;
+    clearValue.color = { { color.x, color.y, color.z, 1.0f } };
+
+    VkRenderPassBeginInfo renderPassBeginInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = _renderPass,
+        .framebuffer = _swapchainFramebuffers[imageIndex],
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = _swapchainExtent
+        },
+        .clearValueCount = 1,
+        .pClearValues = &clearValue
+    };
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+
+    VkViewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)_swapchainExtent.width,
+        .height = (float)_swapchainExtent.height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{
+        .offset = { 0, 0 },
+        .extent = _swapchainExtent
+    };
+
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    VKASSERT(vkEndCommandBuffer(commandBuffer));
 }

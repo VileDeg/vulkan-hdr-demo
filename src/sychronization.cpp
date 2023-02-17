@@ -16,9 +16,11 @@ void Engine::createSyncObjects()
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
     };
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_imageAvailableSemaphores[i]));
         VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_renderFinishedSemaphores[i]));
         VKASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &_inFlightFences[i]));
     }
 }
+
+

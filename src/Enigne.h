@@ -23,7 +23,7 @@ private:
     void createSyncObjects();
     
     void drawFrame();
-    void recordCommandBuffer();
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void recreateSwapchain();
     void cleanupSwapchain();
 
@@ -75,6 +75,7 @@ private:
     std::vector<VkFence> _inFlightFences;
 
     uint32_t _currentFrame = 0;
+    uint32_t _frameNumber = 0;
     bool _framebufferResized = false;
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -86,14 +87,18 @@ private:
     std::vector<const char*> _instanceExtensions{};
     std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 private:
-    static constexpr const uint32_t WIDTH = 800;
-    static constexpr const uint32_t HEIGHT = 600;
+    static constexpr uint32_t WIDTH = 800;
+    static constexpr uint32_t HEIGHT = 600;
 
-    static constexpr const int MAX_FRAMES_IN_FLIGHT = 2;
+    static constexpr uint32_t FS_WIDTH = 1920;
+    static constexpr uint32_t FS_HEIGHT = 1080;
+    static constexpr bool ENABLE_FULLSCREEN = false;
+
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
 
 #ifdef NDEBUG
-    static constexpr const bool ENABLE_VALIDATION_LAYERS = false;
+    static constexpr bool ENABLE_VALIDATION_LAYERS = false;
 #else
-    static constexpr const bool ENABLE_VALIDATION_LAYERS = true;
+    static constexpr bool ENABLE_VALIDATION_LAYERS = true;
 #endif
 };

@@ -34,7 +34,7 @@
     </ClCompile>
     <ClCompile Include="src\physical_device.cpp" />
     <ClCompile Include="src\pipeline.cpp" />
-    <ClCompile Include="src\render_pass.cpp" />
+    <ClCompile Include="src\renderpass.cpp" />
     <ClCompile Include="src\shader.cpp" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -148,8 +148,15 @@
       </AdditionalOptions>
     </Link>
     <PostBuildEvent>
-      <Command>compile_shaders.bat</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
+    <CustomBuildStep>
+      <Command>compile_shaders.bat</Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>file_that_does_not.exist</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>

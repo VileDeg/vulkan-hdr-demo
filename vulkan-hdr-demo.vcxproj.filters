@@ -40,7 +40,7 @@
     <ClCompile Include="src\pipeline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\render_pass.cpp">
+    <ClCompile Include="src\renderpass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\instance.cpp">
