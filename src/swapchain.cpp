@@ -1,6 +1,11 @@
 #include "stdafx.h"
 #include "Enigne.h"
-#include "swapchain.h"
+
+struct SwapchainPropertiesSupport {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};;
 
 static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
 {

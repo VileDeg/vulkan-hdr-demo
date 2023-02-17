@@ -1,7 +1,6 @@
 #include "stdafx.h"
 
 #include "Enigne.h"
-
 #include "defs.h"
 
 void Engine::Init()

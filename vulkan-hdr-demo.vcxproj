@@ -48,7 +48,6 @@
   <ItemGroup>
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\Enigne.h" />
-    <ClInclude Include="src\swapchain.h" />
     <ClInclude Include="src\stdafx.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
