@@ -19,6 +19,17 @@ void Engine::Init()
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
+    VmaAllocatorCreateInfo allocatorInfo = {
+        .physicalDevice = _physicalDevice,
+        .device = _device,
+        .instance = _instance,
+    };
+    vmaCreateAllocator(&allocatorInfo, &_allocator);
+
+    loadMeshes();
+
+
+    _isInitialized = true;
 }
 
 void Engine::Run()
@@ -33,6 +44,13 @@ void Engine::Run()
 
 void Engine::Cleanup()
 {
+    if (!_isInitialized) {
+        return;
+    }
+
+    vmaDestroyBuffer(_allocator, _triangleMesh.vertexBuffer.buffer, _triangleMesh.vertexBuffer.allocation);
+    vmaDestroyAllocator(_allocator);
+
     cleanupSwapchain();
     cleanupPipeline();
 

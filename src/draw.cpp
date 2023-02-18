@@ -61,9 +61,7 @@ void Engine::drawFrame()
 
 void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-    VkCommandBufferBeginInfo beginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    };
+    VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
     VKASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
@@ -92,26 +90,42 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+    {
+        VkViewport viewport{
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = (float)_swapchainExtent.width,
+            .height = (float)_swapchainExtent.height,
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f
+        };
 
-    VkViewport viewport{
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = (float)_swapchainExtent.width,
-        .height = (float)_swapchainExtent.height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f
-    };
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        VkRect2D scissor{
+            .offset = { 0, 0 },
+            .extent = _swapchainExtent
+        };
 
-    VkRect2D scissor{
-        .offset = { 0, 0 },
-        .extent = _swapchainExtent
-    };
-
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    }
+    {
+        VkDeviceSize zeroOffset = 0;
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_triangleMesh.vertexBuffer.buffer, &zeroOffset);
+    }
+    {
+        float camZ = -5.f;
+        glm::vec3 camPos{ 0.f, 0.f, camZ };
+        glm::mat4 viewMat = glm::translate(glm::mat4(1.f), camPos);
+        glm::mat4 projMat = glm::perspective(glm::radians(45.f), _swapchainExtent.width / (float)_swapchainExtent.height, 0.1f, 10.f);
+        projMat[1][1] *= -1; //Flip y-axis
+        float rotSpeed = 0.1f;
+        glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
+        glm::mat4 mvpMat = projMat * viewMat * modelMat;
+        MeshPushConstants pushConstants{ .render_matrix = mvpMat };
+        vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);
+    }
+    vkCmdDraw(commandBuffer, uint32_t(_triangleMesh.vertices.size()), 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 

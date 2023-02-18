@@ -20,6 +20,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\command_buffer.cpp" />
     <ClCompile Include="src\debug.cpp" />
     <ClCompile Include="src\device.cpp" />
@@ -43,12 +44,19 @@
     <ClCompile Include="src\surface.cpp" />
     <ClCompile Include="src\swapchain.cpp" />
     <ClCompile Include="src\sychronization.cpp" />
+    <ClCompile Include="src\types.cpp" />
+    <ClCompile Include="src\vk_initializers.cpp" />
+    <ClCompile Include="src\vk_pipeline_builder.cpp" />
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\Enigne.h" />
     <ClInclude Include="src\stdafx.h" />
+    <ClInclude Include="src\types.h" />
+    <ClInclude Include="src\vk_initializers.h" />
+    <ClInclude Include="src\vk_pipeline_builder.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{f6d329ea-88a2-4d5a-a31e-fb42379157ba}</ProjectGuid>
@@ -134,14 +142,14 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\dev\libs\gl\GLFW\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\dev\libs\gl\GLFW\include;$(VULKAN_SDK)\Include;C:\dev\libs\gl\VMA\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;$(VULKAN_SDK)\Third-Party\Bin;C:\dev\libs\gl\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;VulkanMemoryAllocatord.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;$(VULKAN_SDK)\Third-Party\Bin;C:\dev\libs\gl\GLFW\lib-vc2022;%(AdditionalLibraryDirectories);C:\dev\libs\gl\VMA\lib</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>
       </AdditionalOptions>
@@ -151,7 +159,7 @@
       </Command>
     </PostBuildEvent>
     <CustomBuildStep>
-      <Command>compile_shaders.bat</Command>
+      <Command>py compile_shaders.py</Command>
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>file_that_does_not.exist</Outputs>

@@ -3,7 +3,10 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
+#include <vk_mem_alloc.h>
+
 #include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
 
 #include <GLFW/glfw3.h>
 
@@ -18,3 +21,4 @@
 #include <fstream>
 
 #include "defs.h"
+#include "vk_initializers.h"

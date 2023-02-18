@@ -1,5 +1,8 @@
 #pragma once
 
+#include "types.h"
+#include "Mesh.h"
+
 class Engine {
 public:
     void Init();
@@ -25,11 +28,18 @@ private:
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void recreateSwapchain();
+    
+    
+    void cleanupShaders(PipelineShaders& shaders);
     void cleanupSwapchain();
-
     void cleanupPipeline();
 
-    VkShaderModule createShaderModule(const std::vector<char>& code);
+private:
+    void loadMeshes();
+    void uploadMesh(Mesh& mesh);
+
+    PipelineShaders loadShaders(const std::string& vertName, const std::string& fragName);
+    bool createShaderModule(const std::vector<char>& code, VkShaderModule* module);
     std::vector<char> readShaderBinary(const std::string& filename);
 
     std::vector<
@@ -66,6 +76,7 @@ private:
     VkRenderPass _renderPass;
     VkPipelineLayout _pipelineLayout;
     VkPipeline _graphicsPipeline;
+    Mesh _triangleMesh;
 
     VkCommandPool _commandPool;
     std::vector<VkCommandBuffer> _commandBuffers;
@@ -74,12 +85,15 @@ private:
     std::vector<VkSemaphore> _renderFinishedSemaphores;
     std::vector<VkFence> _inFlightFences;
 
+    VmaAllocator _allocator;
+
     uint32_t _currentFrame = 0;
     uint32_t _frameNumber = 0;
     bool _framebufferResized = false;
 
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+    bool _isInitialized = false;
 
+private:
     const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"
     };
@@ -87,6 +101,8 @@ private:
     std::vector<const char*> _instanceExtensions{};
     std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 private:
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+
     static constexpr uint32_t WIDTH = 800;
     static constexpr uint32_t HEIGHT = 600;
 

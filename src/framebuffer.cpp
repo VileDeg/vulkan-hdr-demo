@@ -6,15 +6,7 @@ void Engine::createFramebuffers()
     size_t viewCount = _swapchainImageViews.size();
     _swapchainFramebuffers.resize(viewCount);
 
-    VkFramebufferCreateInfo framebufferInfo{
-           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-           .renderPass = _renderPass,
-           .attachmentCount = 1,
-           
-           .width = _swapchainExtent.width,
-           .height = _swapchainExtent.height,
-           .layers = 1
-    };
+    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_renderPass, _swapchainExtent);
 
     for (size_t i = 0; i < viewCount; i++)
     {

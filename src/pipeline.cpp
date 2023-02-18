@@ -1,57 +1,73 @@
 #include "stdafx.h"
 #include "Enigne.h"
 
-static constexpr const char* SHADER_PATH = "assets/shaders/";
+#include "vk_pipeline_builder.h"
+
+static constexpr const char* SHADER_PATH = "assets/shaders/bin/";
+
+PipelineShaders Engine::loadShaders(const std::string& vertName, const std::string& fragName)
+{
+    PipelineShaders shaders{};
+
+    shaders.vert.code = readShaderBinary(SHADER_PATH + vertName);
+    shaders.frag.code = readShaderBinary(SHADER_PATH + fragName);
+
+    if (createShaderModule(shaders.vert.code, &shaders.vert.module)) {
+        std::cout << "Vertex shader successfully loaded." << std::endl;
+    } else {
+        PRWRN("Failed to load vertex shader");
+    }
+    
+    if (createShaderModule(shaders.frag.code, &shaders.frag.module)) {
+        std::cout << "Fragment shader successfully loaded." << std::endl;
+    }
+    else {
+        PRWRN("Failed to load fragment shader");
+    }
+
+    return shaders;
+}
+
+//void Engine::cleanupShaders(PipelineShaders& shaders)
+//{
+//    vkDestroyShaderModule(_device, shaders.vert.module, nullptr);
+//    vkDestroyShaderModule(_device, shaders.frag.module, nullptr);
+//}
 
 void Engine::createGraphicsPipeline()
 {
-    auto vertShaderCode = readShaderBinary(SHADER_PATH + std::string("vert.spv"));
-    auto fragShaderCode = readShaderBinary(SHADER_PATH + std::string("frag.spv"));
+    auto shaders = loadShaders("tri_mesh.vert.spv", "shader.frag.spv");
 
-    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+    VertexInputDescription description = Vertex::getDescription();
 
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = vertShaderModule,
-        .pName = "main"
-    };
+    /*PipelineBuilder builder{
+        ._shaderStages = {
+            vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT,
+                shaders.vert.module),
+            vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT,
+                shaders.frag.module)
+        },
+        ._vertexInputInfo = vkinit::vertex_input_state_create_info(
+            description.bindings.size(), description.bindings.data(), 
+            description.attributes.size(), description.attributes.data()),
+        ._inputAssembly = vkinit::input_assembly_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+        ._viewport = 
 
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = fragShaderModule,
-        .pName = "main"
-    };
-
-    VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 0,
-        .vertexAttributeDescriptionCount = 0,
-    };
-
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .primitiveRestartEnable = VK_FALSE
-    };
-
-   /* VkViewport viewport{
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = (float)_swapchainExtent.width,
-        .height = (float)_swapchainExtent.height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f
-    };
-
-    VkRect2D scissor{
-        .offset = { 0, 0 },
-        .extent = _swapchainExtent
     };*/
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = { 
+        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, 
+            shaders.vert.module), 
+        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT,
+            shaders.frag.module) 
+    };
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = vkinit::vertex_input_state_create_info(
+        uint32_t(description.bindings.size()), description.bindings.data(),
+        uint32_t(description.attributes.size()), description.attributes.data()
+    );
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = vkinit::input_assembly_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
     VkPipelineViewportStateCreateInfo viewportState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -59,27 +75,11 @@ void Engine::createGraphicsPipeline()
         .scissorCount = 1,
     };
 
-    VkPipelineRasterizationStateCreateInfo rasterizer{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,
-        .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .depthBiasEnable = VK_FALSE,
-        .lineWidth = 1.0f
-    };
+    VkPipelineRasterizationStateCreateInfo rasterizer = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL);
 
-    VkPipelineMultisampleStateCreateInfo multisampling{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-        .sampleShadingEnable = VK_FALSE
-    };
+    VkPipelineMultisampleStateCreateInfo multisampling = vkinit::multisampling_state_create_info();
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{
-        .blendEnable = VK_FALSE,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-    };
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = vkinit::color_blend_attachment_state();
 
     VkPipelineColorBlendStateCreateInfo colorBlending{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -101,13 +101,19 @@ void Engine::createGraphicsPipeline()
         .pDynamicStates = dynamicStates.data()
     };  
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 0,
-        .pushConstantRangeCount = 0,
-    };
+    {
+        VkPushConstantRange pushConstantRange{
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = sizeof(MeshPushConstants)
+        };
 
-    VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout));
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipeline_layout_create_info();
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+        VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout));
+    }
 
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -128,8 +134,8 @@ void Engine::createGraphicsPipeline()
 
     VKASSERT(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_graphicsPipeline));
 
-    vkDestroyShaderModule(_device, fragShaderModule, nullptr);
-    vkDestroyShaderModule(_device, vertShaderModule, nullptr);
+    //cleanupShaders(shaders);
+    shaders.cleanup(_device);
 }
 
 void Engine::cleanupPipeline()

@@ -5,7 +5,7 @@ struct SwapchainPropertiesSupport {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
-};;
+};
 
 static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
@@ -68,8 +68,7 @@ static VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWw
 {
     if (capabilities.currentExtent.width != UINT32_MAX) {
         return capabilities.currentExtent;
-    }
-    else {
+    } else {
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
 

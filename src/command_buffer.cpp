@@ -3,11 +3,7 @@
 
 void Engine::createCommandPool()
 {
-    VkCommandPoolCreateInfo poolInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = _graphicsQueueFamily
-    };
+    VkCommandPoolCreateInfo poolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     VKASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &_commandPool));
 }

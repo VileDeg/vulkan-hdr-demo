@@ -4,9 +4,7 @@
 std::vector<char> Engine::readShaderBinary(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file!");
-    }
+    ASSERTMSG(file.is_open(), "Failed to open file: " << filename);
 
     size_t fileSize = (size_t)file.tellg();
     std::vector<char> buffer(fileSize);
@@ -19,14 +17,10 @@ std::vector<char> Engine::readShaderBinary(const std::string& filename) {
     return buffer;
 }
 
-VkShaderModule Engine::createShaderModule(const std::vector<char>& code) {
-    VkShaderModule shaderModule;
-
-    VKASSERT(vkCreateShaderModule(_device, HCCP(VkShaderModuleCreateInfo) {
+bool Engine::createShaderModule(const std::vector<char>& code, VkShaderModule* module) {
+    return vkCreateShaderModule(_device, HCCP(VkShaderModuleCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = code.size(),
         .pCode = (uint32_t*)code.data()
-    }, nullptr, &shaderModule));
-
-    return shaderModule;
+    }, nullptr, module) == VK_SUCCESS;
 }
