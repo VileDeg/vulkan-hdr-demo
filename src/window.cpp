@@ -16,6 +16,57 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
     app->drawFrame();
 }
 
+void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    Camera& cam = app->_camera;
+    if (action == GLFW_PRESS) {
+        switch (key) {
+        case GLFW_KEY_ESCAPE:
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+        case GLFW_KEY_C: //Toggle cursor
+            app->_cursorEnabled = !app->_cursorEnabled;
+            glfwSetInputMode(window, GLFW_CURSOR, 
+                app->_cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+            app->_cursorEnabled != app->_cursorEnabled;
+            break;
+        }
+    }
+}
+
+void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
+{
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    if (app->_cursorEnabled) {
+        return;
+    }
+
+    static glm::vec2 lastPos{};
+    static bool firstCall{ true };
+
+    if (firstCall) {
+        firstCall = false;
+        lastPos = { xpos, ypos };
+        return;
+    }
+
+    glm::vec2 currPos = glm::vec2{ xpos, ypos };
+    static float sens = 0.1f;
+    glm::vec2 diff = currPos - lastPos;
+    diff *= sens;
+
+    //std::cout << V2PR(currPos) << V2PR(diff) << std::endl;
+
+    app->_camera.rotate(-diff.x, diff.y);
+
+    /*if (glfwGetMouseButton(app->_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        
+    }*/
+
+    lastPos = { xpos, ypos };
+}
+
 void Engine::createWindow()
 {
     glfwSetErrorCallback(glfw_error_callback);
@@ -30,6 +81,11 @@ void Engine::createWindow()
         _window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     }
 
+    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    _cursorEnabled = false;
+
     glfwSetWindowUserPointer(_window, this);
     glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
+    glfwSetKeyCallback(_window, keyCallback);
+    glfwSetCursorPosCallback(_window, cursorCallback);
 }

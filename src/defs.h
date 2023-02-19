@@ -37,3 +37,6 @@
         PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
         if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
 
+#define V4PR(_v) #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << ", " << _v.w << " "
+#define V3PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << " "
+#define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "

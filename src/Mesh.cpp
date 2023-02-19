@@ -4,15 +4,41 @@
 
 void Engine::loadMeshes()
 {
-    _triangleMesh.vertices.resize(3);
+    uint32_t vertexCount = 12;
+    _triangleMesh.vertices.resize(vertexCount);
 
+    //back
     _triangleMesh.vertices[0].pos = { 1.f, 1.f, 0.0f };
     _triangleMesh.vertices[1].pos = { -1.f, 1.f, 0.0f };
     _triangleMesh.vertices[2].pos = { 0.f, -1.f, 0.0f };
 
-    _triangleMesh.vertices[0].color = { 1.f, 0.f, 0.f };
-    _triangleMesh.vertices[1].color = { 0.f, 1.f, 0.f };
-    _triangleMesh.vertices[2].color = { 0.f, 0.f, 1.f };
+    float z = -2.f;
+
+    //boottom
+    _triangleMesh.vertices[3].pos = { 0.f, 1.f, z };
+    _triangleMesh.vertices[4].pos = { -1.f, 1.f, 0.0f };
+    _triangleMesh.vertices[5].pos = { 1.f, 1.f, 0.0f };
+
+    //right
+    _triangleMesh.vertices[6].pos = { 0.f, 1.f, z };
+    _triangleMesh.vertices[7].pos = { 1.f, 1.f, 0.0f };
+    _triangleMesh.vertices[8].pos = { 0.f, -1.f, 0.0f };
+
+    //left
+    _triangleMesh.vertices[9].pos  = { 0.f, 1.f, z };
+    _triangleMesh.vertices[10].pos = { 0.f, -1.f, 0.0f };
+    _triangleMesh.vertices[11].pos = { -1.f, 1.f, 0.0f };
+
+    std::vector<glm::vec3> colors = {
+        { 1.f, 0.f, 0.f },
+        { 0.f, 1.f, 0.f },
+        { 0.f, 0.f, 1.f },
+    };
+
+    for (uint32_t i = 0; i < vertexCount; ++i) {
+        _triangleMesh.vertices[i].color = colors[i % 3];
+    }
+
 
     uploadMesh(_triangleMesh);
 }
@@ -49,7 +75,7 @@ VertexInputDescription Vertex::getDescription()
         .binding = 0,
         .stride = sizeof(Vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-    };  
+    };
 
     description.bindings.push_back(bindingDescription);
 

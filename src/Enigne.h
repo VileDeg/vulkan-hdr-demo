@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "Mesh.h"
+#include "Camera.h"
 
 class Engine {
 public:
@@ -54,6 +55,15 @@ private:
     bool checkDeviceExtensionSupport(VkPhysicalDevice pd);
 
 private:
+    Camera _camera{};
+    int _fps{};
+    float _deltaTime{};
+    bool _cursorEnabled{};
+
+    void calculateFPS();
+    void calculateDeltaTime();
+    void updateCamera();
+private:
     GLFWwindow* _window;
 
     VkInstance _instance;
@@ -102,6 +112,8 @@ private:
     std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 private:
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void cursorCallback (GLFWwindow* window, double xpos, double ypos);
 
     static constexpr uint32_t WIDTH = 800;
     static constexpr uint32_t HEIGHT = 600;

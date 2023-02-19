@@ -20,6 +20,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Camera.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\command_buffer.cpp" />
     <ClCompile Include="src\debug.cpp" />
@@ -50,6 +51,7 @@
     <ClCompile Include="src\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\defs.h" />
     <ClInclude Include="src\Enigne.h" />
@@ -142,7 +144,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\dev\libs\gl\GLFW\include;$(VULKAN_SDK)\Include;C:\dev\libs\gl\VMA\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\dev\libs\gl\GLFW\include;$(VULKAN_SDK)\Include;C:\dev\libs\gl\VMA\include;$(ProjectDir)\vendor</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>

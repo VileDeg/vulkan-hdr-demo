@@ -37,6 +37,9 @@ void Engine::Run()
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
         drawFrame();
+
+        updateCamera();
+        calculateDeltaTime();
     }
 
     vkDeviceWaitIdle(_device);
