@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\build\CMakeFiles\848a77d06db1bd4d8b1ffa7789c64d6a\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{42843E2B-0E8E-3436-9487-3896ADDE1FC5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

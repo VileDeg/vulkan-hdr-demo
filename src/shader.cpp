@@ -2,8 +2,8 @@
 #include "Enigne.h"
 
 std::vector<char> Engine::readShaderBinary(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
     ASSERTMSG(file.is_open(), "Failed to open file: " << filename);
 
     size_t fileSize = (size_t)file.tellg();

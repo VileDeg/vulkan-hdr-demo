@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\build\CMakeFiles\c400bb7d30c6d278c058583f3e2485ab\uninstall.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\dev\Vulkan\vulkan-hdr-demo\build\external\glfw\CMakeFiles\uninstall" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{42843E2B-0E8E-3436-9487-3896ADDE1FC5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

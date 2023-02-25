@@ -68,7 +68,7 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     VkClearValue clearValue;
     {
         auto flash = [](uint32_t frame, float t) { return abs(sin(frame / t)); };
-        float val = 0.1f;
+        float val = 0.05f;
         glm::vec3 color = {
             flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
         color *= val;
@@ -112,12 +112,12 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     {
         VkDeviceSize zeroOffset = 0;
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_triangleMesh.vertexBuffer.buffer, &zeroOffset);
-    }
-    {
+
         glm::mat4 projMat = glm::perspective(glm::radians(45.f), _swapchainExtent.width / (float)_swapchainExtent.height, 0.01f, 200.f);
         projMat[1][1] *= -1; //Flip y-axis
-        float rotSpeed = 0.1f;
-        glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
+        //float rotSpeed = 0.1f;
+        //glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
+        glm::mat4 modelMat = glm::mat4(1.f);
         glm::mat4 mvpMat = projMat * _camera.getViewMat() * modelMat;
         MeshPushConstants pushConstants{ .render_matrix = mvpMat };
         vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);

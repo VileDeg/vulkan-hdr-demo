@@ -1,14 +1,14 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
 #include <vulkan/vk_enum_string_helper.h>
 
 #include <vk_mem_alloc.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
-
-#include <GLFW/glfw3.h>
 
 #include <optional>
 #include <iostream>

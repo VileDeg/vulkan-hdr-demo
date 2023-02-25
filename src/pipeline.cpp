@@ -3,7 +3,7 @@
 
 #include "vk_pipeline_builder.h"
 
-static constexpr const char* SHADER_PATH = "assets/shaders/bin/";
+static constexpr const char* SHADER_PATH = "../assets/shaders/bin/";
 
 PipelineShaders Engine::loadShaders(const std::string& vertName, const std::string& fragName)
 {

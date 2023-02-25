@@ -9,7 +9,7 @@
 
 //Macro for breaking into the debugger or aborting the program
 #ifdef NDEBUG
-#define BRK do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__) abort(); }while(0)
+#define BRK do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__); abort(); }while(0)
 #else
 #define BRK __debugbreak()
 #endif // !NDEBUG
@@ -37,6 +37,7 @@
         PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
         if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
 
-#define V4PR(_v) #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << ", " << _v.w << " "
+//Print macros for glm types
+#define V4PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << ", " << _v.w << " "
 #define V3PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << " "
 #define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "

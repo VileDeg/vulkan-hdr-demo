@@ -10,7 +10,7 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
     app->_framebufferResized = true;
 
-    //Need to add 2 drawFrame() calls render the image while resizing. 
+    //Need to add 2 drawFrame() calls to render the image while resizing. 
     //First call will only recreate the swapchain, second call will render the image.
     app->drawFrame();
     app->drawFrame();
@@ -29,7 +29,6 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
             app->_cursorEnabled = !app->_cursorEnabled;
             glfwSetInputMode(window, GLFW_CURSOR, 
                 app->_cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
-            app->_cursorEnabled != app->_cursorEnabled;
             break;
         }
     }
@@ -42,8 +41,14 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
         return;
     }
 
+    static bool lastCursorState = app->_cursorEnabled;
     static glm::vec2 lastPos{};
     static bool firstCall{ true };
+    glm::ivec2 extent = { app->_swapchainExtent.width, app->_swapchainExtent.height };
+
+    if (!firstCall) {
+        firstCall = lastCursorState != app->_cursorEnabled;
+    }
 
     if (firstCall) {
         firstCall = false;
@@ -60,11 +65,8 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
 
     app->_camera.rotate(-diff.x, diff.y);
 
-    /*if (glfwGetMouseButton(app->_window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-        
-    }*/
-
     lastPos = { xpos, ypos };
+    lastCursorState = app->_cursorEnabled;
 }
 
 void Engine::createWindow()
