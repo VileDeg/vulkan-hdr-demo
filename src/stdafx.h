@@ -20,6 +20,7 @@
 #include <array>
 #include <fstream>
 #include <chrono>
+#include <cstring>
 
 #include "defs.h"
 #include "vk_initializers.h"
