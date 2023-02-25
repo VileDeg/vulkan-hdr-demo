@@ -5,7 +5,7 @@
 
 #include <vulkan/vk_enum_string_helper.h>
 
-#include <vk_mem_alloc.h>
+#include <vma/vk_mem_alloc.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>

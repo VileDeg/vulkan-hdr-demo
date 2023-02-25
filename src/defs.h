@@ -9,14 +9,24 @@
 
 //Macro for breaking into the debugger or aborting the program
 #ifdef NDEBUG
-#define BRK do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__); abort(); }while(0)
+    #define TRAP() do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__); abort(); }while(0)
 #else
-#define BRK __debugbreak()
-#endif // !NDEBUG
+    #ifdef _WIN32
+        #ifdef _MSC_VER
+            #define TRAP() __debugbreak()
+        #else
+            #include <intrin.h>
+            #define TRAP() __debugbreak()
+        #endif // _MSC_VER
+    #else
+        #include <signal.h>
+        #define TRAP() raise(SIGTRAP)
+    #endif // _WIN32
+#endif // NDEBUG
 
 //Assert macros for boolean expressions
-#define HASSERT(_x, _tru) do{ if ((_x) != _tru) { BRK; } }while(0)
-#define HASSERTMSG(_x, _tru, _msg) do{ if ((_x) != _tru) { PRERR(_msg); BRK; } }while(0)
+#define HASSERT(_x, _tru) do{ if ((_x) != _tru) { TRAP(); } }while(0)
+#define HASSERTMSG(_x, _tru, _msg) do{ if ((_x) != _tru) { PRERR(_msg); TRAP(); } }while(0)
 
 //Assert macros for functions returning bool
 #define ASSERT(_x) HASSERT(_x, true)

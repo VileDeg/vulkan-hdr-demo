@@ -30,14 +30,14 @@ add_executable (${EXNAME} ${SRC_FILES})
 target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 #set_property(TARGET chapter_3 PROPERTY VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:chapter_3>)
 
-target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/external)
 
 target_link_libraries(${EXNAME} 
     #${PCH_NAME}
     ${Vulkan_LIBRARIES}
     glfw
-    glm
-    vma
+    #glm
+    #vma
 )
 
 #add_library(${PCH_NAME} STATIC ${PCH_SRC})
