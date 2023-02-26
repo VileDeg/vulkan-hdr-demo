@@ -27,6 +27,10 @@ bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
 std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
 Engine::findCompatibleDevices()
 {
+    // This function's code is inspired by https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
+    // Link to repo https://github.com/pc-john/VulkanTutorial/
+    
+    
     // find compatible devices
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);

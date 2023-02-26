@@ -51,7 +51,9 @@ void Engine::Cleanup()
         return;
     }
 
-    vmaDestroyBuffer(_allocator, _triangleMesh.vertexBuffer.buffer, _triangleMesh.vertexBuffer.allocation);
+    _triangleMesh.cleanup(_allocator);
+    _modelMesh.cleanup(_allocator);
+
     vmaDestroyAllocator(_allocator);
 
     cleanupSwapchain();

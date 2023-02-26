@@ -3,14 +3,12 @@
 
 #include "vk_pipeline_builder.h"
 
-static constexpr const char* SHADER_PATH = "../assets/shaders/bin/";
-
 PipelineShaders Engine::loadShaders(const std::string& vertName, const std::string& fragName)
 {
     PipelineShaders shaders{};
 
-    shaders.vert.code = readShaderBinary(SHADER_PATH + vertName);
-    shaders.frag.code = readShaderBinary(SHADER_PATH + fragName);
+    shaders.vert.code = readShaderBinary(Engine::shaderPath + vertName);
+    shaders.frag.code = readShaderBinary(Engine::shaderPath + fragName);
 
     if (createShaderModule(shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;

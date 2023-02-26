@@ -8,10 +8,12 @@ set(PCH_NAME "stdafx")
 set(PCH_SRC "${SRCDIR}/stdafx.h")
 
 
+
+
 find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
 #find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 
@@ -26,6 +28,10 @@ set(EXNAME "vkdemo")
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
 add_executable (${EXNAME} ${SRC_FILES})
+
+set_target_properties(
+    ${EXNAME} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
 target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 #set_property(TARGET chapter_3 PROPERTY VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:chapter_3>)

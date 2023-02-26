@@ -1,7 +1,7 @@
 #pragma once
 
 struct Camera {
-    static constexpr glm::vec3 sWorldUp{ 0.f,-1.f,0.f };
+    static constexpr glm::vec3 sWorldUp{ 0.f,1.f,0.f };
 
     glm::vec3 front = glm::vec3{ 0,0,1 };
     glm::vec3 up = sWorldUp;
@@ -40,8 +40,8 @@ struct Camera {
     }
 
     void rotate(float x, float y) {
-        yaw += x * rotSpeed;
-        pitch += y * rotSpeed;
+        yaw -= x * rotSpeed;
+        pitch -= y * rotSpeed;
 
         pitch = std::clamp(pitch, -90.f, 90.f);
         

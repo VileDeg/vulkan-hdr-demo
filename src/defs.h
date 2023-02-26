@@ -2,14 +2,19 @@
 
 //Macros for printing error messages
 //#define HPR(_msg, _type) do{ fprintf(stderr, "[%s, %s, %d] %s: %s\n", __FILE__, __func__, __LINE__, _type, _msg); }while(0)
-#define HPR(_msg, _type) do{ std::cerr << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": " << _msg << std::endl; }while(0)
+#define HHPR(_msg, _type, _file) do{ _file << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": " << _msg << std::endl; }while(0)
+#define HPR(_msg, _type) HHPR(_msg, _type, std::cerr)
+#define HPRINFO(_msg, _type) HHPR(_msg, _type, std::cout)
+
 #define PRERR(_msg) HPR(_msg, "Error");
 #define PRWRN(_msg) HPR(_msg, "Warning");
 #define PRABRT(_msg) HPR(_msg, "Abort");
 
+#define PRINF(_msg) HPRINFO(_msg, "Info");
+
 //Macro for breaking into the debugger or aborting the program
 #ifdef NDEBUG
-    #define TRAP() do{ fprintf(stderr, "Abort called in file %s, function %s, on line %d\n", __FILE__, __func__, __LINE__); abort(); }while(0)
+    #define TRAP() do{ PRABRT(""); abort(); }while(0)
 #else
     #ifdef _WIN32
         #ifdef _MSC_VER

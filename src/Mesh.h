@@ -18,7 +18,10 @@ struct Vertex {
 };;
 
 struct Mesh {
-    std::vector<Vertex> vertices;
-    AllocatedBuffer vertexBuffer;
+    std::vector<Vertex> _vertices;
+    AllocatedBuffer _vertexBuffer;
+
+    bool loadFromObj(const std::string& path);
+    void cleanup(VmaAllocator& allocator);
 };
 
