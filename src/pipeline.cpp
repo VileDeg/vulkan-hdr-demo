@@ -1,7 +1,8 @@
-#include "stdafx.h"
+
 #include "Enigne.h"
 
 #include "vk_pipeline_builder.h"
+#include "vk_initializers.h"
 
 static constexpr const char* SHADER_PATH = "../assets/shaders/bin/";
 

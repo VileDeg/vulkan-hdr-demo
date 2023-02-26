@@ -1,4 +1,8 @@
 #pragma once
+#include <algorithm>
+
+#include "glm/glm.hpp"
+#include "glm/gtx/transform.hpp"
 
 struct Camera {
     static constexpr glm::vec3 sWorldUp{ 0.f,-1.f,0.f };

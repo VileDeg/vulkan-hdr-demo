@@ -1,6 +1,7 @@
-#include "stdafx.h"
-
 #include "Enigne.h"
+
+#include "GLFW/glfw3.h"
+#include <cstring>
 
 void Engine::createInstance()
 {

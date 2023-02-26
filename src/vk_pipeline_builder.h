@@ -23,6 +23,8 @@
  //Code was modified
 
 #pragma once
+#include <vector>
+#include <vulkan/vulkan.h>
 
 class PipelineBuilder {
 public:

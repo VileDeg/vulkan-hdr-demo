@@ -1,6 +1,6 @@
-#include "stdafx.h"
 #include "Mesh.h"
 #include "Enigne.h"
+#include <cstring>
 
 void Engine::loadMeshes()
 {

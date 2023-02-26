@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 //Macros for printing error messages
 //#define HPR(_msg, _type) do{ fprintf(stderr, "[%s, %s, %d] %s: %s\n", __FILE__, __func__, __LINE__, _type, _msg); }while(0)
 #define HPR(_msg, _type) do{ std::cerr << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": " << _msg << std::endl; }while(0)

@@ -1,8 +1,17 @@
 #pragma once
 
+#include <vector>
+
+#include <vulkan/vulkan.h>
+#include "vma/vk_mem_alloc.h"
+
+#include "defs.h"
+
 #include "types.h"
 #include "Mesh.h"
 #include "Camera.h"
+
+struct GLFWwindow;
 
 class Engine {
 public:

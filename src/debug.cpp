@@ -1,5 +1,3 @@
-#include "stdafx.h"
-
 #include "Enigne.h"
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(

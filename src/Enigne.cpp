@@ -1,7 +1,6 @@
-#include "stdafx.h"
-
 #include "Enigne.h"
-#include "defs.h"
+
+#include "GLFW/glfw3.h"
 
 void Engine::Init()
 {

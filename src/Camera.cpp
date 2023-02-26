@@ -1,4 +1,6 @@
-#include "stdafx.h"
+#include <chrono>
+#include <GLFW/glfw3.h>
+
 #include "Camera.h"
 #include "Enigne.h"
 

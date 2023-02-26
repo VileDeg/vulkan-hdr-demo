@@ -1,5 +1,11 @@
 #pragma once
 
+#include <vector>
+#include <vulkan/vulkan.h>
+
+#include "glm/glm.hpp"
+#include "vma/vk_mem_alloc.h"
+
 struct ShaderData {
     std::vector<char> code;
     VkShaderModule module;

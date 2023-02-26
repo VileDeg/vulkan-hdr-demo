@@ -22,8 +22,9 @@
 
  //Code was modified
 
-#include "stdafx.h"
+
 #include "vk_pipeline_builder.h"
+#include <iostream>
 
 VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VkRenderPass pass)
 {

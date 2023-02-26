@@ -1,5 +1,5 @@
-#include "stdafx.h"
 #include "Enigne.h"
+#include "GLFW/glfw3.h"
 
 struct SwapchainPropertiesSupport {
     VkSurfaceCapabilitiesKHR capabilities;

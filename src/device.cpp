@@ -1,5 +1,6 @@
-#include "stdafx.h"
 #include "Enigne.h"
+
+#include <vector>
 
 void Engine::createLogicalDevice()
 {

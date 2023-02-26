@@ -1,5 +1,6 @@
-#include "stdafx.h"
 #include "Enigne.h"
+
+#include <fstream>
 
 std::vector<char> Engine::readShaderBinary(const std::string& filename) {
 

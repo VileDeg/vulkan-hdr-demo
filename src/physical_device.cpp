@@ -1,5 +1,10 @@
-#include "stdafx.h"
 #include "Enigne.h"
+
+#include <string>
+#include <cstring>
+#include <array>
+#include <vector>
+#include <algorithm>
 
 bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
 {

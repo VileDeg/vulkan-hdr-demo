@@ -1,5 +1,6 @@
-#include "stdafx.h"
 #include "Enigne.h"
+
+#include "vk_initializers.h"
 
 void Engine::drawFrame()
 {
