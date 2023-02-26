@@ -11,6 +11,14 @@ void Engine::Init()
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+
+    VmaAllocatorCreateInfo allocatorInfo = {
+        .physicalDevice = _physicalDevice,
+        .device = _device,
+        .instance = _instance,
+    };
+    vmaCreateAllocator(&allocatorInfo, &_allocator);
+
     createSwapchain();
     createImageViews();
     createRenderPass();
@@ -19,15 +27,8 @@ void Engine::Init()
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
-    VmaAllocatorCreateInfo allocatorInfo = {
-        .physicalDevice = _physicalDevice,
-        .device = _device,
-        .instance = _instance,
-    };
-    vmaCreateAllocator(&allocatorInfo, &_allocator);
 
     loadMeshes();
-
 
     _isInitialized = true;
 }
@@ -54,20 +55,19 @@ void Engine::Cleanup()
     _triangleMesh.cleanup(_allocator);
     _modelMesh.cleanup(_allocator);
 
-    vmaDestroyAllocator(_allocator);
-
-    cleanupSwapchain();
-    cleanupPipeline();
-
-    vkDestroyRenderPass(_device, _renderPass, nullptr);
-
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
         vkDestroySemaphore(_device, _imageAvailableSemaphores[i], nullptr);
         vkDestroyFence(_device, _inFlightFences[i], nullptr);
     }
-
     vkDestroyCommandPool(_device, _commandPool, nullptr);
+    cleanupPipeline();
+    vkDestroyRenderPass(_device, _renderPass, nullptr);
+
+    cleanupSwapchainResources();
+    vkDestroySwapchainKHR(_device, _swapchain, nullptr);
+
+    vmaDestroyAllocator(_allocator);
 
     vkDestroyDevice(_device, nullptr);
 

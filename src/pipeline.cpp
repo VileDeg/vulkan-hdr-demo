@@ -38,21 +38,6 @@ void Engine::createGraphicsPipeline()
 
     VertexInputDescription description = Vertex::getDescription();
 
-    /*PipelineBuilder builder{
-        ._shaderStages = {
-            vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT,
-                shaders.vert.module),
-            vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT,
-                shaders.frag.module)
-        },
-        ._vertexInputInfo = vkinit::vertex_input_state_create_info(
-            description.bindings.size(), description.bindings.data(), 
-            description.attributes.size(), description.attributes.data()),
-        ._inputAssembly = vkinit::input_assembly_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
-        ._viewport = 
-
-    };*/
-
     VkPipelineShaderStageCreateInfo shaderStages[] = { 
         vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, 
             shaders.vert.module), 
@@ -76,6 +61,8 @@ void Engine::createGraphicsPipeline()
     VkPipelineRasterizationStateCreateInfo rasterizer = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL);
 
     VkPipelineMultisampleStateCreateInfo multisampling = vkinit::multisampling_state_create_info();
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil = vkinit::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment = vkinit::color_blend_attachment_state();
 
@@ -113,6 +100,7 @@ void Engine::createGraphicsPipeline()
         VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout));
     }
 
+
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
@@ -122,6 +110,7 @@ void Engine::createGraphicsPipeline()
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
+        .pDepthStencilState = &depthStencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = _pipelineLayout,

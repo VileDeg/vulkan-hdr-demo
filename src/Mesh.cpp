@@ -114,8 +114,8 @@ void Engine::loadMeshes()
         _triangleMesh._vertices[i].color = colors[i % 3];
     }
     
-    //_modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
-    _modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
+    _modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
+    //_modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
 
     uploadMesh(_triangleMesh);
     uploadMesh(_modelMesh);

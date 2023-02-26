@@ -65,15 +65,22 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
     VKASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    VkClearValue clearValue;
+    VkClearValue colorClear;
     {
         auto flash = [](uint32_t frame, float t) { return abs(sin(frame / t)); };
         float val = 0.05f;
         glm::vec3 color = {
             flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
         color *= val;
-        clearValue.color = { { color.x, color.y, color.z, 1.0f } };
+        colorClear.color = { { color.x, color.y, color.z, 1.0f } };
     }
+
+    VkClearValue depthClear;
+    {
+        depthClear.depthStencil = { 1.0f, 0 };
+    }
+
+    VkClearValue clearValues[] = { colorClear, depthClear };
 
     VkRenderPassBeginInfo renderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -81,10 +88,10 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         .framebuffer = _swapchainFramebuffers[imageIndex],
         .renderArea = {
             .offset = { 0, 0 },
-            .extent = _swapchainExtent
+            .extent = _windowExtent
         },
-        .clearValueCount = 1,
-        .pClearValues = &clearValue
+        .clearValueCount = 2,
+        .pClearValues = clearValues
     };
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -94,8 +101,8 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         VkViewport viewport{
             .x = 0.0f,
             .y = 0.0f,
-            .width = (float)_swapchainExtent.width,
-            .height = (float)_swapchainExtent.height,
+            .width = (float)_windowExtent.width,
+            .height = (float)_windowExtent.height,
             .minDepth = 0.0f,
             .maxDepth = 1.0f
         };
@@ -104,7 +111,7 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
         VkRect2D scissor{
             .offset = { 0, 0 },
-            .extent = _swapchainExtent
+            .extent = _windowExtent
         };
 
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -114,14 +121,14 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         VkDeviceSize zeroOffset = 0;
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &mesh._vertexBuffer.buffer, &zeroOffset);
 
-        glm::mat4 projMat = glm::perspective(glm::radians(45.f), _swapchainExtent.width / (float)_swapchainExtent.height, 0.01f, 200.f);
+        glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
         projMat[1][1] *= -1; //Flip y-axis
         //float rotSpeed = 0.1f;
         //glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
         float sf = 0.01f;
         glm::mat4 modelMat = glm::mat4(1.f);
         //modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.f, -3.f));
-        modelMat = glm::scale(modelMat, glm::vec3(sf));
+        //modelMat = glm::scale(modelMat, glm::vec3(sf));
         glm::mat4 mvpMat = projMat * _camera.getViewMat() * modelMat;
         MeshPushConstants pushConstants{ .render_matrix = mvpMat };
         vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);

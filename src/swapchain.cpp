@@ -131,7 +131,7 @@ void Engine::createSwapchain()
     vkGetSwapchainImagesKHR(_device, _swapchain, &imageCount, _swapchainImages.data());
 
     _swapchainImageFormat = surfaceFormat.format;
-    _swapchainExtent = windowExtent;
+    _windowExtent = windowExtent;
 }
 
 void Engine::recreateSwapchain()
@@ -145,28 +145,24 @@ void Engine::recreateSwapchain()
 
     vkDeviceWaitIdle(_device);
 
-    for (auto& framebuffer : _swapchainFramebuffers) {
-        vkDestroyFramebuffer(_device, framebuffer, nullptr);
-    }
-
-    for (auto& imageView : _swapchainImageViews) {
-        vkDestroyImageView(_device, imageView, nullptr);
-    }
+    cleanupSwapchainResources();
 
     createSwapchain();
     createImageViews();
     createFramebuffers();
 }
 
-void Engine::cleanupSwapchain()
+void Engine::cleanupSwapchainResources()
 {
     for (auto& framebuffer : _swapchainFramebuffers) {
         vkDestroyFramebuffer(_device, framebuffer, nullptr);
     }
 
+    //Destroy depth image
+    vkDestroyImageView(_device, _depthImageView, nullptr);
+    vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+
     for (auto& imageView : _swapchainImageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
     }
-
-    vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 }

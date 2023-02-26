@@ -44,7 +44,7 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
     static bool lastCursorState = app->_cursorEnabled;
     static glm::vec2 lastPos{};
     static bool firstCall{ true };
-    glm::ivec2 extent = { app->_swapchainExtent.width, app->_swapchainExtent.height };
+    glm::ivec2 extent = { app->_windowExtent.width, app->_windowExtent.height };
 
     if (!firstCall) {
         firstCall = lastCursorState != app->_cursorEnabled;

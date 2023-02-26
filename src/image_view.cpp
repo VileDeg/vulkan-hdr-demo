@@ -28,4 +28,26 @@ void Engine::createImageViews()
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchainImageViews[i]));
     }
+
+    //Create depth image view
+    VkExtent3D depthImageExtent = {
+        _windowExtent.width,
+        _windowExtent.height,
+        1
+    };
+
+    _depthFormat = VK_FORMAT_D32_SFLOAT;
+
+    VkImageCreateInfo dimg_info = vkinit::image_create_info(_depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthImageExtent);
+
+    VmaAllocationCreateInfo dimg_allocinfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+
+    vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_depthImage.image, &_depthImage.allocation, nullptr);
+
+    VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_depthImageView));
 }

@@ -32,7 +32,7 @@ private:
     
     
     void cleanupShaders(PipelineShaders& shaders);
-    void cleanupSwapchain();
+    void cleanupSwapchainResources();
     void cleanupPipeline();
 
 private:
@@ -79,9 +79,13 @@ private:
     VkSwapchainKHR _swapchain{VK_NULL_HANDLE}; // is passed as .oldSwapchain to vkCreateSwapchainKHR
     std::vector<VkImage> _swapchainImages;
     VkFormat _swapchainImageFormat;
-    VkExtent2D _swapchainExtent;
+    VkExtent2D _windowExtent;
     std::vector<VkImageView> _swapchainImageViews;
     std::vector<VkFramebuffer> _swapchainFramebuffers;
+
+    VkImageView _depthImageView;
+    AllocatedImage _depthImage;
+    VkFormat _depthFormat;
     
     VkRenderPass _renderPass;
     VkPipelineLayout _pipelineLayout;
