@@ -17,11 +17,10 @@ void Engine::Init()
     createSwapchain();
     createImageViews();
     createRenderPass();
+
     createGraphicsPipeline();
     createFramebuffers();
-    //createCommandPool();
-    createCommandBuffers();
-    createSyncObjects();
+    createFrameData();
 
     loadMeshes();
     createScene();
@@ -42,50 +41,77 @@ void Engine::Run()
     vkDeviceWaitIdle(_device);
 }
 
+
+AllocatedBuffer Engine::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+{
+    VkBufferCreateInfo bufferInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = allocSize,
+        .usage = usage
+    };
+
+    VmaAllocationCreateInfo vmaallocInfo = {
+        .usage = memoryUsage
+    };
+
+    AllocatedBuffer newBuffer;
+    VKASSERT(vmaCreateBuffer(_allocator, &bufferInfo, &vmaallocInfo,
+        &newBuffer.buffer, &newBuffer.allocation, nullptr));
+
+    return newBuffer;
+}
+
+void Engine::createFrameData()
+{
+    VkCommandPoolCreateInfo poolInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = _graphicsQueueFamily
+    };
+
+    VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
+    VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        auto& f = _frames[i];
+
+        VKASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
+
+        VkCommandBufferAllocateInfo allocInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = f.commandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        VKASSERT(vkAllocateCommandBuffers(_device, &allocInfo, &f.mainCmdBuffer));
+
+        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
+        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
+        VKASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
+
+        f.cameraBuffer = createBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        _deletionStack.push([&]() { f.cleanup(_device, _allocator); });
+    }
+
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        
+    }
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        _deletionStack.push([&]() {  });
+    }
+}
+
 void Engine::Cleanup()
 {
     if (!_isInitialized) {
         return;
     }
-
-    for (auto& mesh : _meshes) {
-        //Destroy vertex buffers
-        mesh.second.cleanup(_allocator);
-    }
-    for (auto& material : _materials) {
-        //Destroy pipeline layout and pipeline
-        material.second.cleanup(_device);
-    }
-
-    //Delete all synchronization objects of frames
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        vkDestroySemaphore(_device, _frames[i].imageAvailableSemaphore, nullptr);
-        vkDestroySemaphore(_device, _frames[i].renderFinishedSemaphore, nullptr);
-        vkDestroyFence(_device, _frames[i].inFlightFence, nullptr);
-
-        vkDestroyCommandPool(_device, _frames[i].commandPool, nullptr);
-    }
-    
-    //cleanupPipeline();
-    vkDestroyRenderPass(_device, _renderPass, nullptr);
-
     cleanupSwapchainResources();
     vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 
     _deletionStack.flush();
-
-    /*vmaDestroyAllocator(_allocator);
-
-    vkDestroyDevice(_device, nullptr);
-
-    if (ENABLE_VALIDATION_LAYERS) {
-        DYNAMIC_LOAD(ddum, _instance, vkDestroyDebugUtilsMessengerEXT);
-        ddum(_instance, _debugMessenger, nullptr);
-    }
-
-    vkDestroySurfaceKHR(_instance, _surface, nullptr);
-    vkDestroyInstance(_instance, nullptr);
-
-    glfwDestroyWindow(_window);
-    glfwTerminate();*/
 }

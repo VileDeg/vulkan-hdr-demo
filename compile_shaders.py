@@ -1,4 +1,8 @@
 import os
+import sys
+
+cmake_source_dir = sys.argv[1]
+os.chdir(cmake_source_dir)
 
 glsl = "glslc"
 

@@ -34,6 +34,10 @@ struct PipelineShaders {
 struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
+
+    void cleanup(const VmaAllocator& allocator) {
+        vmaDestroyBuffer(allocator, buffer, allocation);
+    }
 };
 
 struct AllocatedImage {
@@ -46,10 +50,29 @@ struct MeshPushConstants {
     glm::mat4 render_matrix;
 };
 
+struct GPUCameraData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+};
+
 struct FrameData {
     VkSemaphore imageAvailableSemaphore, renderFinishedSemaphore;
     VkFence inFlightFence;
 
     VkCommandPool commandPool;
     VkCommandBuffer mainCmdBuffer;
+
+    AllocatedBuffer cameraBuffer;
+    VkDescriptorSet globalDescriptor;
+
+    void cleanup(const VkDevice& device, const VmaAllocator& allocator) {
+        vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+        vkDestroyFence(device, inFlightFence, nullptr);
+
+        vkDestroyCommandPool(device, commandPool, nullptr);
+
+        cameraBuffer.cleanup(allocator);
+    }
 };;

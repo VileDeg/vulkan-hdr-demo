@@ -74,4 +74,6 @@ void Engine::createRenderPass()
     };
 
     VKASSERT(vkCreateRenderPass(_device, &renderPassInfo, nullptr, &_renderPass));
+
+    _deletionStack.push([=]() { vkDestroyRenderPass(_device, _renderPass, nullptr); });
 }

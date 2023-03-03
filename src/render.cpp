@@ -1,14 +1,15 @@
 #include "stdafx.h"
 #include "Enigne.h"
 
-
-
 Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
 {
-	_materials[name] = {
+	auto& mat = _materials[name] = {
 		.pipeline = pipeline,
 		.pipelineLayout = layout
 	};
+
+	_deletionStack.push([&]() { mat.cleanup(_device); });
+
 	return &_materials[name];
 }
 

@@ -84,8 +84,6 @@ bool Mesh::loadFromObj(const std::string& path)
     return true;
 }
 
-
-
 void Engine::loadMeshes()
 {
     uint32_t vertexCount = 12;
@@ -135,9 +133,12 @@ void Engine::loadMeshes()
 
     triMesh.upload(_allocator);
     modelMesh.upload(_allocator);
+    
+    for (auto& mesh : _meshes) { //Destroy vertex buffers
+        _deletionStack.push([&]() { mesh.second.cleanup(_allocator); });
+    }
+    
 }
-
-
 
 void Mesh::upload(VmaAllocator allocator)
 {

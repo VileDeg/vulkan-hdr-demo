@@ -24,9 +24,7 @@ private:
     void createRenderPass();
     void createGraphicsPipeline();
     void createFramebuffers();
-    //void createCommandPool();
-    void createCommandBuffers();
-    void createSyncObjects();
+    void createFrameData();
     void createScene();
     
     void bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline);
@@ -34,11 +32,7 @@ private:
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void recreateSwapchain();
     
-    
-    //void cleanupShaders(PipelineShaders& shaders);
     void cleanupSwapchainResources();
-    //void cleanupPipeline();
-
 private:
     void loadMeshes();
 
@@ -65,7 +59,6 @@ private:
 
     void calculateFPS();
     void calculateDeltaTime();
-    //void updateCamera();
 private:
     GLFWwindow* _window;
 
@@ -94,8 +87,6 @@ private:
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
     FrameData _frames[MAX_FRAMES_IN_FLIGHT];
-    //FrameData& getCurrentFrame();
-    
 
     VmaAllocator _allocator;
 
@@ -118,6 +109,8 @@ private:
     Mesh* getMesh(const std::string& name);
 
     void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
+
+    AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 private:
     const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"
@@ -140,8 +133,6 @@ private:
     static constexpr uint32_t FS_WIDTH = 1920;
     static constexpr uint32_t FS_HEIGHT = 1080;
     static constexpr bool ENABLE_FULLSCREEN = false;
-
-    
 
 #ifdef NDEBUG
     static constexpr bool ENABLE_VALIDATION_LAYERS = false;

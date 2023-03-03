@@ -11,7 +11,6 @@ add_subdirectory(external)
 
 set(EXNAME "vkdemo")
 
-
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
 add_executable (${EXNAME} ${SRC_FILES})
 
@@ -26,4 +25,9 @@ target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS} ${P
 target_link_libraries(${EXNAME} 
     ${Vulkan_LIBRARIES}
     glfw
+)
+
+#Compile shaders in assets/shaders folder
+add_custom_command(TARGET ${EXNAME} PRE_BUILD
+    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
 )

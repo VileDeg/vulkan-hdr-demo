@@ -25,7 +25,7 @@ struct Mesh {
     void upload(VmaAllocator allocator);
 
     void cleanup(VmaAllocator allocator) {
-        vmaDestroyBuffer(allocator, _vertexBuffer.buffer, _vertexBuffer.allocation);
+        _vertexBuffer.cleanup(allocator);
     }
 };
 
