@@ -45,7 +45,7 @@
 #define GLFWASSERTMSG(_x, _msg) HASSERTMSG(_x, GLFW_TRUE, _msg)
 
 //Handy macro for reducing code in aggregate initialization of CreateInfoXXX structs
-#define HCCP(_type) &(const _type&)_type
+//#define HCCP(_type) &(const _type&)_type
 
 //Macro for dynamic load of extension functions
 #define DYNAMIC_LOAD(_varname, _instance, _func)\

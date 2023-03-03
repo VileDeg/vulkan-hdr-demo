@@ -37,35 +37,44 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
 void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
 {
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+
+    static bool lastCursorState = app->_cursorEnabled;
+    static bool firstCall{ true };
+
+    if (!firstCall) {
+        if (lastCursorState != app->_cursorEnabled) {
+            std::cout << "Cursor toggle." << std::endl;
+            firstCall = true;
+        } else {
+            firstCall = false;
+        }
+    }
+
     if (app->_cursorEnabled) {
         return;
     }
 
-    static bool lastCursorState = app->_cursorEnabled;
     static glm::vec2 lastPos{};
-    static bool firstCall{ true };
-    glm::ivec2 extent = { app->_windowExtent.width, app->_windowExtent.height };
-
-    if (!firstCall) {
-        firstCall = lastCursorState != app->_cursorEnabled;
-    }
 
     if (firstCall) {
         firstCall = false;
         lastPos = { xpos, ypos };
+        lastCursorState = app->_cursorEnabled;
         return;
     }
+    
+    glm::ivec2 extent = { app->_windowExtent.width, app->_windowExtent.height };
+    glm::vec2 currPos = { xpos, ypos };
 
-    glm::vec2 currPos = glm::vec2{ xpos, ypos };
     static float sens = 0.1f;
     glm::vec2 diff = currPos - lastPos;
     diff *= sens;
 
-    //std::cout << V2PR(currPos) << V2PR(diff) << std::endl;
+    //std::cout << V2PR(currPos) << V2PR(lastPos) << V2PR(diff) << std::endl;
 
-    app->_camera.rotate(-diff.x, diff.y);
+    app->_camera.MouseInput(-diff.x, diff.y);
 
-    lastPos = { xpos, ypos };
+    lastPos = currPos;
     lastCursorState = app->_cursorEnabled;
 }
 

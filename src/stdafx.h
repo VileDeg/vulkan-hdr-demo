@@ -13,7 +13,10 @@
 #include <optional>
 #include <iostream>
 #include <vector>
+#include <unordered_map>
+#include <stack>
 #include <tuple>
+#include <functional>
 #include <string>
 #include <algorithm>
 #include <set>

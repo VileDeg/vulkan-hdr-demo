@@ -9,21 +9,26 @@ void Engine::createInstance()
     ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
 
-    VKASSERT(vkCreateInstance(
-        HCCP(VkInstanceCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            .pApplicationInfo = HCCP(VkApplicationInfo) {
-                .pApplicationName = "Demo",
-                .applicationVersion = 1,
-                .apiVersion = VK_MAKE_VERSION(1, 0, 0)
-            },
-            .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
-            .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
-            .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
-            .ppEnabledExtensionNames = _instanceExtensions.data()
-        },
-        nullptr, & _instance)
-    );
+    VkApplicationInfo appInfo{
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "Vulkan Demo",
+        .applicationVersion = 1,
+        .apiVersion = VK_MAKE_VERSION(1, 0, 0)
+    };
+
+    VkInstanceCreateInfo instanceInfo{
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo = &appInfo,
+        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
+        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+        .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
+        .ppEnabledExtensionNames = _instanceExtensions.data()
+    };
+
+    VKASSERT(vkCreateInstance(&instanceInfo, nullptr, & _instance));
+    {
+        _deletionStack.push([=]() { vkDestroyInstance(_instance, nullptr); });
+    }
 }
 
 bool Engine::checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
@@ -84,6 +89,14 @@ bool Engine::checkInstanceExtensionSupport(const std::vector<const char*>& requi
     }
 
     return true;
+}
+
+void Engine::createSurface()
+{
+    VKASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
+        "GLFW: Failed to create window surface");
+
+    _deletionStack.push([=]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
 }
 
 std::vector<const char*> Engine::get_required_extensions() {

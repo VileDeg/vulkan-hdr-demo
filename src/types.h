@@ -1,5 +1,21 @@
 #pragma once
 
+struct DeletionStack
+{
+    std::stack<std::function<void()>> deletors;
+
+    void push(std::function<void()>&& function) {
+        deletors.push(function);
+    }
+
+    void flush() {
+        while (!deletors.empty()) {
+            deletors.top()();
+            deletors.pop();
+        }
+    }
+};
+
 struct ShaderData {
     std::vector<char> code;
     VkShaderModule module;
@@ -29,3 +45,11 @@ struct MeshPushConstants {
     glm::vec4 data;
     glm::mat4 render_matrix;
 };
+
+struct FrameData {
+    VkSemaphore imageAvailableSemaphore, renderFinishedSemaphore;
+    VkFence inFlightFence;
+
+    VkCommandPool commandPool;
+    VkCommandBuffer mainCmdBuffer;
+};;

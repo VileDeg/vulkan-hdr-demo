@@ -26,12 +26,6 @@ PipelineShaders Engine::loadShaders(const std::string& vertName, const std::stri
     return shaders;
 }
 
-//void Engine::cleanupShaders(PipelineShaders& shaders)
-//{
-//    vkDestroyShaderModule(_device, shaders.vert.module, nullptr);
-//    vkDestroyShaderModule(_device, shaders.frag.module, nullptr);
-//}
-
 void Engine::createGraphicsPipeline()
 {
     auto shaders = loadShaders("tri_mesh.vert.spv", "shader.frag.spv");
@@ -86,6 +80,7 @@ void Engine::createGraphicsPipeline()
         .pDynamicStates = dynamicStates.data()
     };  
 
+    VkPipelineLayout layout;
     {
         VkPushConstantRange pushConstantRange{
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
@@ -97,9 +92,10 @@ void Engine::createGraphicsPipeline()
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-        VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &_pipelineLayout));
+        
+        
+        VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &layout));
     }
-
 
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -113,20 +109,22 @@ void Engine::createGraphicsPipeline()
         .pDepthStencilState = &depthStencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
-        .layout = _pipelineLayout,
+        .layout = layout,
         .renderPass = _renderPass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE
     };
 
-    VKASSERT(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_graphicsPipeline));
+    VkPipeline pipeline;
+    VKASSERT(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-    //cleanupShaders(shaders);
+    createMaterial(pipeline, layout, "default");
+
     shaders.cleanup(_device);
 }
 
-void Engine::cleanupPipeline()
-{
-    vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
-}
+//void Engine::cleanupPipeline()
+//{
+//    vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
+//    vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+//}

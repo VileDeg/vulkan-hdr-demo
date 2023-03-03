@@ -3,11 +3,13 @@
 
 void Engine::drawFrame()
 {
-    VKASSERT(vkWaitForFences(_device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX));
-    VKASSERT(vkResetFences(_device, 1, &_inFlightFences[_currentFrame]));
+    FrameData& frame = _frames[_currentFrame];
+
+    VKASSERT(vkWaitForFences(_device, 1, &frame.inFlightFence, VK_TRUE, UINT64_MAX));
+    VKASSERT(vkResetFences(_device, 1, &frame.inFlightFence));
 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, frame.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapchain();
@@ -16,12 +18,12 @@ void Engine::drawFrame()
         ASSERTMSG(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR, "failed to acquire swap chain image!");
     }
 
-    VKASSERT(vkResetCommandBuffer(_commandBuffers[_currentFrame], 0));
-    recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
+    VKASSERT(vkResetCommandBuffer(frame.mainCmdBuffer, 0));
+    recordCommandBuffer(frame.mainCmdBuffer, imageIndex);
 
-    VkSemaphore waitSemaphores[] = { _imageAvailableSemaphores[_currentFrame] };
+    VkSemaphore waitSemaphores[] = { frame.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    VkSemaphore signalSemaphores[] = { _renderFinishedSemaphores[_currentFrame] };
+    VkSemaphore signalSemaphores[] = { frame.renderFinishedSemaphore };
 
     VkSubmitInfo submitInfo{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -29,12 +31,12 @@ void Engine::drawFrame()
         .pWaitSemaphores = waitSemaphores,
         .pWaitDstStageMask = waitStages,
         .commandBufferCount = 1,
-        .pCommandBuffers = &_commandBuffers[_currentFrame],
+        .pCommandBuffers = &frame.mainCmdBuffer,
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = signalSemaphores
     };
 
-    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]));
+    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, frame.inFlightFence));
 
     VkSwapchainKHR swapchains[] = { _swapchain };
     VkPresentInfoKHR presentInfo{
@@ -72,7 +74,8 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         glm::vec3 color = {
             flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
         color *= val;
-        colorClear.color = { { color.x, color.y, color.z, 1.0f } };
+        colorClear.color = { color.x, color.y, color.z, 1.0f };
+        //colorClear.color = { color.x, color.y, color.z, 1.0f };
     }
 
     VkClearValue depthClear;
@@ -96,44 +99,27 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
-    {
-        VkViewport viewport{
-            .x = 0.0f,
-            .y = 0.0f,
-            .width = (float)_windowExtent.width,
-            .height = (float)_windowExtent.height,
-            .minDepth = 0.0f,
-            .maxDepth = 1.0f
-        };
+    //bindPipeline(commandBuffer, _graphicsPipeline);
+    //Mesh& mesh = _modelMesh;
+    //{
+    //    VkDeviceSize zeroOffset = 0;
+    //    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &mesh._vertexBuffer.buffer, &zeroOffset);
 
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    //    glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
+    //    projMat[1][1] *= -1; //Flip y-axis
+    //    float rotSpeed = 0.1f;
+    //    glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
+    //    //float sf = 0.01f;
+    //    //glm::mat4 modelMat = glm::mat4(1.f);
+    //    //modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.f, -3.f));
+    //    //modelMat = glm::scale(modelMat, glm::vec3(sf));
+    //    glm::mat4 mvpMat = projMat * _camera.GetViewMat() * modelMat;
+    //    MeshPushConstants pushConstants{ .render_matrix = mvpMat };
+    //    vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);
+    //}
+    //vkCmdDraw(commandBuffer, uint32_t(mesh._vertices.size()), 1, 0, 0);
 
-        VkRect2D scissor{
-            .offset = { 0, 0 },
-            .extent = _windowExtent
-        };
-
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    }
-    Mesh& mesh = _modelMesh;
-    {
-        VkDeviceSize zeroOffset = 0;
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &mesh._vertexBuffer.buffer, &zeroOffset);
-
-        glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
-        projMat[1][1] *= -1; //Flip y-axis
-        //float rotSpeed = 0.1f;
-        //glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
-        float sf = 0.01f;
-        glm::mat4 modelMat = glm::mat4(1.f);
-        //modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.f, -3.f));
-        //modelMat = glm::scale(modelMat, glm::vec3(sf));
-        glm::mat4 mvpMat = projMat * _camera.getViewMat() * modelMat;
-        MeshPushConstants pushConstants{ .render_matrix = mvpMat };
-        vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);
-    }
-    vkCmdDraw(commandBuffer, uint32_t(mesh._vertices.size()), 1, 0, 0);
+    drawObjects(commandBuffer, _renderables);
 
     vkCmdEndRenderPass(commandBuffer);
 

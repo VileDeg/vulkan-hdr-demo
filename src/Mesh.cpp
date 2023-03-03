@@ -4,6 +4,18 @@
 
 #include "tinyobj/tiny_obj_loader.h"
 
+void Engine::createVmaAllocator()
+{
+    VmaAllocatorCreateInfo allocatorInfo = {
+        .physicalDevice = _physicalDevice,
+        .device = _device,
+        .instance = _instance,
+    };
+    vmaCreateAllocator(&allocatorInfo, &_allocator);
+
+    _deletionStack.push([=]() { vmaDestroyAllocator(_allocator); });
+}
+
 bool Mesh::loadFromObj(const std::string& path)
 {
     tinyobj::attrib_t attrib;
@@ -72,37 +84,38 @@ bool Mesh::loadFromObj(const std::string& path)
     return true;
 }
 
-void Mesh::cleanup(VmaAllocator& allocator)
-{
-    vmaDestroyBuffer(allocator, _vertexBuffer.buffer, _vertexBuffer.allocation);
-}
+
 
 void Engine::loadMeshes()
 {
     uint32_t vertexCount = 12;
-    _triangleMesh._vertices.resize(vertexCount);
+
+    _meshes["triangle"] = {};
+    Mesh& triMesh = _meshes["triangle"];
+    
+    triMesh._vertices.resize(vertexCount);
 
     //back
-    _triangleMesh._vertices[0].pos = { 1.f, 1.f, 0.0f };
-    _triangleMesh._vertices[1].pos = { -1.f, 1.f, 0.0f };
-    _triangleMesh._vertices[2].pos = { 0.f, -1.f, 0.0f };
+    triMesh._vertices[0].pos = { 1.f, 1.f, 0.0f };
+    triMesh._vertices[1].pos = { -1.f, 1.f, 0.0f };
+    triMesh._vertices[2].pos = { 0.f, -1.f, 0.0f };
 
     float z = -2.f;
 
     //boottom
-    _triangleMesh._vertices[3].pos = { 0.f, 1.f, z };
-    _triangleMesh._vertices[4].pos = { -1.f, 1.f, 0.0f };
-    _triangleMesh._vertices[5].pos = { 1.f, 1.f, 0.0f };
+    triMesh._vertices[3].pos = { 0.f, 1.f, z };
+    triMesh._vertices[4].pos = { -1.f, 1.f, 0.0f };
+    triMesh._vertices[5].pos = { 1.f, 1.f, 0.0f };
 
     //right
-    _triangleMesh._vertices[6].pos = { 0.f, 1.f, z };
-    _triangleMesh._vertices[7].pos = { 1.f, 1.f, 0.0f };
-    _triangleMesh._vertices[8].pos = { 0.f, -1.f, 0.0f };
+    triMesh._vertices[6].pos = { 0.f, 1.f, z };
+    triMesh._vertices[7].pos = { 1.f, 1.f, 0.0f };
+    triMesh._vertices[8].pos = { 0.f, -1.f, 0.0f };
 
     //left
-    _triangleMesh._vertices[9].pos  = { 0.f, 1.f, z };
-    _triangleMesh._vertices[10].pos = { 0.f, -1.f, 0.0f };
-    _triangleMesh._vertices[11].pos = { -1.f, 1.f, 0.0f };
+    triMesh._vertices[9].pos  = { 0.f, 1.f, z };
+    triMesh._vertices[10].pos = { 0.f, -1.f, 0.0f };
+    triMesh._vertices[11].pos = { -1.f, 1.f, 0.0f };
 
     std::vector<glm::vec3> colors = {
         { 1.f, 0.f, 0.f },
@@ -111,21 +124,26 @@ void Engine::loadMeshes()
     };
 
     for (uint32_t i = 0; i < vertexCount; ++i) {
-        _triangleMesh._vertices[i].color = colors[i % 3];
+        triMesh._vertices[i].color = colors[i % 3];
     }
-    
-    _modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
-    //_modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
 
-    uploadMesh(_triangleMesh);
-    uploadMesh(_modelMesh);
+    _meshes["model"] = {};
+    Mesh& modelMesh = _meshes["model"];
+    
+    modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
+    //modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
+
+    triMesh.upload(_allocator);
+    modelMesh.upload(_allocator);
 }
 
-void Engine::uploadMesh(Mesh& mesh)
+
+
+void Mesh::upload(VmaAllocator allocator)
 {
     VkBufferCreateInfo bufferInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = sizeof(Vertex) * mesh._vertices.size(),
+        .size = sizeof(Vertex) * _vertices.size(),
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
@@ -134,15 +152,14 @@ void Engine::uploadMesh(Mesh& mesh)
         .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     };
 
-    VKASSERT(vmaCreateBuffer(_allocator, &bufferInfo, &allocInfo, 
-        &mesh._vertexBuffer.buffer, &mesh._vertexBuffer.allocation, nullptr));
+    VKASSERT(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+        &_vertexBuffer.buffer, &_vertexBuffer.allocation, nullptr));
 
     void* data;
 
-    vmaMapMemory(_allocator, mesh._vertexBuffer.allocation, &data);
-    memcpy(data, mesh._vertices.data(), mesh._vertices.size() * sizeof(Vertex));
-    vmaUnmapMemory(_allocator, mesh._vertexBuffer.allocation);
-
+    vmaMapMemory(allocator, _vertexBuffer.allocation, &data);
+    memcpy(data, _vertices.data(), _vertices.size() * sizeof(Vertex));
+    vmaUnmapMemory(allocator, _vertexBuffer.allocation);
 }
 
 VertexInputDescription Vertex::getDescription()

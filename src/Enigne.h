@@ -3,6 +3,7 @@
 #include "types.h"
 #include "Mesh.h"
 #include "Camera.h"
+#include "RenderObject.h"
 
 class Engine {
 public:
@@ -17,27 +18,29 @@ private:
     void createSurface();
     void pickPhysicalDevice();
     void createLogicalDevice();
+    void createVmaAllocator();
     void createSwapchain();
     void createImageViews();
     void createRenderPass();
     void createGraphicsPipeline();
     void createFramebuffers();
-    void createCommandPool();
+    //void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
+    void createScene();
     
+    void bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline);
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void recreateSwapchain();
     
     
-    void cleanupShaders(PipelineShaders& shaders);
+    //void cleanupShaders(PipelineShaders& shaders);
     void cleanupSwapchainResources();
-    void cleanupPipeline();
+    //void cleanupPipeline();
 
 private:
     void loadMeshes();
-    void uploadMesh(Mesh& mesh);
 
     PipelineShaders loadShaders(const std::string& vertName, const std::string& fragName);
     bool createShaderModule(const std::vector<char>& code, VkShaderModule* module);
@@ -62,7 +65,7 @@ private:
 
     void calculateFPS();
     void calculateDeltaTime();
-    void updateCamera();
+    //void updateCamera();
 private:
     GLFWwindow* _window;
 
@@ -88,17 +91,11 @@ private:
     VkFormat _depthFormat;
     
     VkRenderPass _renderPass;
-    VkPipelineLayout _pipelineLayout;
-    VkPipeline _graphicsPipeline;
-    Mesh _triangleMesh;
-    Mesh _modelMesh;
 
-    VkCommandPool _commandPool;
-    std::vector<VkCommandBuffer> _commandBuffers;
-
-    std::vector<VkSemaphore> _imageAvailableSemaphores;
-    std::vector<VkSemaphore> _renderFinishedSemaphores;
-    std::vector<VkFence> _inFlightFences;
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
+    FrameData _frames[MAX_FRAMES_IN_FLIGHT];
+    //FrameData& getCurrentFrame();
+    
 
     VmaAllocator _allocator;
 
@@ -107,7 +104,20 @@ private:
     bool _framebufferResized = false;
 
     bool _isInitialized = false;
+    DeletionStack _deletionStack{};
+private:
+    std::vector<RenderObject> _renderables;
 
+    std::unordered_map<std::string, Material> _materials;
+    std::unordered_map<std::string, Mesh> _meshes;
+
+    Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+
+    Material* getMaterial(const std::string& name);
+
+    Mesh* getMesh(const std::string& name);
+
+    void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
 private:
     const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"
@@ -124,8 +134,6 @@ private:
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void cursorCallback (GLFWwindow* window, double xpos, double ypos);
 
-    
-
     static constexpr uint32_t WIDTH = 800;
     static constexpr uint32_t HEIGHT = 600;
 
@@ -133,7 +141,7 @@ private:
     static constexpr uint32_t FS_HEIGHT = 1080;
     static constexpr bool ENABLE_FULLSCREEN = false;
 
-    static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
+    
 
 #ifdef NDEBUG
     static constexpr bool ENABLE_VALIDATION_LAYERS = false;

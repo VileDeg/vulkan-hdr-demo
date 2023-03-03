@@ -30,27 +30,42 @@ void Engine::calculateDeltaTime()
     sLastFrameTime = currentTime;
 }
 
-void Engine::updateCamera()
+void Camera::Update(GLFWwindow* window, float dt)
 {
-    if (glfwGetKey(_window, GLFW_KEY_W) == GLFW_PRESS) {
-        _camera.goFront(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        goFront(dt);
     }
-    if (glfwGetKey(_window, GLFW_KEY_S) == GLFW_PRESS) {
-        _camera.goBack(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        goBack(dt);
     }
-    if (glfwGetKey(_window, GLFW_KEY_A) == GLFW_PRESS) {
-        _camera.goLeft(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        goLeft(dt);
     }
-    if (glfwGetKey(_window, GLFW_KEY_D) == GLFW_PRESS) {
-        _camera.goRight(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        goRight(dt);
     }
-    if (glfwGetKey(_window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        _camera.goUp(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        goUp(dt);
     }
-    if (glfwGetKey(_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-        glfwGetKey(_window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
-        _camera.goDown(_deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
+        goDown(dt);
     }
+}
 
-    //std::cout << _fps << " " << _camera.pos.x << " " << _camera.pos.y << " " << _camera.pos.z << std::endl;
+void Camera::rotate(float x, float y) {
+    _yaw -= x * _rotSpeed;
+    _pitch -= y * _rotSpeed;
+
+    _pitch = std::clamp(_pitch, -90.f, 90.f);
+
+    _front.x = cos(glm::radians(_yaw)) * cos(glm::radians(_pitch));
+    _front.y = sin(glm::radians(_pitch));
+    _front.z = sin(glm::radians(_yaw)) * cos(glm::radians(_pitch));
+    _front = glm::normalize(_front);
+
+    _right = glm::normalize(glm::cross(_front, sWorldUp));
+    _up = glm::normalize(glm::cross(_right, _front));
+
+    //std::cout << V3PR(_front) << V3PR(_right) << V3PR(_up) << std::endl;
 }

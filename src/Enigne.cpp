@@ -12,23 +12,19 @@ void Engine::Init()
     pickPhysicalDevice();
     createLogicalDevice();
 
-    VmaAllocatorCreateInfo allocatorInfo = {
-        .physicalDevice = _physicalDevice,
-        .device = _device,
-        .instance = _instance,
-    };
-    vmaCreateAllocator(&allocatorInfo, &_allocator);
+    createVmaAllocator();
 
     createSwapchain();
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
     createFramebuffers();
-    createCommandPool();
+    //createCommandPool();
     createCommandBuffers();
     createSyncObjects();
 
     loadMeshes();
+    createScene();
 
     _isInitialized = true;
 }
@@ -39,7 +35,7 @@ void Engine::Run()
         glfwPollEvents();
         drawFrame();
 
-        updateCamera();
+        _camera.Update(_window, _deltaTime);
         calculateDeltaTime();
     }
 
@@ -52,22 +48,33 @@ void Engine::Cleanup()
         return;
     }
 
-    _triangleMesh.cleanup(_allocator);
-    _modelMesh.cleanup(_allocator);
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(_device, _renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(_device, _imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(_device, _inFlightFences[i], nullptr);
+    for (auto& mesh : _meshes) {
+        //Destroy vertex buffers
+        mesh.second.cleanup(_allocator);
     }
-    vkDestroyCommandPool(_device, _commandPool, nullptr);
-    cleanupPipeline();
+    for (auto& material : _materials) {
+        //Destroy pipeline layout and pipeline
+        material.second.cleanup(_device);
+    }
+
+    //Delete all synchronization objects of frames
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        vkDestroySemaphore(_device, _frames[i].imageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(_device, _frames[i].renderFinishedSemaphore, nullptr);
+        vkDestroyFence(_device, _frames[i].inFlightFence, nullptr);
+
+        vkDestroyCommandPool(_device, _frames[i].commandPool, nullptr);
+    }
+    
+    //cleanupPipeline();
     vkDestroyRenderPass(_device, _renderPass, nullptr);
 
     cleanupSwapchainResources();
     vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 
-    vmaDestroyAllocator(_allocator);
+    _deletionStack.flush();
+
+    /*vmaDestroyAllocator(_allocator);
 
     vkDestroyDevice(_device, nullptr);
 
@@ -80,5 +87,5 @@ void Engine::Cleanup()
     vkDestroyInstance(_instance, nullptr);
 
     glfwDestroyWindow(_window);
-    glfwTerminate();
+    glfwTerminate();*/
 }

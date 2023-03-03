@@ -22,6 +22,10 @@ struct Mesh {
     AllocatedBuffer _vertexBuffer;
 
     bool loadFromObj(const std::string& path);
-    void cleanup(VmaAllocator& allocator);
+    void upload(VmaAllocator allocator);
+
+    void cleanup(VmaAllocator allocator) {
+        vmaDestroyBuffer(allocator, _vertexBuffer.buffer, _vertexBuffer.allocation);
+    }
 };
 

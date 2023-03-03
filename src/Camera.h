@@ -1,62 +1,58 @@
 #pragma once
 
-struct Camera {
-    static constexpr glm::vec3 sWorldUp{ 0.f,1.f,0.f };
+struct GLFWwindow;
 
-    glm::vec3 front = glm::vec3{ 0,0,1 };
-    glm::vec3 up = sWorldUp;
-    glm::vec3 right = glm::vec3{ 1,0,0 };
+class Camera 
+{
+public:
+    void Update(GLFWwindow* window, float dt);
+    void MouseInput(float x, float y) {
+        rotate(x, y);
+    }
 
-    glm::vec3 pos{0.f, 0.f, -5.f};
-    //glm::vec3 rot{};
-    float yaw{90.f}; //rotation around y axis
-    float pitch{}; //rotation around x axis
-
-    float movSpeed = 10.f;
-    float rotSpeed = 1.f;
-
+    glm::mat4 GetViewMat() {
+        return glm::lookAt(_pos, _pos + _front, _up);
+    }
+private:
     void goFront(float dt) {
-        pos += front * movSpeed * dt;
+        _pos += _front * _movSpeed * dt;
     }
 
     void goBack(float dt) {
-        pos -= front * movSpeed * dt;
+        _pos -= _front * _movSpeed * dt;
     }
 
     void goLeft(float dt) {
-        pos -= right * movSpeed * dt;
+        _pos -= _right * _movSpeed * dt;
     }
 
     void goRight(float dt) {
-        pos += right * movSpeed * dt;
+        _pos += _right * _movSpeed * dt;
     }
 
     void goUp(float dt) {
-        pos += up * movSpeed * dt;
+        _pos += _up * _movSpeed * dt;
     }
 
     void goDown(float dt) {
-        pos -= up * movSpeed * dt;
+        _pos -= _up * _movSpeed * dt;
     }
 
-    void rotate(float x, float y) {
-        yaw -= x * rotSpeed;
-        pitch -= y * rotSpeed;
+    void rotate(float x, float y);
+private:
+    static constexpr glm::vec3 sWorldUp{ 0.f, 1.f, 0.f };
 
-        pitch = std::clamp(pitch, -90.f, 90.f);
-        
-        front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front.y = sin(glm::radians(pitch));
-        front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front = glm::normalize(front);
+    glm::vec3 _front{ 0.f, 0.f, 1.f };
+    glm::vec3 _up{ sWorldUp };
+    glm::vec3 _right{ -1.f, 0.f, 0.f };
 
-        right = glm::normalize(glm::cross(front, sWorldUp));
-        up = glm::normalize(glm::cross(right, front));
+    glm::vec3 _pos{0.f, 0.f, -5.f};
 
-        //std::cout << V3PR(front) << V3PR(right) << V3PR(up) << std::endl;
-    }
+    float _yaw{90.f}; //rotation around y axis
+    float _pitch{}; //rotation around x axis
 
-    glm::mat4 getViewMat() {
-        return glm::lookAt(pos, pos + front, up);
-    }
+    float _movSpeed{ 10.f };
+    float _rotSpeed{ 1.f };
+
+    
 };

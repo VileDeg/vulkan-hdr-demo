@@ -121,6 +121,9 @@ void Engine::createSwapchain()
 
     VkSwapchainKHR newSwapchain{};
     VKASSERT(vkCreateSwapchainKHR(_device, &swapchainInfo, nullptr, &newSwapchain));
+ 
+    //Because we are using the old swapchain to create the new one, 
+    //we only delete it after the new one is created
     if (_swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(_device, _swapchain, nullptr);
     }
