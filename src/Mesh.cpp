@@ -13,7 +13,7 @@ void Engine::createVmaAllocator()
     };
     vmaCreateAllocator(&allocatorInfo, &_allocator);
 
-    _deletionStack.push([=]() { vmaDestroyAllocator(_allocator); });
+    _deletionStack.push([&]() { vmaDestroyAllocator(_allocator); });
 }
 
 bool Mesh::loadFromObj(const std::string& path)

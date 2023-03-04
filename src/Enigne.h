@@ -22,7 +22,7 @@ private:
     void createSwapchain();
     void createImageViews();
     void createRenderPass();
-    void createGraphicsPipeline();
+    void createPipeline();
     void createFramebuffers();
     void createFrameData();
     void createScene();
@@ -59,6 +59,23 @@ private:
 
     void calculateFPS();
     void calculateDeltaTime();
+
+private:
+    std::vector<RenderObject> _renderables;
+
+    std::unordered_map<std::string, Material> _materials;
+    std::unordered_map<std::string, Mesh> _meshes;
+
+    Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+    Material* getMaterial(const std::string& name);
+    Mesh* getMesh(const std::string& name);
+    void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
+    AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+
+    FrameData& getCurrentFrame() { return _frames[_currentFrame]; }
+
+    VkDescriptorSetLayout _globalSetLayout;
+    VkDescriptorPool _descriptorPool;
 private:
     GLFWwindow* _window;
 
@@ -96,21 +113,7 @@ private:
 
     bool _isInitialized = false;
     DeletionStack _deletionStack{};
-private:
-    std::vector<RenderObject> _renderables;
 
-    std::unordered_map<std::string, Material> _materials;
-    std::unordered_map<std::string, Mesh> _meshes;
-
-    Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
-
-    Material* getMaterial(const std::string& name);
-
-    Mesh* getMesh(const std::string& name);
-
-    void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
-
-    AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 private:
     const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"

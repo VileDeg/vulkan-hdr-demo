@@ -66,9 +66,22 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < objects.size(); i++) {
         const RenderObject& obj = objects[i];
+
+		GPUCameraData camData{
+			.view = _camera.GetViewMat(),
+			.proj = projMat,
+			.viewproj = projMat * _camera.GetViewMat()
+		};
+		void* data;
+		vmaMapMemory(_allocator, getCurrentFrame().cameraBuffer.allocation, &data);
+		memcpy(data, &camData, sizeof(GPUCameraData));
+		vmaUnmapMemory(_allocator, getCurrentFrame().cameraBuffer.allocation);
+
 		if (obj.material != lastMaterial) {
 			bindPipeline(cmd, obj.material->pipeline);
 			lastMaterial = obj.material;
+
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, 1, &getCurrentFrame().globalDescriptor, 0, nullptr);
 		}
 
 		if (obj.mesh != lastMesh) {
@@ -78,13 +91,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 		}
 		
         glm::mat4 modelMat = obj.transform;
-        glm::mat4 mvp = projMat * _camera.GetViewMat() * modelMat;
+        //glm::mat4 mvp = projMat * _camera.GetViewMat() * modelMat;
+
 		MeshPushConstants pushConsts{
-			.render_matrix = mvp
+			.render_matrix = modelMat
 		};
+		ASSERT(obj.material && obj.mesh);
 
         vkCmdPushConstants(cmd, obj.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConsts);
-		
         vkCmdDraw(cmd, obj.mesh->_vertices.size(), 1, 0, 0);
     }
 }

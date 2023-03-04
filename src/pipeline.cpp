@@ -26,9 +26,9 @@ PipelineShaders Engine::loadShaders(const std::string& vertName, const std::stri
     return shaders;
 }
 
-void Engine::createGraphicsPipeline()
+void Engine::createPipeline()
 {
-    auto shaders = loadShaders("tri_mesh.vert.spv", "shader.frag.spv");
+    auto shaders = loadShaders("shader.vert.spv", "shader.frag.spv");
 
     VertexInputDescription description = Vertex::getDescription();
 
@@ -88,11 +88,30 @@ void Engine::createGraphicsPipeline()
             .size = sizeof(MeshPushConstants)
         };
 
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipeline_layout_create_info();
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+        VkDescriptorSetLayoutBinding cameraBufferBinding{
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+        };
 
-        
+
+        VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 1,
+            .pBindings = &cameraBufferBinding
+        };
+
+        VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
+        _deletionStack.push([&]() { vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr); });
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &_globalSetLayout,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &pushConstantRange
+        };
         
         VKASSERT(vkCreatePipelineLayout(_device, &pipelineLayoutInfo, nullptr, &layout));
     }

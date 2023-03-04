@@ -30,7 +30,7 @@ void Engine::createLogicalDevice()
 
     VKASSERT(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_device));
 
-    _deletionStack.push([=]() { vkDestroyDevice(_device, nullptr); });
+    _deletionStack.push([&]() { vkDestroyDevice(_device, nullptr); });
 
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);

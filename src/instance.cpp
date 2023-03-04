@@ -27,7 +27,7 @@ void Engine::createInstance()
 
     VKASSERT(vkCreateInstance(&instanceInfo, nullptr, & _instance));
     {
-        _deletionStack.push([=]() { vkDestroyInstance(_instance, nullptr); });
+        _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
     }
 }
 
@@ -96,7 +96,7 @@ void Engine::createSurface()
     VKASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
         "GLFW: Failed to create window surface");
 
-    _deletionStack.push([=]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
+    _deletionStack.push([&]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
 }
 
 std::vector<const char*> Engine::get_required_extensions() {

@@ -29,8 +29,10 @@ void Engine::createDebugMessenger()
         DYNAMIC_LOAD(cdum, _instance, vkCreateDebugUtilsMessengerEXT);
         VKASSERT(cdum(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
         
-        DYNAMIC_LOAD(ddum, _instance, vkDestroyDebugUtilsMessengerEXT);
-        _deletionStack.push([=]() { ddum(_instance, _debugMessenger, nullptr); });
+        _deletionStack.push([&]() { 
+            DYNAMIC_LOAD(ddum, _instance, vkDestroyDebugUtilsMessengerEXT); 
+            ddum(_instance, _debugMessenger, nullptr); 
+        });
     }
 }
 
