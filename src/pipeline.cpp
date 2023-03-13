@@ -88,22 +88,14 @@ void Engine::createPipeline()
             .size = sizeof(MeshPushConstants)
         };
 
-        VkDescriptorSetLayoutBinding cameraBufferBinding{
+        /*VkDescriptorSetLayoutBinding cameraBufferBinding{
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-        };
+        };*/
 
-
-        VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 1,
-            .pBindings = &cameraBufferBinding
-        };
-
-        VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
-        _deletionStack.push([&]() { vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr); });
+        
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

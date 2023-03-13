@@ -93,6 +93,9 @@ Engine::findCompatibleDevices()
 
 void Engine::pickPhysicalDevice()
 {
+    // This function's code is inspired by https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
+    // Link to repo https://github.com/pc-john/VulkanTutorial/
+
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
         compatibleDevices = findCompatibleDevices();
     ASSERTMSG(!compatibleDevices.empty(), "No compatible devices found");
@@ -138,4 +141,7 @@ void Engine::pickPhysicalDevice()
     _physicalDevice = get<0>(*bestDevice);
     _graphicsQueueFamily = get<1>(*bestDevice);
     _presentQueueFamily = get<2>(*bestDevice);
+    _gpuProperties = get<3>(*bestDevice);
+
+    std::cout << "The GPU has a minimum buffer alignment of " << _gpuProperties.limits.minUniformBufferOffsetAlignment << std::endl;
 }

@@ -56,8 +56,8 @@ void Camera::Update(GLFWwindow* window, float dt)
 void Camera::rotate(float x, float y) {
     _yaw -= x * _rotSpeed;
     _pitch -= y * _rotSpeed;
-
-    _pitch = std::clamp(_pitch, -90.f, 90.f);
+    
+    _pitch = std::clamp(_pitch, -89.f, 89.f);
 
     _front.x = cos(glm::radians(_yaw)) * cos(glm::radians(_pitch));
     _front.y = sin(glm::radians(_pitch));

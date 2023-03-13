@@ -72,10 +72,14 @@ private:
     void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
-    FrameData& getCurrentFrame() { return _frames[_currentFrame]; }
+    FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
+    size_t pad_uniform_buffer_size(size_t originalSize);
 
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorPool _descriptorPool;
+
+    GPUSceneData _sceneParameters;
+    AllocatedBuffer _sceneParameterBuffer;
 private:
     GLFWwindow* _window;
 
@@ -84,6 +88,7 @@ private:
     VkSurfaceKHR _surface;
 
     VkPhysicalDevice _physicalDevice;
+    VkPhysicalDeviceProperties _gpuProperties;
     VkDevice _device;
     uint32_t _graphicsQueueFamily;
     uint32_t _presentQueueFamily;
@@ -107,7 +112,7 @@ private:
 
     VmaAllocator _allocator;
 
-    uint32_t _currentFrame = 0;
+    uint32_t _frameInFlightNum = 0;
     uint32_t _frameNumber = 0;
     bool _framebufferResized = false;
 

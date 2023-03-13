@@ -3,11 +3,13 @@
 
 void Engine::drawFrame()
 {
-    FrameData& frame = _frames[_currentFrame];
+    _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
+    FrameData& frame = _frames[_frameInFlightNum];
 
     VKASSERT(vkWaitForFences(_device, 1, &frame.inFlightFence, VK_TRUE, UINT64_MAX));
     VKASSERT(vkResetFences(_device, 1, &frame.inFlightFence));
 
+    //Get index of next image after 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, frame.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
@@ -58,7 +60,7 @@ void Engine::drawFrame()
         VKASSERTMSG(result, "failed to present swap chain image!");
     }
 
-    _currentFrame = (++_frameNumber) % MAX_FRAMES_IN_FLIGHT;
+    ++_frameNumber;
 }
 
 void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -98,26 +100,6 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     };
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    //bindPipeline(commandBuffer, _graphicsPipeline);
-    //Mesh& mesh = _modelMesh;
-    //{
-    //    VkDeviceSize zeroOffset = 0;
-    //    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &mesh._vertexBuffer.buffer, &zeroOffset);
-
-    //    glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
-    //    projMat[1][1] *= -1; //Flip y-axis
-    //    float rotSpeed = 0.1f;
-    //    glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(_frameNumber * rotSpeed), glm::vec3(0, 1, 0));
-    //    //float sf = 0.01f;
-    //    //glm::mat4 modelMat = glm::mat4(1.f);
-    //    //modelMat = glm::translate(modelMat, glm::vec3(0.f, -1.f, -3.f));
-    //    //modelMat = glm::scale(modelMat, glm::vec3(sf));
-    //    glm::mat4 mvpMat = projMat * _camera.GetViewMat() * modelMat;
-    //    MeshPushConstants pushConstants{ .render_matrix = mvpMat };
-    //    vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConstants);
-    //}
-    //vkCmdDraw(commandBuffer, uint32_t(mesh._vertices.size()), 1, 0, 0);
 
     drawObjects(commandBuffer, _renderables);
 

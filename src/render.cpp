@@ -62,6 +62,15 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 	glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
 	projMat[1][1] *= -1; //Flip y-axis
 
+	float framed = _frameNumber / 120.f;
+	_sceneParameters.ambientColor = { sin(framed)*0.5f, 0.5f, cos(framed)*0.5f, 1.0f};
+
+	char* sceneData;
+	vmaMapMemory(_allocator, _sceneParameterBuffer.allocation, (void**)&sceneData);
+	sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+	memcpy(sceneData, &_sceneParameters, sizeof(GPUSceneData));
+	vmaUnmapMemory(_allocator, _sceneParameterBuffer.allocation);
+
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < objects.size(); i++) {
@@ -81,7 +90,10 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 			bindPipeline(cmd, obj.material->pipeline);
 			lastMaterial = obj.material;
 
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, 1, &getCurrentFrame().globalDescriptor, 0, nullptr);
+			//offset for our scene buffer
+			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, 1, &getCurrentFrame().globalDescriptor, 1, &uniform_offset);
 		}
 
 		if (obj.mesh != lastMesh) {
@@ -91,7 +103,6 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 		}
 		
         glm::mat4 modelMat = obj.transform;
-        //glm::mat4 mvp = projMat * _camera.GetViewMat() * modelMat;
 
 		MeshPushConstants pushConsts{
 			.render_matrix = modelMat
