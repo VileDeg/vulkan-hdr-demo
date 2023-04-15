@@ -1,7 +1,6 @@
 #pragma once
 
-struct DeletionStack
-{
+struct DeletionStack {
     std::stack<std::function<void()>> deletors;
 
     void push(std::function<void()>&& function) {
@@ -31,7 +30,10 @@ struct PipelineShaders {
     }
 };
 
+
+
 struct AllocatedBuffer {
+    /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkBuffer buffer;
     VmaAllocation allocation;
 
@@ -41,8 +43,13 @@ struct AllocatedBuffer {
 };
 
 struct AllocatedImage {
+    /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkImage image;
     VmaAllocation allocation;
+
+    void destroy(VmaAllocator& allocator) {
+        vmaDestroyImage(allocator, image, allocation);
+    }
 };
 
 struct MeshPushConstants {

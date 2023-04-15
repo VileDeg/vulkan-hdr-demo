@@ -59,7 +59,40 @@ void Engine::initFrame(FrameData& f)
     vkUpdateDescriptorSets(_device, 2, setWrites, 0, nullptr);
 }
 
+void Engine::initDescriptors()
+{
+    VkDescriptorSetLayoutBinding cameraBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
 
+    VkDescriptorSetLayoutBinding sceneBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+
+    VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
+
+    VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = bindings
+    };
+
+    VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
+    _deletionStack.push([&]() {
+        vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr);
+    });
+
+    //another set, one that holds a single texture
+    VkDescriptorSetLayoutBinding textureBind = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+
+    VkDescriptorSetLayoutCreateInfo set3info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = 0,
+        .bindingCount = 1,
+        .pBindings = &textureBind
+    };
+
+    vkCreateDescriptorSetLayout(_device, &set3info, nullptr, &_singleTextureSetLayout);
+    _deletionStack.push([&]() {
+        vkDestroyDescriptorSetLayout(_device, _singleTextureSetLayout, nullptr);
+    });
+}
 
 void Engine::createFrameData()
 {
@@ -67,7 +100,9 @@ void Engine::createFrameData()
         uint32_t poolCount = 10;
         std::vector<VkDescriptorPoolSize> poolSizes = {
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, poolCount },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, poolCount }
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, poolCount },
+            //add combined-image-sampler descriptor types to the pool
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 }
         };
 
         VkDescriptorPoolCreateInfo descriptorPoolInfo{
@@ -92,28 +127,8 @@ void Engine::createFrameData()
         });
     }
 
-    {
-        VkDescriptorSetLayoutBinding cameraBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
-
-        VkDescriptorSetLayoutBinding sceneBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-
-        VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
-
-        VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 2,
-            .pBindings = bindings
-        };
-
-        VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
-        _deletionStack.push([&]() {
-            vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr);
-        });
-    }
-
-    {
-        initUploadContext();
-    }
+    initDescriptors();
+    initUploadContext();
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         initFrame(_frames[i]);

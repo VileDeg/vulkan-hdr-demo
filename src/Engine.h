@@ -3,7 +3,7 @@
 #include "types.h"
 #include "Mesh.h"
 #include "Camera.h"
-#include "RenderObject.h"
+#include "render.h"
 
 /**
 * Struct that holds data related to immediate command execution.
@@ -53,6 +53,7 @@ private: /* Methods used from Init directly */
     void createFrameData();
 
     void loadMeshes();
+    void loadTextures();
 
     void createScene();
 private: /* Secondary methods */
@@ -61,9 +62,13 @@ private: /* Secondary methods */
     void recreateSwapchain();
     void cleanupSwapchainResources();
 
-    void initFrame(FrameData& f);
+    
 
 private:
+    void initDescriptors();
+    void initUploadContext();
+    void initFrame(FrameData& f);
+
     void uploadMesh(Mesh& mesh);
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
@@ -78,15 +83,20 @@ private:
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     size_t pad_uniform_buffer_size(size_t originalSize);
 
-    void initUploadContext();
+    
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+
+    bool loadImageFromFile(std::string filePath, AllocatedImage& outImage);
 
     std::vector<RenderObject> _renderables;
 
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;
+    std::unordered_map<std::string, Texture> _loadedTextures;
 
     VkDescriptorSetLayout _globalSetLayout;
+    VkDescriptorSetLayout _singleTextureSetLayout;
+
     VkDescriptorPool _descriptorPool;
 
     GPUSceneData _sceneParameters;
@@ -144,6 +154,7 @@ private:
 public:
     inline static std::string _assetPath = "assets/";
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
+    inline static std::string imagePath  = _assetPath + "images/";
     inline static std::string modelPath  = _assetPath + "models/";
 private:
     static constexpr uint32_t WIDTH = 800;

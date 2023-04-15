@@ -49,20 +49,18 @@ bool Mesh::loadFromObj(const std::string& path)
                 tinyobj::real_t nx = attrib.normals[3 * idx.normal_index + 0];
                 tinyobj::real_t ny = attrib.normals[3 * idx.normal_index + 1];
                 tinyobj::real_t nz = attrib.normals[3 * idx.normal_index + 2];
+                //vertex uv
+                tinyobj::real_t ux = attrib.texcoords[2 * idx.texcoord_index + 0];
+                tinyobj::real_t uy = attrib.texcoords[2 * idx.texcoord_index + 1];
 
                 //copy it into our vertex
-                Vertex new_vert;
-                new_vert.pos.x = vx;
-                new_vert.pos.y = vy;
-                new_vert.pos.z = vz;
-
-                new_vert.normal.x = nx;
-                new_vert.normal.y = ny;
-                new_vert.normal.z = nz;
-
-                //we are setting the vertex color as the vertex normal. This is just for display purposes
-                new_vert.color = new_vert.normal;
-
+                Vertex new_vert{
+                    .pos = {vx, vy, vz},
+                    .normal = {nx, ny, nz},
+                    //we are setting the vertex color as the vertex normal. This is just for display purposess
+                    .color = {nx, ny, nz},
+                    .uv = {ux, 1-uy}
+                };
 
                 _vertices.push_back(new_vert);
             }
@@ -171,9 +169,17 @@ VertexInputDescription Vertex::getDescription()
         .offset = offsetof(Vertex, color),
     };
 
+    VkVertexInputAttributeDescription uvAttribute = {
+        .location = 3,
+        .binding = 0,
+        .format = VK_FORMAT_R32G32_SFLOAT,
+        .offset = offsetof(Vertex, uv)
+    };
+
     description.attributes.push_back(positionAttribute);
     description.attributes.push_back(normalAttribute);
     description.attributes.push_back(colorAttribute);
+    description.attributes.push_back(uvAttribute);
 
     return description;
 }

@@ -93,11 +93,17 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
 
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, 1, &getCurrentFrame().globalDescriptor, 1, &uniform_offset);
+
+			if (obj.material->textureSet != VK_NULL_HANDLE) {
+				//texture descriptor
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 1, 1, &obj.material->textureSet, 0, nullptr);
+
+			}
 		}
 
 		if (obj.mesh != lastMesh) {
 			VkDeviceSize zeroOffset = 0;
-			vkCmdBindVertexBuffers(cmd, 0, 1, &obj.mesh->_stagingBuffer.buffer, &zeroOffset);
+			vkCmdBindVertexBuffers(cmd, 0, 1, &obj.mesh->_vertexBuffer.buffer, &zeroOffset);
 			lastMesh = obj.mesh;
 		}
 		
@@ -113,33 +119,21 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
     }
 }
 
-void Engine::createScene()
-{
-	//Rotate to face the camera
-	glm::mat4 modelMat = glm::mat4(1.f);
-	modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
-	modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
-	RenderObject model{
-		.mesh = getMesh("model"),
-        .material = getMaterial("default"),
-        .transform = modelMat
-    };
 
-	_renderables.push_back(model);
-	for (int x = -20; x < 20; x++) {
-		for (int y = -20; y < 20; y++) {
-			glm::mat4 modelMat = glm::mat4(1.f);
-			modelMat = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, y));
-			float sf = 0.2f;
-			modelMat = glm::scale(modelMat, glm::vec3(sf, sf, sf));
-			RenderObject tri{
-                .mesh = getMesh("triangle"),
-                .material = getMaterial("default"),
-                .transform = modelMat
-            };
-            _renderables.push_back(tri);
-        }
-    }
+
+void Engine::loadTextures()
+{
+	Texture lostEmpire;
+
+	loadImageFromFile(Engine::imagePath + "lost_empire-RGBA.png", lostEmpire.image);
+
+	VkImageViewCreateInfo imageinfo = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &lostEmpire.imageView));
+	_deletionStack.push([=]() {
+		vkDestroyImageView(_device, lostEmpire.imageView, nullptr);
+		});
+
+	_loadedTextures["empire_diffuse"] = lostEmpire;
 }
 
 void Engine::loadMeshes()
@@ -186,13 +180,74 @@ void Engine::loadMeshes()
 	_meshes["model"] = {};
 	Mesh& modelMesh = _meshes["model"];
 
-	modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
-	//modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
+	modelMesh.loadFromObj(Engine::modelPath + "lost_empire.obj");
 
-	triMesh.initBuffers(_allocator);
-	modelMesh.initBuffers(_allocator);
+	uploadMesh(triMesh);
+	uploadMesh(modelMesh);
+}
 
-	for (auto& mesh : _meshes) { //Destroy vertex buffers
-		_deletionStack.push([&]() { mesh.second.cleanup(_allocator); });
-	}
+
+void Engine::createScene()
+{
+	
+
+	//Rotate to face the camera
+	glm::mat4 modelMat = glm::mat4(1.f);
+	modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
+	modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
+	RenderObject model{
+		.mesh = getMesh("model"),
+		.material = getMaterial("default"),
+		.transform = modelMat
+	};
+
+	_renderables.push_back(model);
+	/*for (int x = -20; x < 20; x++) {
+		for (int y = -20; y < 20; y++) {
+			glm::mat4 modelMat = glm::mat4(1.f);
+			modelMat = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, y));
+			float sf = 0.2f;
+			modelMat = glm::scale(modelMat, glm::vec3(sf, sf, sf));
+			RenderObject tri{
+				.mesh = getMesh("triangle"),
+				.material = getMaterial("default"),
+				.transform = modelMat
+			};
+			_renderables.push_back(tri);
+		}
+	}*/
+
+
+	//create a sampler for the texture
+	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
+
+	VkSampler blockySampler;
+	VKASSERT(vkCreateSampler(_device, &samplerInfo, nullptr, &blockySampler));
+	_deletionStack.push([=]() {
+		vkDestroySampler(_device, blockySampler, nullptr);
+		});
+
+	Material* material = getMaterial("default");
+
+	//allocate the descriptor set for single-texture to use on the material
+	VkDescriptorSetAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = _descriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &_singleTextureSetLayout
+	};
+
+	VKASSERT(vkAllocateDescriptorSets(_device, &allocInfo, &material->textureSet));
+
+
+	//write to the descriptor set so that it points to our empire_diffuse texture
+	VkDescriptorImageInfo imageBufferInfo{
+		.sampler = blockySampler,
+		.imageView = _loadedTextures["empire_diffuse"].imageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+
+	VkWriteDescriptorSet texture1 = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, material->textureSet, &imageBufferInfo, 0);
+
+	vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
 }

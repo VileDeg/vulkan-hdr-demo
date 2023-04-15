@@ -22,6 +22,7 @@ void Engine::Init()
     createPipeline();
     createFramebuffers();
 
+    loadTextures();
     loadMeshes();
     createScene();
 

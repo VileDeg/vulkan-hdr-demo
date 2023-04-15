@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 vblanco20-1 https://github.com/vblanco20-1
+ * Copyright © 2020 vblanco20-1 https://github.com/vblanco20-1/vulkan-guide
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+ /* Initial code was modified */
 
 #include "stdafx.h"
 #include "vk_initializers.h"
@@ -316,6 +318,35 @@ VkWriteDescriptorSet vkinit::write_descriptor_buffer(VkDescriptorType type, VkDe
 	write.descriptorCount = 1;
 	write.descriptorType = type;
 	write.pBufferInfo = bufferInfo;
+
+	return write;
+}
+
+VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter filters, VkSamplerAddressMode samplerAddressMode /*= VK_SAMPLER_ADDRESS_MODE_REPEAT*/)
+{
+	VkSamplerCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	info.pNext = nullptr;
+
+	info.magFilter = filters;
+	info.minFilter = filters;
+	info.addressModeU = samplerAddressMode;
+	info.addressModeV = samplerAddressMode;
+	info.addressModeW = samplerAddressMode;
+
+	return info;
+}
+VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, uint32_t binding)
+{
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.pNext = nullptr;
+
+	write.dstBinding = binding;
+	write.dstSet = dstSet;
+	write.descriptorCount = 1;
+	write.descriptorType = type;
+	write.pImageInfo = imageInfo;
 
 	return write;
 }

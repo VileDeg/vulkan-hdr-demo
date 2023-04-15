@@ -89,10 +89,12 @@ void Engine::createPipeline()
             .size = sizeof(MeshPushConstants)
         };
 
+        VkDescriptorSetLayout setLayouts[] = { _globalSetLayout, _singleTextureSetLayout };
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &_globalSetLayout,
+            .setLayoutCount = 2,
+            .pSetLayouts = setLayouts,
             .pushConstantRangeCount = 1,
             .pPushConstantRanges = &pushConstantRange
         };

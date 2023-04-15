@@ -58,7 +58,7 @@
 #define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "
 
 #ifdef NDEBUG
-#define ENABLE_VALIDATION_LAYERS 1
-#else
 #define ENABLE_VALIDATION_LAYERS 0
+#else
+#define ENABLE_VALIDATION_LAYERS 1
 #endif
