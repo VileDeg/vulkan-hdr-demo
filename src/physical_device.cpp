@@ -1,7 +1,7 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "Engine.h"
 
-bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
+static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<const char*>& deviceExtensions)
 {
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
@@ -9,7 +9,7 @@ bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
 
     bool allSupported = true;
-    for (const auto& de : _deviceExtensions) {
+    for (const auto& de : deviceExtensions) {
         bool found = false;
         for (VkExtensionProperties& property : availableExtensionProperties) {
             if (strcmp(property.extensionName, de) == 0) {
@@ -24,23 +24,24 @@ bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice pd)
     return allSupported;
 }
 
+static
 std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-Engine::findCompatibleDevices()
+findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*>& deviceExtensions)
 {
-    // This function's code is inspired by https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
-    // Link to repo https://github.com/pc-john/VulkanTutorial/
-    
+    // This function is based on the code by https://github.com/pc-john/
+    // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
+    // Repository: https://github.com/pc-john/VulkanTutorial/
     
     // find compatible devices
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
     std::vector<VkPhysicalDevice> deviceList(deviceCount);
-    vkEnumeratePhysicalDevices(_instance, &deviceCount, deviceList.data());
+    vkEnumeratePhysicalDevices(instance, &deviceCount, deviceList.data());
 
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>> compatibleDevices;
     for (VkPhysicalDevice pd : deviceList) {
         
-        if (!checkDeviceExtensionSupport(pd))
+        if (!checkDeviceExtensionSupport(pd, deviceExtensions))
             continue;
 
         VkPhysicalDeviceProperties deviceProperties{};
@@ -58,7 +59,7 @@ Engine::findCompatibleDevices()
 
             // test for presentation support
             VkBool32 presentationSupported = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, _surface, &presentationSupported);
+            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
             if (presentationSupported) {
 
                 // test for graphics operations support
@@ -93,20 +94,20 @@ Engine::findCompatibleDevices()
 
 void Engine::pickPhysicalDevice()
 {
-    // This function's code is inspired by https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
-    // Link to repo https://github.com/pc-john/VulkanTutorial/
+    // This function is based on the code by https://github.com/pc-john/
+    // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
+    // Repository: https://github.com/pc-john/VulkanTutorial/
 
-    std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-        compatibleDevices = findCompatibleDevices();
+    auto compatibleDevices = findCompatibleDevices(_instance, _surface, _deviceExtensions);
     ASSERTMSG(!compatibleDevices.empty(), "No compatible devices found");
 
     // print compatible devices
 #ifndef NDEBUG
-    std::cout << "Compatible devices:" << std::endl;
+   pr("Compatible devices:");
     for (auto& t : compatibleDevices)
-        std::cout << "   " << get<3>(t).deviceName << " (graphics queue: " << get<1>(t)
+       pr("\t" << get<3>(t).deviceName << " (graphics queue: " << get<1>(t)
         << ", presentation queue: " << get<2>(t)
-        << ", type: " << std::to_string(get<3>(t).deviceType) << ")" << std::endl;
+        << ", type: " << std::to_string(get<3>(t).deviceType) << ")");
 #endif // NDEBUG
 
     // choose the best device
@@ -114,11 +115,11 @@ void Engine::pickPhysicalDevice()
     ASSERTMSG(bestDevice != compatibleDevices.end(), "No compatible devices found");
 
     constexpr const std::array deviceTypeScore = {
-        10, // VK_PHYSICAL_DEVICE_TYPE_OTHER         - lowest score
+        10, // VK_PHYSICAL_DEVICE_TYPE_OTHER          - lowest score
         40, // VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU - high score
         50, // VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU   - highest score
         30, // VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU    - normal score
-        20, // VK_PHYSICAL_DEVICE_TYPE_CPU           - low score
+        20, // VK_PHYSICAL_DEVICE_TYPE_CPU            - low score
         10, // unknown VkPhysicalDeviceType
     };
     int bestScore = deviceTypeScore[std::clamp(int(get<3>(*bestDevice).deviceType), 0, int(deviceTypeScore.size()) - 1)];
@@ -134,8 +135,7 @@ void Engine::pickPhysicalDevice()
         }
     }
 #ifndef NDEBUG
-    std::cout << "Using device:\n"
-        "   " << get<3>(*bestDevice).deviceName << std::endl;
+   pr("Using device:\n" << "\t" << get<3>(*bestDevice).deviceName);
 #endif // NDEBUG
 
     _physicalDevice = get<0>(*bestDevice);
@@ -143,5 +143,6 @@ void Engine::pickPhysicalDevice()
     _presentQueueFamily = get<2>(*bestDevice);
     _gpuProperties = get<3>(*bestDevice);
 
-    std::cout << "The GPU has a minimum buffer alignment of " << _gpuProperties.limits.minUniformBufferOffsetAlignment << std::endl;
+   pr("The GPU has a minimum buffer alignment of " 
+       << _gpuProperties.limits.minUniformBufferOffsetAlignment);
 }

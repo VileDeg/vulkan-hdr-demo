@@ -1,8 +1,9 @@
 #pragma once
 
 //Macros for printing error messages
-//#define HPR(_msg, _type) do{ fprintf(stderr, "[%s, %s, %d] %s: %s\n", __FILE__, __func__, __LINE__, _type, _msg); }while(0)
-#define HHPR(_msg, _type, _file) do{ _file << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": " << _msg << std::endl; }while(0)
+
+#define HHHPR(_msg, _stream) do{ _stream << _msg << std::endl; }while(0)
+#define HHPR(_msg, _type, _stream) do{ _stream << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": "; HHHPR(_msg, _stream); }while(0)
 #define HPR(_msg, _type) HHPR(_msg, _type, std::cerr)
 #define HPRINFO(_msg, _type) HHPR(_msg, _type, std::cout)
 
@@ -11,6 +12,8 @@
 #define PRABRT(_msg) HPR(_msg, "Abort");
 
 #define PRINF(_msg) HPRINFO(_msg, "Info");
+
+#define pr(_msg) HHHPR(_msg, std::cout)
 
 //Macro for breaking into the debugger or aborting the program
 #ifdef NDEBUG
@@ -24,8 +27,8 @@
             #define TRAP() __debugbreak()
         #endif // _MSC_VER
     #else
-        #include <signal.h>
-        #define TRAP() raise(SIGTRAP)
+        #include <csignal>
+        #define TRAP() std::raise(SIGTRAP)
     #endif // _WIN32
 #endif // NDEBUG
 
@@ -44,9 +47,6 @@
 //Assert macros for functions returning GLFWbool
 #define GLFWASSERTMSG(_x, _msg) HASSERTMSG(_x, GLFW_TRUE, _msg)
 
-//Handy macro for reducing code in aggregate initialization of CreateInfoXXX structs
-//#define HCCP(_type) &(const _type&)_type
-
 //Macro for dynamic load of extension functions
 #define DYNAMIC_LOAD(_varname, _instance, _func)\
         PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
@@ -56,3 +56,9 @@
 #define V4PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << ", " << _v.w << " "
 #define V3PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << " "
 #define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "
+
+#ifdef NDEBUG
+#define ENABLE_VALIDATION_LAYERS 1
+#else
+#define ENABLE_VALIDATION_LAYERS 0
+#endif

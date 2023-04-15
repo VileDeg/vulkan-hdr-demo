@@ -35,7 +35,7 @@ struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
 
-    void cleanup(const VmaAllocator& allocator) {
+    void destroy(const VmaAllocator& allocator) {
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
 };
@@ -74,13 +74,6 @@ struct FrameData {
     AllocatedBuffer cameraBuffer;
     VkDescriptorSet globalDescriptor;
 
-    void cleanup(const VkDevice& device, const VmaAllocator& allocator) {
-        vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
-        vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
-        vkDestroyFence(device, inFlightFence, nullptr);
-
-        vkDestroyCommandPool(device, commandPool, nullptr);
-
-        cameraBuffer.cleanup(allocator);
-    }
-};;
+    void init(VkDevice device);
+    void cleanup(const VkDevice& device, const VmaAllocator& allocator);
+};

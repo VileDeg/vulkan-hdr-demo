@@ -1,25 +1,26 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "Engine.h"
 
 #include "vk_pipeline_builder.h"
 
-PipelineShaders Engine::loadShaders(const std::string& vertName, const std::string& fragName)
+#include "shader.h"
+
+static PipelineShaders loadShaders(VkDevice device, const std::string& vertName, const std::string& fragName)
 {
     PipelineShaders shaders{};
 
     shaders.vert.code = readShaderBinary(Engine::shaderPath + vertName);
     shaders.frag.code = readShaderBinary(Engine::shaderPath + fragName);
 
-    if (createShaderModule(shaders.vert.code, &shaders.vert.module)) {
+    if (createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load vertex shader");
     }
-    
-    if (createShaderModule(shaders.frag.code, &shaders.frag.module)) {
+
+    if (createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
         std::cout << "Fragment shader successfully loaded." << std::endl;
-    }
-    else {
+    } else {
         PRWRN("Failed to load fragment shader");
     }
 
@@ -28,9 +29,7 @@ PipelineShaders Engine::loadShaders(const std::string& vertName, const std::stri
 
 void Engine::createPipeline()
 {
-    auto shaders = loadShaders("shader.vert.spv", "shader.frag.spv");
-
-    VertexInputDescription description = Vertex::getDescription();
+    auto shaders = loadShaders(_device, "shader.vert.spv", "shader.frag.spv");
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { 
         vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, 
@@ -38,6 +37,8 @@ void Engine::createPipeline()
         vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT,
             shaders.frag.module) 
     };
+
+    VertexInputDescription description = Vertex::getDescription();
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = vkinit::vertex_input_state_create_info(
         uint32_t(description.bindings.size()), description.bindings.data(),
@@ -88,15 +89,6 @@ void Engine::createPipeline()
             .size = sizeof(MeshPushConstants)
         };
 
-        /*VkDescriptorSetLayoutBinding cameraBufferBinding{
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-        };*/
-
-        
-
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
@@ -134,8 +126,3 @@ void Engine::createPipeline()
     shaders.cleanup(_device);
 }
 
-//void Engine::cleanupPipeline()
-//{
-//    vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
-//    vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
-//}

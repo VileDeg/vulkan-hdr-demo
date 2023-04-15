@@ -1,23 +1,12 @@
 #include "stdafx.h"
 #include "Mesh.h"
-#include "Enigne.h"
+#include "Engine.h"
 
 #include "tinyobj/tiny_obj_loader.h"
 
-void Engine::createVmaAllocator()
-{
-    VmaAllocatorCreateInfo allocatorInfo = {
-        .physicalDevice = _physicalDevice,
-        .device = _device,
-        .instance = _instance,
-    };
-    vmaCreateAllocator(&allocatorInfo, &_allocator);
-
-    _deletionStack.push([&]() { vmaDestroyAllocator(_allocator); });
-}
-
 bool Mesh::loadFromObj(const std::string& path)
 {
+    //From https://github.com/tinyobjloader/tinyobjloader
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -27,14 +16,14 @@ bool Mesh::loadFromObj(const std::string& path)
     bool good = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.data());
 
     if (!warn.empty()) {
-        std::cout << "tinyobj: WARN: " << warn << std::endl;
+        pr("tinyobj: WARN: " << warn);
     }
     if (!err.empty()) {
-        std::cout << "tinyobj: ERR: " << err << std::endl;
+        pr("tinyobj: ERR: " << err);
     }
 
     if (!good || !err.empty()) {
-        std::cout << "tinyobj: Failed to load " << path << std::endl;
+        pr("tinyobj: Failed to load " << path);
         return false;
     }
 
@@ -84,83 +73,69 @@ bool Mesh::loadFromObj(const std::string& path)
     return true;
 }
 
-void Engine::loadMeshes()
+void Engine::uploadMesh(Mesh& mesh)
 {
-    uint32_t vertexCount = 12;
+    mesh.initBuffers(_allocator);
 
-    _meshes["triangle"] = {};
-    Mesh& triMesh = _meshes["triangle"];
-    
-    triMesh._vertices.resize(vertexCount);
-
-    //back
-    triMesh._vertices[0].pos = { 1.f, 1.f, 0.0f };
-    triMesh._vertices[1].pos = { -1.f, 1.f, 0.0f };
-    triMesh._vertices[2].pos = { 0.f, -1.f, 0.0f };
-
-    float z = -2.f;
-
-    //boottom
-    triMesh._vertices[3].pos = { 0.f, 1.f, z };
-    triMesh._vertices[4].pos = { -1.f, 1.f, 0.0f };
-    triMesh._vertices[5].pos = { 1.f, 1.f, 0.0f };
-
-    //right
-    triMesh._vertices[6].pos = { 0.f, 1.f, z };
-    triMesh._vertices[7].pos = { 1.f, 1.f, 0.0f };
-    triMesh._vertices[8].pos = { 0.f, -1.f, 0.0f };
-
-    //left
-    triMesh._vertices[9].pos  = { 0.f, 1.f, z };
-    triMesh._vertices[10].pos = { 0.f, -1.f, 0.0f };
-    triMesh._vertices[11].pos = { -1.f, 1.f, 0.0f };
-
-    std::vector<glm::vec3> colors = {
-        { 1.f, 0.f, 0.f },
-        { 0.f, 1.f, 0.f },
-        { 0.f, 0.f, 1.f },
+    //allocate vertex buffer
+    VkBufferCreateInfo vertexBufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        //this is the total size, in bytes, of the buffer we are allocating
+        .size = mesh.getBufferSize(),
+        //this buffer is going to be used as a Vertex Buffer
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     };
 
-    for (uint32_t i = 0; i < vertexCount; ++i) {
-        triMesh._vertices[i].color = colors[i % 3];
-    }
+    //let the VMA library know that this data should be GPU native
+    VmaAllocationCreateInfo vmaAllocInfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+    };
 
-    _meshes["model"] = {};
-    Mesh& modelMesh = _meshes["model"];
-    
-    modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
-    //modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
+    //allocate the buffer
+    VKASSERT(vmaCreateBuffer(_allocator, &vertexBufferInfo, &vmaAllocInfo,
+        &mesh._vertexBuffer.buffer,
+        &mesh._vertexBuffer.allocation,
+        nullptr));
 
-    triMesh.upload(_allocator);
-    modelMesh.upload(_allocator);
-    
-    for (auto& mesh : _meshes) { //Destroy vertex buffers
-        _deletionStack.push([&]() { mesh.second.cleanup(_allocator); });
-    }
-    
+    immediate_submit([&](VkCommandBuffer cmd) {
+        VkBufferCopy copy;
+        copy.dstOffset = 0;
+        copy.srcOffset = 0;
+        copy.size = mesh.getBufferSize();
+        vkCmdCopyBuffer(cmd, mesh._stagingBuffer.buffer, mesh._vertexBuffer.buffer, 1, &copy);
+        });
+
+    _deletionStack.push([&]() {
+        mesh._vertexBuffer.destroy(_allocator);
+        });
+
+    // Destroy staging buffer now as we don't need it anymore
+    mesh._stagingBuffer.destroy(_allocator);
 }
 
-void Mesh::upload(VmaAllocator allocator)
+void Mesh::initBuffers(VmaAllocator allocator)
 {
-    VkBufferCreateInfo bufferInfo = {
+    const size_t bufferSize = getBufferSize();
+
+    VkBufferCreateInfo stagingBufferInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(Vertex) * _vertices.size(),
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
 
     VmaAllocationCreateInfo allocInfo = {
-        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY,
     };
 
-    VKASSERT(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
-        &_vertexBuffer.buffer, &_vertexBuffer.allocation, nullptr));
+    VKASSERT(vmaCreateBuffer(allocator, &stagingBufferInfo, &allocInfo,
+        &_stagingBuffer.buffer, &_stagingBuffer.allocation, nullptr));
 
     void* data;
-
-    vmaMapMemory(allocator, _vertexBuffer.allocation, &data);
+    vmaMapMemory(allocator, _stagingBuffer.allocation, &data);
     memcpy(data, _vertices.data(), _vertices.size() * sizeof(Vertex));
-    vmaUnmapMemory(allocator, _vertexBuffer.allocation);
+    vmaUnmapMemory(allocator, _stagingBuffer.allocation);
+   
 }
 
 VertexInputDescription Vertex::getDescription()

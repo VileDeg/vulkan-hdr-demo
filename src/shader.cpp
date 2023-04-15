@@ -1,7 +1,8 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "shader.h"
+#include "Engine.h"
 
-std::vector<char> Engine::readShaderBinary(const std::string& filename) 
+std::vector<char> readShaderBinary(const std::string& filename) 
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
     ASSERTMSG(file.is_open(), "Failed to open file: " << filename);
@@ -17,7 +18,7 @@ std::vector<char> Engine::readShaderBinary(const std::string& filename)
     return buffer;
 }
 
-bool Engine::createShaderModule(const std::vector<char>& code, VkShaderModule* module) 
+bool createShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule* module) 
 {
     VkShaderModuleCreateInfo moduleInfo{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -25,5 +26,6 @@ bool Engine::createShaderModule(const std::vector<char>& code, VkShaderModule* m
         .pCode = (uint32_t*)code.data()
     };
     
-    return vkCreateShaderModule(_device, &moduleInfo, nullptr, module) == VK_SUCCESS;
+    return vkCreateShaderModule(device, &moduleInfo, nullptr, module) == VK_SUCCESS;
 }
+

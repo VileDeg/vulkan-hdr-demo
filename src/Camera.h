@@ -5,7 +5,7 @@ struct GLFWwindow;
 class Camera 
 {
 public:
-    void Update(GLFWwindow* window, float dt);
+    void Update(GLFWwindow* window);
     void MouseInput(float x, float y) {
         rotate(x, y);
     }
@@ -13,6 +13,7 @@ public:
     glm::mat4 GetViewMat() {
         return glm::lookAt(_pos, _pos + _front, _up);
     }
+
 private:
     void goFront(float dt) {
         _pos += _front * _movSpeed * dt;
@@ -39,6 +40,9 @@ private:
     }
 
     void rotate(float x, float y);
+
+    void calculateFPS();
+    void calculateDeltaTime();
 private:
     static constexpr glm::vec3 sWorldUp{ 0.f, 1.f, 0.f };
 
@@ -54,5 +58,6 @@ private:
     float _movSpeed{ 10.f };
     float _rotSpeed{ 1.f };
 
-    
+    int _fps{};
+    float _dt{};
 };

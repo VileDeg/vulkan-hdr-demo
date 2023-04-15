@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "Engine.h"
 
 Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
 {
@@ -23,7 +23,6 @@ Material* Engine::getMaterial(const std::string& name)
 		return &(*it).second;
 	}
 }
-
 
 Mesh* Engine::getMesh(const std::string& name)
 {
@@ -77,9 +76,9 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
         const RenderObject& obj = objects[i];
 
 		GPUCameraData camData{
-			.view = _camera.GetViewMat(),
+			.view = _inp.camera.GetViewMat(),
 			.proj = projMat,
-			.viewproj = projMat * _camera.GetViewMat()
+			.viewproj = projMat * _inp.camera.GetViewMat()
 		};
 		void* data;
 		vmaMapMemory(_allocator, getCurrentFrame().cameraBuffer.allocation, &data);
@@ -98,7 +97,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 
 		if (obj.mesh != lastMesh) {
 			VkDeviceSize zeroOffset = 0;
-			vkCmdBindVertexBuffers(cmd, 0, 1, &obj.mesh->_vertexBuffer.buffer, &zeroOffset);
+			vkCmdBindVertexBuffers(cmd, 0, 1, &obj.mesh->_stagingBuffer.buffer, &zeroOffset);
 			lastMesh = obj.mesh;
 		}
 		
@@ -117,7 +116,9 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 void Engine::createScene()
 {
 	//Rotate to face the camera
-	glm::mat4 modelMat = glm::rotate(glm::mat4(1.f), glm::radians(180.f), glm::vec3(0, 1, 0));
+	glm::mat4 modelMat = glm::mat4(1.f);
+	modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
+	modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
 	RenderObject model{
 		.mesh = getMesh("model"),
         .material = getMaterial("default"),
@@ -139,4 +140,59 @@ void Engine::createScene()
             _renderables.push_back(tri);
         }
     }
+}
+
+void Engine::loadMeshes()
+{
+	uint32_t vertexCount = 12;
+
+	_meshes["triangle"] = {};
+	Mesh& triMesh = _meshes["triangle"];
+
+	triMesh._vertices.resize(vertexCount);
+
+	//back
+	triMesh._vertices[0].pos = { 1.f, 1.f, 0.0f };
+	triMesh._vertices[1].pos = { -1.f, 1.f, 0.0f };
+	triMesh._vertices[2].pos = { 0.f, -1.f, 0.0f };
+
+	float z = -2.f;
+
+	//boottom
+	triMesh._vertices[3].pos = { 0.f, 1.f, z };
+	triMesh._vertices[4].pos = { -1.f, 1.f, 0.0f };
+	triMesh._vertices[5].pos = { 1.f, 1.f, 0.0f };
+
+	//right
+	triMesh._vertices[6].pos = { 0.f, 1.f, z };
+	triMesh._vertices[7].pos = { 1.f, 1.f, 0.0f };
+	triMesh._vertices[8].pos = { 0.f, -1.f, 0.0f };
+
+	//left
+	triMesh._vertices[9].pos = { 0.f, 1.f, z };
+	triMesh._vertices[10].pos = { 0.f, -1.f, 0.0f };
+	triMesh._vertices[11].pos = { -1.f, 1.f, 0.0f };
+
+	std::vector<glm::vec3> colors = {
+		{ 1.f, 0.f, 0.f },
+		{ 0.f, 1.f, 0.f },
+		{ 0.f, 0.f, 1.f },
+	};
+
+	for (uint32_t i = 0; i < vertexCount; ++i) {
+		triMesh._vertices[i].color = colors[i % 3];
+	}
+
+	_meshes["model"] = {};
+	Mesh& modelMesh = _meshes["model"];
+
+	modelMesh.loadFromObj(Engine::modelPath + "monkey_smooth.obj");
+	//modelMesh.loadFromObj(Engine::modelPath + "holodeck/holodeck.obj");
+
+	triMesh.initBuffers(_allocator);
+	modelMesh.initBuffers(_allocator);
+
+	for (auto& mesh : _meshes) { //Destroy vertex buffers
+		_deletionStack.push([&]() { mesh.second.cleanup(_allocator); });
+	}
 }

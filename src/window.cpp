@@ -1,69 +1,82 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "Engine.h"
 
 static void glfw_error_callback(int error, const char* description)
 {
     std::cout << "GLFW Error: " << description << std::endl;
 }
 
-void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
-    app->_framebufferResized = true;
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height) 
+{
+    InputContext* inp = reinterpret_cast<InputContext*>(glfwGetWindowUserPointer(window));
+    inp->framebufferResized = true;
 
-    //Need to add 2 drawFrame() calls to render the image while resizing. 
-    //First call will only recreate the swapchain, second call will render the image.
-    app->drawFrame();
-    app->drawFrame();
+    /* Need to add 2 drawFrame() calls to render the image while resizing.
+     * First call will only recreate the swapchain, second call will render the image. */
+    inp->onFramebufferResize();
+    inp->onFramebufferResize();
 }
 
-void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+/**
+* Callback for handling different keyboard input.
+*/
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
-    Camera& cam = app->_camera;
+    
+    InputContext* inp = reinterpret_cast<InputContext*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_PRESS) {
         switch (key) {
-        case GLFW_KEY_ESCAPE:
+        case GLFW_KEY_ESCAPE: // Close window
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
-        case GLFW_KEY_C: //Toggle cursor
-            app->_cursorEnabled = !app->_cursorEnabled;
+        case GLFW_KEY_C: // Toggle cursor
+            inp->cursorEnabled = !inp->cursorEnabled;
             glfwSetInputMode(window, GLFW_CURSOR, 
-                app->_cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+                inp->cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
         }
     }
 }
 
-void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
+/**
+* This callbacks handles mouse input for camera rotation.
+* 
+* Only works when cursor is disabled.
+*/
+static void cursorCallback(GLFWwindow* window, double xpos, double ypos)
 {
-    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    InputContext* inp = reinterpret_cast<InputContext*>(glfwGetWindowUserPointer(window));
 
-    static bool lastCursorState = app->_cursorEnabled;
-    static bool firstCall{ true };
+    static bool lastCursorState = inp->cursorEnabled;
+    static bool firstCall{ true }; // First call after cursor is enabled
 
     if (!firstCall) {
-        if (lastCursorState != app->_cursorEnabled) {
-            std::cout << "Cursor toggle." << std::endl;
+        if (lastCursorState != inp->cursorEnabled) {
+            PRINF("Cursor toggle.");
             firstCall = true;
         } else {
             firstCall = false;
         }
     }
 
-    if (app->_cursorEnabled) {
+    if (inp->cursorEnabled) {
         return;
     }
 
     static glm::vec2 lastPos{};
 
-    if (firstCall) {
+    if (firstCall) { 
+        /** 
+        *  If cursor was just enabled simply set lastPos to current pos.
+        *  This is needed to prevent camera from cursor from jumping from old position to the new one instantly.
+        */
         firstCall = false;
         lastPos = { xpos, ypos };
-        lastCursorState = app->_cursorEnabled;
+        lastCursorState = inp->cursorEnabled;
         return;
     }
     
-    glm::ivec2 extent = { app->_windowExtent.width, app->_windowExtent.height };
+    //glm::ivec2 extent = { inp->_windowExtent.width, inp->_windowExtent.height };
     glm::vec2 currPos = { xpos, ypos };
 
     static float sens = 0.1f;
@@ -72,10 +85,10 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
 
     //std::cout << V2PR(currPos) << V2PR(lastPos) << V2PR(diff) << std::endl;
 
-    app->_camera.MouseInput(-diff.x, diff.y);
+    inp->camera.MouseInput(-diff.x, diff.y);
 
     lastPos = currPos;
-    lastCursorState = app->_cursorEnabled;
+    lastCursorState = inp->cursorEnabled;
 }
 
 void Engine::createWindow()
@@ -93,9 +106,11 @@ void Engine::createWindow()
     }
 
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    _cursorEnabled = false;
+    //inp.cursorEnabled = false;
 
-    glfwSetWindowUserPointer(_window, this);
+    glfwSetWindowUserPointer(_window, &_inp); // Make window data accessible inside callbacks
+
+    /* Set callbacks. */
     glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
     glfwSetKeyCallback(_window, keyCallback);
     glfwSetCursorPosCallback(_window, cursorCallback);

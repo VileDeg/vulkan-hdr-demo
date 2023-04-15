@@ -19,13 +19,15 @@ struct Vertex {
 
 struct Mesh {
     std::vector<Vertex> _vertices;
+    AllocatedBuffer _stagingBuffer;
     AllocatedBuffer _vertexBuffer;
 
     bool loadFromObj(const std::string& path);
-    void upload(VmaAllocator allocator);
+    void initBuffers(VmaAllocator allocator);
+    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
 
     void cleanup(VmaAllocator allocator) {
-        _vertexBuffer.cleanup(allocator);
+        _stagingBuffer.destroy(allocator);
     }
 };
 

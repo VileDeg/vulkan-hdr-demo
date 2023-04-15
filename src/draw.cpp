@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Enigne.h"
+#include "Engine.h"
 
 void Engine::drawFrame()
 {
@@ -77,7 +77,6 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
             flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
         color *= val;
         colorClear.color = { color.x, color.y, color.z, 1.0f };
-        //colorClear.color = { color.x, color.y, color.z, 1.0f };
     }
 
     VkClearValue depthClear;

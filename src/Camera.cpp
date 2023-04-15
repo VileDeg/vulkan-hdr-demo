@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include "Enigne.h"
+#include "Engine.h"
 
-void Engine::calculateFPS()
+void Camera::calculateFPS()
 {
     using namespace std::chrono;
 
@@ -22,34 +22,36 @@ void Engine::calculateFPS()
     }
 }
 
-void Engine::calculateDeltaTime()
+void Camera::calculateDeltaTime()
 {
     static float sLastFrameTime = 0.0f;
     float currentTime = glfwGetTime();
-    _deltaTime = currentTime - sLastFrameTime;
+    _dt = currentTime - sLastFrameTime;
     sLastFrameTime = currentTime;
 }
 
-void Camera::Update(GLFWwindow* window, float dt)
+void Camera::Update(GLFWwindow* window)
 {
+    calculateDeltaTime();
+
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        goFront(dt);
+        goFront(_dt);
     }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        goBack(dt);
+        goBack(_dt);
     }
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        goLeft(dt);
+        goLeft(_dt);
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        goRight(dt);
+        goRight(_dt);
     }
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        goUp(dt);
+        goUp(_dt);
     }
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
-        goDown(dt);
+        goDown(_dt);
     }
 }
 
@@ -66,6 +68,4 @@ void Camera::rotate(float x, float y) {
 
     _right = glm::normalize(glm::cross(_front, sWorldUp));
     _up = glm::normalize(glm::cross(_right, _front));
-
-    //std::cout << V3PR(_front) << V3PR(_right) << V3PR(_up) << std::endl;
 }
