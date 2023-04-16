@@ -37,6 +37,13 @@ struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
 
+    void runOnMemoryMap(VmaAllocator allocator, std::function<void(void*)> func) {
+        void* data;
+        vmaMapMemory(allocator, allocation, &data);
+        func(data);
+        vmaUnmapMemory(allocator, allocation);
+    }
+
     void destroy(const VmaAllocator& allocator) {
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
@@ -64,11 +71,19 @@ struct GPUCameraData {
 };
 
 struct GPUSceneData {
-    glm::vec4 fogColor; // w is for exponent
-    glm::vec4 fogDistances; //x for min, y for max, zw unused.
     glm::vec4 ambientColor;
-    glm::vec4 sunlightDirection; //w for sun power
-    glm::vec4 sunlightColor;
+    glm::vec4 lightPos;
+    glm::vec4 cameraPos;
+    //glm::vec4 diffuseColor;
+    //glm::vec4 fogColor; // w is for exponent
+    //glm::vec4 fogDistances; //x for min, y for max, zw unused.
+    //glm::vec4 sunlightDirection; //w for sun power
+    //glm::vec4 sunlightColor;
+};
+
+struct GPUObjectData {
+    glm::mat4 modelMatrix;
+    glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
 };
 
 struct FrameData {
@@ -79,8 +94,10 @@ struct FrameData {
     VkCommandBuffer mainCmdBuffer;
 
     AllocatedBuffer cameraBuffer;
-    VkDescriptorSet globalDescriptor;
+    AllocatedBuffer objectBuffer;
 
-    void init(VkDevice device);
+    VkDescriptorSet globalDescriptor;
+    VkDescriptorSet objectDescriptor;
+
     void cleanup(const VkDevice& device, const VmaAllocator& allocator);
 };

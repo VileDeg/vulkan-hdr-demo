@@ -104,9 +104,9 @@ void Engine::createInstance()
 
     VkApplicationInfo appInfo{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Vulkan Demo",
-        .applicationVersion = 1,
-        .apiVersion = VK_MAKE_VERSION(1, 0, 0)
+        .pApplicationName = "Vulkan HDR Demo",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_API_VERSION_1_1
     };
 
     VkInstanceCreateInfo instanceInfo{

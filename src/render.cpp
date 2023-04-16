@@ -58,17 +58,36 @@ void Engine::bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline)
 
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects)
 {
-	glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
-	projMat[1][1] *= -1; //Flip y-axis
+	// Load objects' SSBO to GPU
+	getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+        GPUObjectData* objectSSBO = (GPUObjectData*)data;
+
+		for (int i = 0; i < objects.size(); i++) {
+			objectSSBO[i].modelMatrix = objects[i].transform;
+			
+			objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
+			if (objects[i].tag == "light") {
+				objectSSBO[i].color = glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f };
+			} else {
+				objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
+			}
+        }
+    });
 
 	float framed = _frameNumber / 120.f;
-	_sceneParameters.ambientColor = { sin(framed)*0.5f, 0.5f, cos(framed)*0.5f, 1.0f};
+	//_sceneParameters.ambientColor = { sin(framed) * 0.5f, 0.5f, cos(framed) * 0.5f, 1.0f };
+	_sceneParameters.ambientColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
+	_sceneParameters.cameraPos = glm::vec4(_inp.camera.GetPos(), 0.0f);
 
-	char* sceneData;
-	vmaMapMemory(_allocator, _sceneParameterBuffer.allocation, (void**)&sceneData);
-	sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-	memcpy(sceneData, &_sceneParameters, sizeof(GPUSceneData));
-	vmaUnmapMemory(_allocator, _sceneParameterBuffer.allocation);
+	// Load scene data to GPU
+	_sceneParameterBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+		char* sceneData = (char*)data;
+		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		memcpy(sceneData, &_sceneParameters, sizeof(GPUSceneData));
+	});
+
+	glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
+	projMat[1][1] *= -1; //Flip y-axis
 
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
@@ -78,13 +97,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 		GPUCameraData camData{
 			.view = _inp.camera.GetViewMat(),
 			.proj = projMat,
-			.viewproj = projMat * _inp.camera.GetViewMat()
+			.viewproj = projMat * _inp.camera.GetViewMat(),
+			
 		};
-		void* data;
-		vmaMapMemory(_allocator, getCurrentFrame().cameraBuffer.allocation, &data);
-		memcpy(data, &camData, sizeof(GPUCameraData));
-		vmaUnmapMemory(_allocator, getCurrentFrame().cameraBuffer.allocation);
+		getCurrentFrame().cameraBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+			memcpy(data, &camData, sizeof(GPUCameraData));
+		});
 
+		// If the material is different, bind the new material
 		if (obj.material != lastMaterial) {
 			bindPipeline(cmd, obj.material->pipeline);
 			lastMaterial = obj.material;
@@ -92,13 +112,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 			//offset for our scene buffer
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
 
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, 1, &getCurrentFrame().globalDescriptor, 1, &uniform_offset);
-
+			// Always add the global and object descriptor
+			std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor};
+			// If the material has a texture, add texture descriptor
 			if (obj.material->textureSet != VK_NULL_HANDLE) {
-				//texture descriptor
-				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 1, 1, &obj.material->textureSet, 0, nullptr);
-
-			}
+				sets.push_back(obj.material->textureSet);
+            }
+			// Bind the descriptor sets
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
 		}
 
 		if (obj.mesh != lastMesh) {
@@ -115,11 +136,11 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 		ASSERT(obj.material && obj.mesh);
 
         vkCmdPushConstants(cmd, obj.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConsts);
-        vkCmdDraw(cmd, obj.mesh->_vertices.size(), 1, 0, 0);
+
+		// Ve send loop index as instance index to use it in shader to access object data in SSBO
+        vkCmdDraw(cmd, obj.mesh->_vertices.size(), 1, 0, i);
     }
 }
-
-
 
 void Engine::loadTextures()
 {
@@ -186,37 +207,53 @@ void Engine::loadMeshes()
 	uploadMesh(modelMesh);
 }
 
-
 void Engine::createScene()
 {
-	
+	Material* mat = getMaterial("textured");
 
 	//Rotate to face the camera
 	glm::mat4 modelMat = glm::mat4(1.f);
-	modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
+	//modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
 	modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
 	RenderObject model{
 		.mesh = getMesh("model"),
-		.material = getMaterial("default"),
+		.material = mat,
 		.transform = modelMat
 	};
 
 	_renderables.push_back(model);
-	/*for (int x = -20; x < 20; x++) {
+
+#if 0
+	for (int x = -20; x < 20; x++) {
 		for (int y = -20; y < 20; y++) {
 			glm::mat4 modelMat = glm::mat4(1.f);
-			modelMat = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, y));
+			modelMat = glm::translate(glm::mat4(1.0f), glm::vec3(x, 20.0f, y));
 			float sf = 0.2f;
 			modelMat = glm::scale(modelMat, glm::vec3(sf, sf, sf));
 			RenderObject tri{
 				.mesh = getMesh("triangle"),
-				.material = getMaterial("default"),
+				.material = getMaterial("colored"),
 				.transform = modelMat
 			};
 			_renderables.push_back(tri);
 		}
-	}*/
+	}
+#endif
 
+	auto lightMat = modelMat;
+	lightMat = glm::translate(lightMat, glm::vec3(0, 40.f, 0));
+	RenderObject lightSource{
+		.tag = "light",
+		.mesh = getMesh("triangle"),
+		.material = getMaterial("colored"),
+		.transform = lightMat
+	};
+	_renderables.push_back(lightSource);
+
+	_sceneParameters.lightPos = glm::vec4(0, 40.f, 0, 1.f);
+
+	/*_renderContext.lightSource = lightSource;
+	_renderContext.lightPos = glm::vec4(0, 40.f, 0, 1.f);*/
 
 	//create a sampler for the texture
 	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
@@ -227,7 +264,7 @@ void Engine::createScene()
 		vkDestroySampler(_device, blockySampler, nullptr);
 		});
 
-	Material* material = getMaterial("default");
+	
 
 	//allocate the descriptor set for single-texture to use on the material
 	VkDescriptorSetAllocateInfo allocInfo{
@@ -237,7 +274,7 @@ void Engine::createScene()
 		.pSetLayouts = &_singleTextureSetLayout
 	};
 
-	VKASSERT(vkAllocateDescriptorSets(_device, &allocInfo, &material->textureSet));
+	VKASSERT(vkAllocateDescriptorSets(_device, &allocInfo, &mat->textureSet));
 
 
 	//write to the descriptor set so that it points to our empire_diffuse texture
@@ -247,7 +284,9 @@ void Engine::createScene()
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
 
-	VkWriteDescriptorSet texture1 = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, material->textureSet, &imageBufferInfo, 0);
+	VkWriteDescriptorSet texture1 = 
+		vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+			mat->textureSet, &imageBufferInfo, 0);
 
 	vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
 }

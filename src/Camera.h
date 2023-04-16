@@ -10,6 +10,10 @@ public:
         rotate(x, y);
     }
 
+    glm::vec3 GetPos() const {
+        return _pos;
+    }
+
     glm::mat4 GetViewMat() {
         return glm::lookAt(_pos, _pos + _front, _up);
     }
@@ -32,11 +36,11 @@ private:
     }
 
     void goUp(float dt) {
-        _pos += _up * _movSpeed * dt;
+        _pos += sWorldUp * _movSpeed * dt;
     }
 
     void goDown(float dt) {
-        _pos -= _up * _movSpeed * dt;
+        _pos -= sWorldUp * _movSpeed * dt;
     }
 
     void rotate(float x, float y);

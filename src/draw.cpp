@@ -71,12 +71,13 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
     VkClearValue colorClear;
     {
-        auto flash = [](uint32_t frame, float t) { return abs(sin(frame / t)); };
+        /*auto flash = [](uint32_t frame, float t) { return abs(sin(frame / t)); };
         float val = 0.05f;
         glm::vec3 color = {
             flash(_frameNumber, 600.f), flash(_frameNumber, 1200.f), flash(_frameNumber, 2400.f) };
-        color *= val;
-        colorClear.color = { color.x, color.y, color.z, 1.0f };
+        color *= val;*/
+        //colorClear.color = { color.x, color.y, color.z, 1.0f };
+        colorClear.color = { 0.1f, 0.0f, 0.1f, 1.0f };
     }
 
     VkClearValue depthClear;

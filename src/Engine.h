@@ -48,7 +48,7 @@ private: /* Methods used from Init directly */
     void createSwapchain();
     void createImageViews();
     void createRenderPass();
-    void createPipeline();
+    void createPipelines();
     void createFramebuffers();
     void createFrameData();
 
@@ -56,15 +56,13 @@ private: /* Methods used from Init directly */
     void loadTextures();
 
     void createScene();
+
 private: /* Secondary methods */
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     void recreateSwapchain();
     void cleanupSwapchainResources();
 
-    
-
-private:
     void initDescriptors();
     void initUploadContext();
     void initFrame(FrameData& f);
@@ -83,25 +81,13 @@ private:
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     size_t pad_uniform_buffer_size(size_t originalSize);
 
-    
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
     bool loadImageFromFile(std::string filePath, AllocatedImage& outImage);
 
-    std::vector<RenderObject> _renderables;
-
-    std::unordered_map<std::string, Material> _materials;
-    std::unordered_map<std::string, Mesh> _meshes;
-    std::unordered_map<std::string, Texture> _loadedTextures;
-
-    VkDescriptorSetLayout _globalSetLayout;
-    VkDescriptorSetLayout _singleTextureSetLayout;
-
-    VkDescriptorPool _descriptorPool;
-
-    GPUSceneData _sceneParameters;
-    AllocatedBuffer _sceneParameterBuffer;
-private:
+private: 
+    
+private: 
     GLFWwindow* _window;
 
     VkInstance _instance;
@@ -144,23 +130,39 @@ private:
 
     InputContext _inp;
     
+    std::vector<RenderObject> _renderables;
+
+    std::unordered_map<std::string, Material> _materials;
+    std::unordered_map<std::string, Mesh> _meshes;
+    std::unordered_map<std::string, Texture> _loadedTextures;
+
+    VkDescriptorSetLayout _globalSetLayout;
+    VkDescriptorSetLayout _objectSetLayout;
+    VkDescriptorSetLayout _singleTextureSetLayout;
+
+    VkDescriptorPool _descriptorPool;
+
+    GPUSceneData _sceneParameters;
+    AllocatedBuffer _sceneParameterBuffer;
+    RenderContext _renderContext;
+
 private:
     const std::vector<const char*> _enabledValidationLayers{
         "VK_LAYER_KHRONOS_validation"
     };
 
     std::vector<const char*> _instanceExtensions{};
-    std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_maintenance4"};
 public:
     inline static std::string _assetPath = "assets/";
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
     inline static std::string imagePath  = _assetPath + "images/";
     inline static std::string modelPath  = _assetPath + "models/";
 private:
-    static constexpr uint32_t WIDTH = 800;
-    static constexpr uint32_t HEIGHT = 600;
+    static constexpr uint32_t WIDTH  = 1080;
+    static constexpr uint32_t HEIGHT = 640;
 
-    static constexpr uint32_t FS_WIDTH = 1920;
+    static constexpr uint32_t FS_WIDTH  = 1920;
     static constexpr uint32_t FS_HEIGHT = 1080;
     static constexpr bool ENABLE_FULLSCREEN = false;
 };

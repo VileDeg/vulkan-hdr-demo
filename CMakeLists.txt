@@ -23,11 +23,33 @@ target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/external)
 
 target_link_libraries(${EXNAME} 
-    ${Vulkan_LIBRARIES}
-    glfw
+    ${Vulkan_LIBRARIES}   glfw
 )
 
-#Compile shaders in assets/shaders folder
-add_custom_command(TARGET ${EXNAME} PRE_BUILD
-    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+set(SHADER_DIR "${PROJECT_SOURCE_DIR}/assets/shaders/src")
+set(SPV_DIR "${PROJECT_SOURCE_DIR}/assets/shaders/bin")
+
+set(SHADER_SRC ${SPV_DIR}/*)
+
+add_custom_target(glsl_shaders ALL
+  DEPENDS ${SHADER_SRC}
+  COMMENT "Shaders to compile"
 )
+
+add_dependencies(${EXNAME} glsl_shaders)
+
+add_custom_command(
+    TARGET glsl_shaders
+    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+    COMMENT "Compiling shaders"
+)
+
+
+#Compile shaders in assets/shaders folder
+
+
+#add_custom_command(TARGET ${EXNAME} PRE_BUILD
+#    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+#)
+
+

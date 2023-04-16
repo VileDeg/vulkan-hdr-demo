@@ -19,7 +19,7 @@ void Engine::Init()
     createRenderPass();
 
     createFrameData();
-    createPipeline();
+    createPipelines();
     createFramebuffers();
 
     loadTextures();

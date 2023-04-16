@@ -5,7 +5,14 @@
 int main()
 {
     Engine engine;
-    engine.Init();
+
+    try {
+        engine.Init();
+    } catch (const std::runtime_error& e) {
+        PRERR(e.what());
+        return EXIT_FAILURE;
+    }
+
     engine.Run();
 	engine.Cleanup();
 

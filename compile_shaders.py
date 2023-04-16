@@ -4,23 +4,24 @@ import sys
 cmake_source_dir = sys.argv[1]
 os.chdir(cmake_source_dir)
 
+#glsl = "glslangValidator"
 glsl = "glslc"
 
-shader_dir     = os.path.join("assets", "shaders")
-shader_bin_dir = os.path.join(shader_dir, "bin")
+base_dir = os.path.join("assets", "shaders")
+
+src_dir = os.path.join(base_dir, "src")
+bin_dir = os.path.join(base_dir, "bin")
 
 src_ext = (".frag", ".vert", ".geom", ".tesc", ".tese", ".comp")
 bin_ext = (".spv")
 
-for f in os.listdir(shader_dir):
-	if f.endswith(src_ext):
-		path = os.path.join(shader_dir, f)
-		os.system(glsl + " " + path + " -o " + path + ".spv")
-	else:
-		continue
+debug_flags = "-gVS"
 
-for f in os.listdir(shader_dir):
-	if f.endswith(bin_ext):
-		os.replace(os.path.join(shader_dir, f), os.path.join(shader_bin_dir, f))
+for f in os.listdir(src_dir):
+	if f.endswith(src_ext):
+		src_path = os.path.join(src_dir, f)
+		dst_path = os.path.join(bin_dir, f)
+		#os.system(f"{glsl} -e main {debug_flags} -V {src_path} -o {dst_path}.spv")
+		os.system(f"{glsl} -g {src_path} -o {dst_path}.spv")
 	else:
 		continue
