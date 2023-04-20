@@ -165,12 +165,12 @@ void Engine::loadMeshes()
 {
 	_meshes["ball"] = {};
 	Mesh& ballMesh = _meshes["ball"];
-	ballMesh.loadFromObj(Engine::modelPath + "CustomBall/CustomBall.obj");
+	ASSERT(ballMesh.loadFromObj(Engine::modelPath + "CustomBall/CustomBall.obj"));
 
 	_meshes["model"] = {};
 	Mesh& modelMesh = _meshes["model"];
 
-	modelMesh.loadFromObj(Engine::modelPath + "lost_empire/lost_empire.obj");
+	ASSERT(modelMesh.loadFromObj(Engine::modelPath + "lost_empire/lost_empire.obj"));
 	//modelMesh.loadFromGLTF(Engine::modelPath + "back_rooms/scene.gltf");
 
 	uploadMesh(ballMesh);

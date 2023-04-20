@@ -401,3 +401,6 @@ build*/
 CMakeFiles/
 CMakeCache.txt
 *.cmake
+
+# Unignore .obj models files
+!assets/**/*.obj 

@@ -22,6 +22,8 @@ for f in os.listdir(src_dir):
 		src_path = os.path.join(src_dir, f)
 		dst_path = os.path.join(bin_dir, f)
 		#os.system(f"{glsl} -e main {debug_flags} -V {src_path} -o {dst_path}.spv")
+		if not os.path.exists(bin_dir):
+			os.makedirs(bin_dir)
 		os.system(f"{glsl} -g {src_path} -o {dst_path}.spv")
 	else:
 		continue
