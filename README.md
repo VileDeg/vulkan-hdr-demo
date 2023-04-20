@@ -37,6 +37,8 @@ then to run:
 build\Debug\vkdemo.exe
 ```
 But be aware that the solution or executable name may change in future.
+
+All shaders are compiled automatically when the project is built using the python script `compile_shaders.py`.
 ## Usage
 The compiled executable is `vkdemo` or `vkdemo.exe`.
 
