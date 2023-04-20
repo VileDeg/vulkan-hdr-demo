@@ -362,5 +362,42 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
+
+# Ignore Visual Studio files
+*.csproj
+*.csproj.user
+*.sln
+*.suo
+*.vcxproj
+*.vcxproj.user
+*.vcproj
+*.vcproj.user
+*.dbmdl
+*.dbproj
+*.userprefs
+*.jfm
+*.pfx
+*.publishsettings
+*.pubxml
+*.pubxml.user
+*.rdl.data
+*.rptproj
+*.rptproj.user
+*.scc
+*.sln.ide
+*.suo
+*.target
+*.webinfo
+*.wiq
+*.wixobj
+*.wixpdb
+*.wiq
+*.yml
+*.vcxproj.filters
+*.proj
+*.proj.filters
+
 build*/
 CMakeFiles/
+CMakeCache.txt
+*.cmake
