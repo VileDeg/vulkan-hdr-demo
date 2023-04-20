@@ -1,22 +1,28 @@
-struct Attenuation {
-    float constant;
-	float linear;
-	float quadratic;
+#define MAX_LIGHTS 4
+
+struct LightData {
+    vec4 color; // r, g, b, a
+    vec4 pos; // x, y, z, radius
+    vec4 fac; // Ambient, diffuse, sepcular, intensity
+    vec4 att; // Constant, linear, quadratic, __unused
 };
 
-struct LightParams {
-    float ambFactor;
-    float diffFactor;
-    float specFactor;
-};
 
-vec3 calcLighting(vec3 lightColor, vec3 lightPos, vec3 fragPos, vec3 normal, vec3 cameraPos) {
-    Attenuation att = Attenuation(1.0, 0.09, 0.032);
-    LightParams lp  = LightParams(0.1, 1.0, 0.5);
-    
-    // ambient
-    vec3 ambient = lp.ambFactor * lightColor;
-    
+
+vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
+    vec3 lightColor = vec3(ld.color);
+    float intensity = ld.fac.w;
+
+    vec3 lightPos   = vec3(ld.pos);
+
+    float ambFactor  = ld.fac.x;
+    float diffFactor = ld.fac.y;
+    float specFactor = ld.fac.z;
+
+    float constant = ld.att.x;
+    float linear = ld.att.y;
+    float quadratic = ld.att.z;
+
     // diffuse 
     vec3 norm = normalize(normal);
     vec3 lightDir = normalize(lightPos - fragPos);
@@ -28,15 +34,36 @@ vec3 calcLighting(vec3 lightColor, vec3 lightPos, vec3 fragPos, vec3 normal, vec
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = lp.specFactor * spec * lightColor;  
+    vec3 specular = specFactor * spec * lightColor;  
 
     // attenuation
     float distance    = length(lightPos - fragPos);
-    float attenuation = 1.0 / (att.constant + att.linear * distance + 
-        att.quadratic * (distance * distance));    
+    float attenuation = 1.0 / (constant + linear * distance + 
+        quadratic * (distance * distance));    
 
-    vec3 lightVal = ambient + diffuse + specular;
+    vec3 lightVal = diffuse + specular;
     lightVal *= attenuation;
+    //lightVal += ambient;
+    lightVal *= intensity;
 
     return lightVal;
 }
+
+vec3 reinhart(vec3 color) {
+	return color / (color + vec3(1.0));
+}
+
+vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec4 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos) {
+    vec3 lightVal = ambientColor.rgb;
+
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        LightData ld = lights[i];
+        float dist = distance(ld.pos.xyz, fragPos);
+        float radius = ld.pos.w;
+        //if (dist > radius) {
+    	//	continue;
+	    //}
+		lightVal += pointLight(ld, fragPos, normal, cameraPos.xyz);
+	}
+    return lightVal;
+};

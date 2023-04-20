@@ -2,7 +2,7 @@
 #include "textures.h"
 #include "Engine.h"
 
-#define STB_IMAGE_IMPLEMENTATION
+//#define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
 bool Engine::loadImageFromFile(std::string filePath, AllocatedImage& outImage)

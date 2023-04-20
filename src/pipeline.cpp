@@ -36,7 +36,7 @@ void Engine::createPipelines()
     };
 
     PipelineData pd_colored{
-        .shaders = loadShaders(_device, "shader.vert.spv", "color.frag.spv"),
+        .shaders = loadShaders(_device, "shader.vert.spv", "colored.frag.spv"),
         .setLayouts = { _globalSetLayout, _objectSetLayout }
     };
 
@@ -124,7 +124,7 @@ void Pipeline::Init()
     };
 
     pushConstantRange = {
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
         .size = sizeof(MeshPushConstants)
     };

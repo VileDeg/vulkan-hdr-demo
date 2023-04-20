@@ -17,8 +17,6 @@ layout(set = 0, binding = 1) uniform SceneData {
     LightData[MAX_LIGHTS] lights;
 } sd;
 
-layout(set = 2, binding = 0) uniform sampler2D tex1;
-
 layout(push_constant) uniform constants {
 	ivec4 data;
 	mat4 render_matrix;
@@ -27,13 +25,11 @@ layout(push_constant) uniform constants {
 void main() {
     vec3 lightVal = 
         calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos.xyz);
-
-    vec4 tex = texture(tex1, texCoord); 
-    vec3 result = lightVal * tex.rgb;
+    vec3 result = lightVal * objectColor.xyz;
     //if (pc.data.x == 1) { // If enable HDR
     //    result = reinhart(result);
     //}
     result = reinhart(result);
 
-    FragColor = vec4(result, tex.a);
+    FragColor = vec4(result, 1.0);
 }

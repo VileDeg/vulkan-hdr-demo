@@ -64,26 +64,27 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 
 		for (int i = 0; i < objects.size(); i++) {
 			objectSSBO[i].modelMatrix = objects[i].transform;
+			objectSSBO[i].color = objects[i].color;
 			
-			objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
-			if (objects[i].tag == "light") {
+			//objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
+			/*if (objects[i].tag == "light") {
 				objectSSBO[i].color = glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f };
 			} else {
 				objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
-			}
+			}*/
         }
     });
 
 	float framed = _frameNumber / 120.f;
 	//_sceneParameters.ambientColor = { sin(framed) * 0.5f, 0.5f, cos(framed) * 0.5f, 1.0f };
-	_sceneParameters.ambientColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
-	_sceneParameters.cameraPos = glm::vec4(_inp.camera.GetPos(), 0.0f);
+	//_sceneParameters.ambientColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
+	_renderContext.SetCamPos(_inp.camera.GetPos());
 
 	// Load scene data to GPU
 	_sceneParameterBuffer.runOnMemoryMap(_allocator, [&](void* data) {
 		char* sceneData = (char*)data;
 		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-		memcpy(sceneData, &_sceneParameters, sizeof(GPUSceneData));
+		memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));
 	});
 
 	glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
@@ -131,11 +132,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
         glm::mat4 modelMat = obj.transform;
 
 		MeshPushConstants pushConsts{
+			.data = glm::vec4{1}, // Enable HDR
 			.render_matrix = modelMat
 		};
 		ASSERT(obj.material && obj.mesh);
 
-        vkCmdPushConstants(cmd, obj.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &pushConsts);
+        vkCmdPushConstants(cmd, obj.material->pipelineLayout, 
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+			0, sizeof(MeshPushConstants), &pushConsts);
 
 		// Ve send loop index as instance index to use it in shader to access object data in SSBO
         vkCmdDraw(cmd, obj.mesh->_vertices.size(), 1, 0, i);
@@ -146,7 +150,7 @@ void Engine::loadTextures()
 {
 	Texture lostEmpire;
 
-	loadImageFromFile(Engine::imagePath + "lost_empire-RGBA.png", lostEmpire.image);
+	ASSERT(loadImageFromFile(Engine::imagePath + "lost_empire/lost_empire-RGBA.png", lostEmpire.image));
 
 	VkImageViewCreateInfo imageinfo = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &lostEmpire.imageView));
@@ -159,62 +163,47 @@ void Engine::loadTextures()
 
 void Engine::loadMeshes()
 {
-	uint32_t vertexCount = 12;
-
-	_meshes["triangle"] = {};
-	Mesh& triMesh = _meshes["triangle"];
-
-	triMesh._vertices.resize(vertexCount);
-
-	//back
-	triMesh._vertices[0].pos = { 1.f, 1.f, 0.0f };
-	triMesh._vertices[1].pos = { -1.f, 1.f, 0.0f };
-	triMesh._vertices[2].pos = { 0.f, -1.f, 0.0f };
-
-	float z = -2.f;
-
-	//boottom
-	triMesh._vertices[3].pos = { 0.f, 1.f, z };
-	triMesh._vertices[4].pos = { -1.f, 1.f, 0.0f };
-	triMesh._vertices[5].pos = { 1.f, 1.f, 0.0f };
-
-	//right
-	triMesh._vertices[6].pos = { 0.f, 1.f, z };
-	triMesh._vertices[7].pos = { 1.f, 1.f, 0.0f };
-	triMesh._vertices[8].pos = { 0.f, -1.f, 0.0f };
-
-	//left
-	triMesh._vertices[9].pos = { 0.f, 1.f, z };
-	triMesh._vertices[10].pos = { 0.f, -1.f, 0.0f };
-	triMesh._vertices[11].pos = { -1.f, 1.f, 0.0f };
-
-	std::vector<glm::vec3> colors = {
-		{ 1.f, 0.f, 0.f },
-		{ 0.f, 1.f, 0.f },
-		{ 0.f, 0.f, 1.f },
-	};
-
-	for (uint32_t i = 0; i < vertexCount; ++i) {
-		triMesh._vertices[i].color = colors[i % 3];
-	}
+	_meshes["ball"] = {};
+	Mesh& ballMesh = _meshes["ball"];
+	ballMesh.loadFromObj(Engine::modelPath + "CustomBall/CustomBall.obj");
 
 	_meshes["model"] = {};
 	Mesh& modelMesh = _meshes["model"];
 
-	modelMesh.loadFromObj(Engine::modelPath + "lost_empire.obj");
+	modelMesh.loadFromObj(Engine::modelPath + "lost_empire/lost_empire.obj");
+	//modelMesh.loadFromGLTF(Engine::modelPath + "back_rooms/scene.gltf");
 
-	uploadMesh(triMesh);
+	uploadMesh(ballMesh);
 	uploadMesh(modelMesh);
 }
 
+
 void Engine::createScene()
 {
+	glm::mat4 modelMat = glm::mat4(1.f);
+
+	_renderContext.Init();
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		auto lightMat = modelMat;
+		lightMat = glm::translate(lightMat, _renderContext.lightPos[i]);
+		lightMat = glm::scale(lightMat, glm::vec3(10.f));
+
+		RenderObject lightSource{
+			.tag = "light" + std::to_string(i),
+			.color = _renderContext.lightColor[i] * _renderContext.intensity[i],
+			.mesh = getMesh("ball"),
+			.material = getMaterial("colored"),
+			.transform = lightMat
+		};
+		_renderables.push_back(lightSource);
+    }
+
 	Material* mat = getMaterial("textured");
 
 	//Rotate to face the camera
-	glm::mat4 modelMat = glm::mat4(1.f);
-	//modelMat = glm::translate(modelMat, glm::vec3(0, 2.5f, 0));
-	modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
+	
+	modelMat = glm::translate(modelMat, glm::vec3(0, -18.f, 0));
+	//modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
 	RenderObject model{
 		.mesh = getMesh("model"),
 		.material = mat,
@@ -239,18 +228,6 @@ void Engine::createScene()
 		}
 	}
 #endif
-
-	auto lightMat = modelMat;
-	lightMat = glm::translate(lightMat, glm::vec3(0, 40.f, 0));
-	RenderObject lightSource{
-		.tag = "light",
-		.mesh = getMesh("triangle"),
-		.material = getMaterial("colored"),
-		.transform = lightMat
-	};
-	_renderables.push_back(lightSource);
-
-	_sceneParameters.lightPos = glm::vec4(0, 40.f, 0, 1.f);
 
 	/*_renderContext.lightSource = lightSource;
 	_renderContext.lightPos = glm::vec4(0, 40.f, 0, 1.f);*/
@@ -289,4 +266,61 @@ void Engine::createScene()
 			mat->textureSet, &imageBufferInfo, 0);
 
 	vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
+}
+
+GPUSceneData::GPUSceneData(glm::vec4 ambCol,
+	std::vector<glm::vec3> lightPos,
+	std::vector<glm::vec4> lightColor,
+	std::vector<float> radius,
+	std::vector<float> intensity)
+	: cameraPos(0.f)
+{
+	ambientColor = ambCol;
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		// Find the attenuation values that are the most fitting for the specified radius
+		int min_diff = std::numeric_limits<int>::max();
+		int closest_key = 0;
+
+		for (auto& [key, value] : atten_map) {
+			int diff = std::abs(key - radius[i]);
+			if (diff < min_diff) {
+				min_diff = diff;
+				closest_key = key;
+			}
+		}
+		radius[i] = closest_key;
+		pr("Light radius[" << i << "] set to: " << radius[i] << " units");
+		glm::vec3 att = atten_map[closest_key];
+
+		light[i] = {
+			.color = { lightColor[i] },
+			.pos = glm::vec4(lightPos[i], radius[i]), // 10 units - radius
+			.fac = { 0.1, 1.0, 0.5, intensity[i]}, // 1 - intensity
+			.att = glm::vec4(att, 0.f)
+		};
+	}
+}
+
+void RenderContext::Init() 
+{
+	lightPos = {
+		{ 0. , 5., 0.  },
+		{ 15., 5., 0.  },
+		{ 0. , 5., 15. },
+		{ 15., 5., 15. }
+	};
+
+	lightColor = {
+		{ 1.f , 1.f , 0.2f, 1.f },
+		{ 0.7f, 1.f , 0.8f, 1.f },
+		{ 1.f , 0.5f, 1.f , 1.f },
+		{ 0.7f, 1.f , 1.f , 1.f }
+	};
+
+	radius = { 20.f, 10.f, 30.f, 5.f };
+	intensity = { 2000.f, 100.f, 30.f, 500.f };
+
+	float amb = 0.05f;
+	glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
+	sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
 }

@@ -59,32 +59,7 @@ struct AllocatedImage {
     }
 };
 
-struct MeshPushConstants {
-    glm::vec4 data;
-    glm::mat4 render_matrix;
-};
 
-struct GPUCameraData {
-    glm::mat4 view;
-    glm::mat4 proj;
-    glm::mat4 viewproj;
-};
-
-struct GPUSceneData {
-    glm::vec4 ambientColor;
-    glm::vec4 lightPos;
-    glm::vec4 cameraPos;
-    //glm::vec4 diffuseColor;
-    //glm::vec4 fogColor; // w is for exponent
-    //glm::vec4 fogDistances; //x for min, y for max, zw unused.
-    //glm::vec4 sunlightDirection; //w for sun power
-    //glm::vec4 sunlightColor;
-};
-
-struct GPUObjectData {
-    glm::mat4 modelMatrix;
-    glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
-};
 
 struct FrameData {
     VkSemaphore imageAvailableSemaphore, renderFinishedSemaphore;

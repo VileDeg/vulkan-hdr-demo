@@ -142,7 +142,7 @@ private:
 
     VkDescriptorPool _descriptorPool;
 
-    GPUSceneData _sceneParameters;
+    //GPUSceneData _sceneParameters;
     AllocatedBuffer _sceneParameterBuffer;
     RenderContext _renderContext;
 
@@ -156,7 +156,7 @@ private:
 public:
     inline static std::string _assetPath = "assets/";
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
-    inline static std::string imagePath  = _assetPath + "images/";
+    inline static std::string imagePath  = _assetPath + "models/";
     inline static std::string modelPath  = _assetPath + "models/";
 private:
     static constexpr uint32_t WIDTH  = 1080;

@@ -7,7 +7,7 @@ struct VertexInputDescription {
     std::vector<VkVertexInputAttributeDescription> attributes;
 
     VkPipelineVertexInputStateCreateFlags flags = 0;
-};;
+};
 
 struct Vertex {
     glm::vec3 pos;
@@ -16,7 +16,9 @@ struct Vertex {
     glm::vec2 uv;
 
     static VertexInputDescription getDescription();
-};;
+
+    
+};
 
 struct Mesh {
     std::vector<Vertex> _vertices;
@@ -24,6 +26,7 @@ struct Mesh {
     AllocatedBuffer _vertexBuffer;
 
     bool loadFromObj(const std::string& path);
+    bool loadFromGLTF(const std::string& path);
     void initBuffers(VmaAllocator allocator);
     size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
 
