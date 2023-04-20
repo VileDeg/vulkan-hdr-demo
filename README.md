@@ -40,6 +40,8 @@ But be aware that the solution or executable name may change in future.
 ## Usage
 The compiled executable is `vkdemo` or `vkdemo.exe`.
 
+**You must run it from `root folder` otherwise the paths to assets will be wrong!**
+
 You can run it from command line, or on Windows also from Visual Studio.
 
 ## Libraries/Resources Used
