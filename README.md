@@ -28,8 +28,15 @@ make
 ```
 On Windows:
 
-Open generated Visual Studio solution and build the project.
-
+Open generated Visual Studio solution and build the project or open `x64 Native Tools Command Prompt for VS 20XX` and run:
+```
+msbuild vulkan-hdr-demo.sln
+```
+then to run:
+```
+build\Debug\vkdemo.exe
+```
+But be aware that the solution or executable name may change in future.
 ## Usage
 The compiled executable is `vkdemo` or `vkdemo.exe`.
 
