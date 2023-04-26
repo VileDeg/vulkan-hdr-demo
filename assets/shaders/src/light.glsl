@@ -7,8 +7,6 @@ struct LightData {
     vec4 att; // Constant, linear, quadratic, __unused
 };
 
-
-
 vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     vec3 lightColor = vec3(ld.color);
     float intensity = ld.fac.w;

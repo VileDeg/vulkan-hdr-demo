@@ -319,8 +319,9 @@ void RenderContext::Init()
 
 	radius = { 20.f, 10.f, 30.f, 5.f };
 	intensity = { 2000.f, 100.f, 30.f, 500.f };
+	float i = 0.1f;
 
-	float amb = 0.05f;
+	float amb = 0.005f;
 	glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
 	sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
 }

@@ -8,7 +8,7 @@ layout(location = 3) in vec2 vTexCoord;
 layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragColor;
 layout(location = 2) out vec2 texCoord;
-layout(location = 3) out vec4 objectColor;
+layout(location = 3) out flat vec4 objectColor;
 layout(location = 4) out vec3 normal;
 
 layout(set = 0, binding = 0) uniform CameraBuffer {

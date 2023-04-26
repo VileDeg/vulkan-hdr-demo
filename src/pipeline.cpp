@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "Engine.h"
 
-#include "vk_pipeline_builder.h"
-
 #include "shader.h"
 #include "pipeline.h"
 
