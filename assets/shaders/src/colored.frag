@@ -28,7 +28,7 @@ void main() {
     //if (pc.data.x == 1) { // If enable HDR
     //    result = reinhart(result);
     //}
-    result = reinhart(result);
+    //result = reinhart(result);
 
     FragColor = vec4(result, 1.0);
 }

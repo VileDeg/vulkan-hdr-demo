@@ -11,7 +11,22 @@ add_subdirectory(external)
 
 set(EXNAME "vkdemo")
 
+# Add project source files
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
+
+# Add ImGUI source files
+set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
+set(SRC_FILES
+    ${SRC_FILES}
+    ${IMGUI_DIR}/imgui_impl_glfw.cpp 
+    ${IMGUI_DIR}/imgui_impl_vulkan.cpp 
+    ${IMGUI_DIR}/imgui.cpp 
+    ${IMGUI_DIR}/imgui_draw.cpp 
+    ${IMGUI_DIR}/imgui_demo.cpp 
+    ${IMGUI_DIR}/imgui_tables.cpp 
+    ${IMGUI_DIR}/imgui_widgets.cpp
+)
+
 add_executable (${EXNAME} ${SRC_FILES})
 
 set_target_properties(

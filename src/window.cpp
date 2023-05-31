@@ -22,7 +22,6 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 */
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    
     InputContext* inp = reinterpret_cast<InputContext*>(glfwGetWindowUserPointer(window));
     if (action == GLFW_PRESS) {
         switch (key) {
@@ -34,6 +33,14 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             glfwSetInputMode(window, GLFW_CURSOR, 
                 inp->cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
+        case GLFW_KEY_T: // Toggle tone mapping
+            if (inp->toneMappingEnabled) {
+                inp->toneMappingEnabled = false;
+                PRINF("Tone mapping OFF.");
+            } else {
+                inp->toneMappingEnabled = true;
+                PRINF("Tone mapping ON.");
+            }
         }
     }
 }

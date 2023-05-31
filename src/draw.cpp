@@ -3,6 +3,8 @@
 
 void Engine::drawFrame()
 {
+    imguiOnDrawStart();
+
     _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
     FrameData& frame = _frames[_frameInFlightNum];
 
@@ -102,6 +104,9 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     drawObjects(commandBuffer, _renderables);
+
+    // Record dear imgui primitives into command buffer
+    imguiOnRenderPassEnd(commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
 

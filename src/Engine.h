@@ -24,6 +24,8 @@ struct InputContext {
     bool cursorEnabled = false;
     bool framebufferResized = false;
 
+    bool toneMappingEnabled = true;
+
     std::function<void(void)> onFramebufferResize = nullptr;
 };
 
@@ -86,7 +88,13 @@ private: /* Secondary methods */
     bool loadImageFromFile(std::string filePath, AllocatedImage& outImage);
 
 private: 
-    
+    void initImgui();
+    void imguiCommands();
+    void imguiOnDrawStart();
+    void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
+
+private:
+    int _toneMappingOp = 0; // Reinhard, ACES Narkowicz, ACES Hill
 private: 
     GLFWwindow* _window;
 
@@ -159,8 +167,8 @@ public:
     inline static std::string imagePath  = _assetPath + "models/";
     inline static std::string modelPath  = _assetPath + "models/";
 private:
-    static constexpr uint32_t WIDTH  = 1080;
-    static constexpr uint32_t HEIGHT = 640;
+    static constexpr uint32_t WIDTH  = 1280;
+    static constexpr uint32_t HEIGHT = 800;
 
     static constexpr uint32_t FS_WIDTH  = 1920;
     static constexpr uint32_t FS_HEIGHT = 1080;

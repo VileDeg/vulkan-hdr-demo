@@ -132,7 +132,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
         glm::mat4 modelMat = obj.transform;
 
 		MeshPushConstants pushConsts{
-			.data = glm::vec4{1}, // Enable HDR
+			.data = { _inp.toneMappingEnabled, _toneMappingOp, _toneMappingOp, _toneMappingOp },
 			.render_matrix = modelMat
 		};
 		ASSERT(obj.material && obj.mesh);
@@ -275,6 +275,22 @@ GPUSceneData::GPUSceneData(glm::vec4 ambCol,
 	std::vector<float> intensity)
 	: cameraPos(0.f)
 {
+	static std::unordered_map<int, glm::vec3> atten_map = {
+		// From: https://learnopengl.com/Lighting/Light-casters
+		{ 7   , {1.0, 0.7   , 1.8     } },
+		{ 13  , {1.0, 0.35  , 0.44    } },
+		{ 20  , {1.0, 0.22  , 0.20    } },
+		{ 32  , {1.0, 0.14  , 0.07    } },
+		{ 50  , {1.0, 0.09  , 0.032   } },
+		{ 65  , {1.0, 0.07  , 0.017   } },
+		{ 100 , {1.0, 0.045 , 0.0075  } },
+		{ 160 , {1.0, 0.027 , 0.0028  } },
+		{ 200 , {1.0, 0.022 , 0.0019  } },
+		{ 325 , {1.0, 0.014 , 0.0007  } },
+		{ 600 , {1.0, 0.007 , 0.0002  } },
+		{ 3250, {1.0, 0.0014, 0.000007} }
+	};
+
 	ambientColor = ambCol;
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		// Find the attenuation values that are the most fitting for the specified radius
@@ -321,7 +337,7 @@ void RenderContext::Init()
 	intensity = { 2000.f, 100.f, 30.f, 500.f };
 	float i = 0.1f;
 
-	float amb = 0.005f;
+	float amb = 0.2f;
 	glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
 	sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
 }

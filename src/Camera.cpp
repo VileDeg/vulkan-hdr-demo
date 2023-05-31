@@ -34,24 +34,30 @@ void Camera::Update(GLFWwindow* window)
 {
     calculateDeltaTime();
 
+    float deltaTime = _dt;
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        deltaTime *= _sprintBoost;
+    }
+
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        goFront(_dt);
+        goFront(deltaTime);
     }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        goBack(_dt);
+        goBack(deltaTime);
     }
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        goLeft(_dt);
+        goLeft(deltaTime);
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        goRight(_dt);
+        goRight(deltaTime);
     }
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-        goUp(_dt);
+        goUp(deltaTime);
     }
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
-        goDown(_dt);
+        goDown(deltaTime);
     }
 }
 

@@ -26,6 +26,8 @@ void Engine::Init()
     loadMeshes();
     createScene();
 
+    initImgui();
+
     _isInitialized = true;
 }
 
@@ -33,10 +35,14 @@ void Engine::Run()
 {
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
+
+        imguiCommands();
+
         drawFrame();
 
         _inp.camera.Update(_window);
-        //calculateDeltaTime();
+
+        
     }
 
     vkDeviceWaitIdle(_device);
@@ -52,3 +58,5 @@ void Engine::Cleanup()
 
     _deletionStack.flush();
 }
+
+

@@ -9,6 +9,7 @@ layout(location = 4) in vec3 normal;
 layout(location = 0) out vec4 FragColor;
 
 #include "light.glsl"
+#include "tone_mapping.glsl"
 
 layout(set = 0, binding = 1) uniform SceneData {
     vec4 cameraPos;
@@ -19,7 +20,7 @@ layout(set = 0, binding = 1) uniform SceneData {
 layout(set = 2, binding = 0) uniform sampler2D tex1;
 
 layout(push_constant) uniform constants {
-	ivec4 data;
+	ivec4 data; //ivec4
 	mat4 render_matrix;
 } pc;
 
@@ -29,10 +30,14 @@ void main() {
 
     vec4 tex = texture(tex1, texCoord); 
     vec3 result = lightVal * tex.rgb;
-    //if (pc.data.x == 1) { // If enable HDR
-    //    result = reinhart(result);
-    //}
-    result = reinhart(result);
+
+    if (pc.data.x == 1) { // If enable tone mapping
+        switch (pc.data.y) {
+        case 0: result = Reinhard(result)  ; break;
+        case 1: result = ACESFilm(result)  ; break;
+        case 2: result = ACESFitted(result);
+        }
+    }
 
     FragColor = vec4(result, tex.a);
 }

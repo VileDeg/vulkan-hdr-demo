@@ -61,6 +61,7 @@ private:
 
     float _movSpeed{ 10.f };
     float _rotSpeed{ 1.f };
+    float _sprintBoost{ 2.5f };
 
     int _fps{};
     float _dt{};
