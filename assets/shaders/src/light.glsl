@@ -47,8 +47,6 @@ vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     return lightVal;
 }
 
-
-
 vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec4 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     vec3 lightVal = ambientColor.rgb;
 

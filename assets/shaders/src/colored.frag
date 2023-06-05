@@ -22,9 +22,9 @@ layout(push_constant) uniform constants {
 } pc;
 
 void main() {
-    vec3 lightVal = 
-        calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos.xyz);
-    vec3 result = lightVal * objectColor.xyz;
+    /*vec3 lightVal = 
+        calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos.xyz);*/
+    vec3 result = objectColor.xyz;
     //if (pc.data.x == 1) { // If enable HDR
     //    result = reinhart(result);
     //}

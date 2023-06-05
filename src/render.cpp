@@ -60,7 +60,19 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 {
 	// Load objects' SSBO to GPU
 	getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, [&](void* data) {
-        GPUObjectData* objectSSBO = (GPUObjectData*)data;
+		//char* objectData = (char*)data + sizeof(glm::vec4); // Skip the first vec4, which is maxval
+		glm::uvec4* maxVal = (glm::uvec4*)data;
+		if (_frameNumber == 0) { // Reset maximum to zero every 2nd frame
+			*maxVal = glm::uvec4(0, 0, 0, 0);
+		} else {
+			std::swap(maxVal->x, maxVal->y);
+			maxVal->x = 0;
+		}
+		
+		//*maxVal = glm::uvec4(0,0,0,0);
+		//}
+		++maxVal;
+        GPUObjectData* objectSSBO = (GPUObjectData*)maxVal;
 
 		for (int i = 0; i < objects.size(); i++) {
 			objectSSBO[i].modelMatrix = objects[i].transform;
@@ -132,7 +144,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
         glm::mat4 modelMat = obj.transform;
 
 		MeshPushConstants pushConsts{
-			.data = { _inp.toneMappingEnabled, _toneMappingOp, _toneMappingOp, _toneMappingOp },
+			.data = { _inp.toneMappingEnabled, _toneMappingOp, _inp.exposureEnabled, _toneMappingOp },
 			.render_matrix = modelMat
 		};
 		ASSERT(obj.material && obj.mesh);
@@ -190,7 +202,8 @@ void Engine::createScene()
 
 		RenderObject lightSource{
 			.tag = "light" + std::to_string(i),
-			.color = _renderContext.lightColor[i] * _renderContext.intensity[i],
+			//.color = _renderContext.lightColor[i] * _renderContext.intensity[i],
+			.color = glm::vec4(0.5, 0.5, 0.5, 1.),
 			.mesh = getMesh("ball"),
 			.material = getMaterial("colored"),
 			.transform = lightMat

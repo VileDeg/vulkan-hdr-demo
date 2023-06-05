@@ -34,13 +34,10 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
                 inp->cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
         case GLFW_KEY_T: // Toggle tone mapping
-            if (inp->toneMappingEnabled) {
-                inp->toneMappingEnabled = false;
-                PRINF("Tone mapping OFF.");
-            } else {
-                inp->toneMappingEnabled = true;
-                PRINF("Tone mapping ON.");
-            }
+            inp->toneMappingEnabled = !inp->toneMappingEnabled;
+            break;
+        case GLFW_KEY_E: // Toggle tone mapping
+            inp->exposureEnabled = !inp->exposureEnabled;
         }
     }
 }

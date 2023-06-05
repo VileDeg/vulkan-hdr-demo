@@ -44,27 +44,7 @@ size_t Engine::pad_uniform_buffer_size(size_t originalSize)
     return alignedSize;
 }
 
-void Engine::initUploadContext()
-{
-    VkFenceCreateInfo uploadFenceCreateInfo = vkinit::fence_create_info();
-    VKASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
-    _deletionStack.push([&]() {
-        vkDestroyFence(_device, _uploadContext.uploadFence, nullptr);
-        });
 
-    VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily);
-    //create pool for upload context
-    VKASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
-
-    _deletionStack.push([=]() {
-        vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
-        });
-
-    //allocate the default command buffer that we will use for the instant commands
-    VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
-
-    VKASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
-}
 
 void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
 {

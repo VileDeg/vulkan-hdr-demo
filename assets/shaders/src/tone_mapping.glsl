@@ -1,6 +1,10 @@
 
 vec3 Reinhard(vec3 color) {
-	return color / (color + vec3(1.0));
+	if (color.x < 1.f || color.y < 1.f || color.z < 1.f) {
+		return color / (color + vec3(1.0));
+	} else {
+		return log(color) / (log(color) + vec3(1.0));
+	}
 }
 
 vec3 Reinhard1(vec3 color, float maxLuminosity) {

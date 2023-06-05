@@ -41,7 +41,9 @@ void Engine::initFrame(FrameData& f)
 
         // Create SSBO with all objects data
         const int MAX_OBJECTS = 10000; 
-        f.objectBuffer = createBuffer(sizeof(GPUObjectData) * MAX_OBJECTS, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        const int SSBO_SIZE = sizeof(glm::uvec4) + sizeof(GPUObjectData) * MAX_OBJECTS;
+        //const int SSBO_SIZE = sizeof(GPUObjectData) * MAX_OBJECTS;
+        f.objectBuffer = createBuffer(SSBO_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
         VkDescriptorSetAllocateInfo objectSetAlloc = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -67,7 +69,7 @@ void Engine::initFrame(FrameData& f)
         VkDescriptorBufferInfo objectInfo{
             .buffer = f.objectBuffer.buffer,
             .offset = 0,
-            .range = sizeof(GPUObjectData) * MAX_OBJECTS
+            .range = SSBO_SIZE
         };
 
         VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);
@@ -132,7 +134,7 @@ void Engine::initDescriptors()
     }
 
     { // Object descriptor set (SSBO)
-        VkDescriptorSetLayoutBinding objectBind = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
+        VkDescriptorSetLayoutBinding objectBind = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
         VkDescriptorSetLayoutCreateInfo set2info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -144,7 +146,7 @@ void Engine::initDescriptors()
         VKASSERT(vkCreateDescriptorSetLayout(_device, &set2info, nullptr, &_objectSetLayout));
         _deletionStack.push([&]() {
             vkDestroyDescriptorSetLayout(_device, _objectSetLayout, nullptr);
-            });
+        });
     }
 
     //another set, one that holds a single texture
@@ -163,10 +165,30 @@ void Engine::initDescriptors()
     });
 }
 
+void Engine::initUploadContext()
+{
+    VkFenceCreateInfo uploadFenceCreateInfo = vkinit::fence_create_info();
+    VKASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
+    _deletionStack.push([&]() {
+        vkDestroyFence(_device, _uploadContext.uploadFence, nullptr);
+        });
+
+    VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily);
+    //create pool for upload context
+    VKASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
+
+    _deletionStack.push([=]() {
+        vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
+        });
+
+    //allocate the default command buffer that we will use for the instant commands
+    VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
+
+    VKASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
+}
+
 void Engine::createFrameData()
 {
-    
-
     initDescriptors();
     initUploadContext();
 

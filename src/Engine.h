@@ -25,6 +25,7 @@ struct InputContext {
     bool framebufferResized = false;
 
     bool toneMappingEnabled = true;
+    bool exposureEnabled    = true;
 
     std::function<void(void)> onFramebufferResize = nullptr;
 };

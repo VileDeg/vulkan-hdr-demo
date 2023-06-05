@@ -110,6 +110,7 @@ void Engine::imguiCommands()
 		}
 
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
+		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
 
 		ImGui::Checkbox("Show demo window"	 , &show_demo_window);
 

@@ -23,7 +23,8 @@ struct ObjectData{
 	vec4 color;
 };
 
-layout(std140, set = 1, binding = 0) readonly buffer ObjectBuffer{
+layout(std140, set = 1, binding = 0) buffer ObjectBuffer{
+	vec4 maxColorValue; // x = max, the rest is padding
 	ObjectData objects[];
 } objectBuffer;
 
