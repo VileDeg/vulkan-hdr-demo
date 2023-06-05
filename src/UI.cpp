@@ -78,30 +78,11 @@ void Engine::initImgui()
 	});
 }
 
-void Engine::imguiCommands()
+void Engine::uiUpdateHDR()
 {
-	// Start the Dear ImGui frame
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	
-	// Our state
-	static bool show_demo_window	= false;
-	static bool enable_tone_mapping = true;
-	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
-	if (show_demo_window)
-		ImGui::ShowDemoWindow(&show_demo_window);
-
-	{
-		ImGui::Begin("Tone mapping");
-
-		ImGui::Text("Choose tone mapping operator.");               
-
+	if (ImGui::TreeNode("HDR")) {
 		const char* items[] = { "Reinhard", "ACES Narkowicz", "ACES Hill" };
 		static int item_current = 0;
 		if (ImGui::Combo("TM", &item_current, items, IM_ARRAYSIZE(items))) {
@@ -112,8 +93,77 @@ void Engine::imguiCommands()
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
 		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
 
-		ImGui::Checkbox("Show demo window"	 , &show_demo_window);
+		ImGui::TreePop();
+	}
+}
 
+void Engine::uiUpdateRenderContext()
+{
+	if (ImGui::TreeNode("Scene lighting")) {
+		for (int i = 0; i < MAX_LIGHTS; ++i) {
+
+			// Use SetNextItemOpen() so set the default state of a node to be open. We could
+			// also use TreeNodeEx() with the ImGuiTreeNodeFlags_DefaultOpen flag to achieve the same thing!
+			if (i == 0) {
+				ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			}
+
+			if (ImGui::TreeNode((void*)(intptr_t)i, "Light source %d", i)) {
+				Light& l = _renderContext.sceneData.lights[i];
+
+				ImGui::DragFloat3("Position", glm::value_ptr(l.position), 1.f, -100.f, 100.f);
+
+				if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
+					ImGui::ColorPicker3("Color", glm::value_ptr(l.color));
+					ImGui::TreePop();
+				}
+
+				if (ImGui::DragFloat("Radius", &l.radius, 1.f, 1.f, 50.f)) {
+					_renderContext.UpdateLightAttenuation(i);
+				}
+
+				ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 50.f);
+				bool lon = l.enabled;
+				if (ImGui::Checkbox("Enabled", &lon)) {
+					l.enabled = lon;
+				}
+
+
+				ImGui::TreePop();
+			}
+		}
+
+		ImGui::TreePop();
+	}
+}
+
+void Engine::imguiCommands()
+{
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	
+	{
+		ImGui::Begin("Config");
+
+		uiUpdateHDR();
+
+		uiUpdateRenderContext();
+		
+		ImGui::DragFloat("Filed of view", &_fovY, 1.f, 45.f, 90.f);
+		
+		ImGui::Separator();
+		static bool show_demo_window = false;
+		ImGui::Checkbox("Show demo window", &show_demo_window);
+		if (show_demo_window) {
+			ImGui::ShowDemoWindow(&show_demo_window);
+		}
+		ImGui::Separator();
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 		ImGui::End();
 	}

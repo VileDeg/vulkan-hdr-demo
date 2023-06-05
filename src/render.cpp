@@ -60,17 +60,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 {
 	// Load objects' SSBO to GPU
 	getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, [&](void* data) {
-		//char* objectData = (char*)data + sizeof(glm::vec4); // Skip the first vec4, which is maxval
 		glm::uvec4* maxVal = (glm::uvec4*)data;
-		if (_frameNumber == 0) { // Reset maximum to zero every 2nd frame
+		if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
 			*maxVal = glm::uvec4(0, 0, 0, 0);
-		} else {
+		} else { // On every next frame, swap new MAX and old MAX and set new MAX to zero.
 			std::swap(maxVal->x, maxVal->y);
 			maxVal->x = 0;
 		}
 		
-		//*maxVal = glm::uvec4(0,0,0,0);
-		//}
 		++maxVal;
         GPUObjectData* objectSSBO = (GPUObjectData*)maxVal;
 
@@ -90,16 +87,19 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 	float framed = _frameNumber / 120.f;
 	//_sceneParameters.ambientColor = { sin(framed) * 0.5f, 0.5f, cos(framed) * 0.5f, 1.0f };
 	//_sceneParameters.ambientColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
-	_renderContext.SetCamPos(_inp.camera.GetPos());
+	_renderContext.sceneData.cameraPos = _inp.camera.GetPos();
 
 	// Load scene data to GPU
+	
 	_sceneParameterBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+		//auto layout = _renderContext.sceneData.GPULayout();
+		//size_t bytes_size = layout.size() * sizeof(glm::vec4);
 		char* sceneData = (char*)data;
 		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
 		memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));
 	});
 
-	glm::mat4 projMat = glm::perspective(glm::radians(45.f), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
+	glm::mat4 projMat = glm::perspective(glm::radians(_fovY), _windowExtent.width / (float)_windowExtent.height, 0.01f, 200.f);
 	projMat[1][1] *= -1; //Flip y-axis
 
 	Mesh* lastMesh = nullptr;
@@ -197,7 +197,7 @@ void Engine::createScene()
 	_renderContext.Init();
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		auto lightMat = modelMat;
-		lightMat = glm::translate(lightMat, _renderContext.lightPos[i]);
+		lightMat = glm::translate(lightMat, _renderContext.sceneData.lights[i].position);
 		lightMat = glm::scale(lightMat, glm::vec3(10.f));
 
 		RenderObject lightSource{
@@ -281,12 +281,62 @@ void Engine::createScene()
 	vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
 }
 
-GPUSceneData::GPUSceneData(glm::vec4 ambCol,
-	std::vector<glm::vec3> lightPos,
-	std::vector<glm::vec4> lightColor,
-	std::vector<float> radius,
-	std::vector<float> intensity)
-	: cameraPos(0.f)
+//GPUSceneData::GPUSceneData(glm::vec4 ambCol,
+//	std::vector<glm::vec3> lightPos,
+//	std::vector<glm::vec4> lightColor,
+//	std::vector<float> radius,
+//	std::vector<float> intensity)
+//	: cameraPos(0.f)
+//{
+//	static std::unordered_map<int, glm::vec3> atten_map = {
+//		// From: https://learnopengl.com/Lighting/Light-casters
+//		{ 7   , {1.0, 0.7   , 1.8     } },
+//		{ 13  , {1.0, 0.35  , 0.44    } },
+//		{ 20  , {1.0, 0.22  , 0.20    } },
+//		{ 32  , {1.0, 0.14  , 0.07    } },
+//		{ 50  , {1.0, 0.09  , 0.032   } },
+//		{ 65  , {1.0, 0.07  , 0.017   } },
+//		{ 100 , {1.0, 0.045 , 0.0075  } },
+//		{ 160 , {1.0, 0.027 , 0.0028  } },
+//		{ 200 , {1.0, 0.022 , 0.0019  } },
+//		{ 325 , {1.0, 0.014 , 0.0007  } },
+//		{ 600 , {1.0, 0.007 , 0.0002  } },
+//		{ 3250, {1.0, 0.0014, 0.000007} }
+//	};
+//
+//	ambientColor = ambCol;
+//	for (int i = 0; i < MAX_LIGHTS; i++) {
+//		// Find the attenuation values that are the most fitting for the specified radius
+//		int min_diff = std::numeric_limits<int>::max();
+//		int closest_key = 0;
+//
+//		for (auto& [key, value] : atten_map) {
+//			int diff = std::abs(key - radius[i]);
+//			if (diff < min_diff) {
+//				min_diff = diff;
+//				closest_key = key;
+//			}
+//		}
+//		radius[i] = closest_key;
+//		pr("Light radius[" << i << "] set to: " << radius[i] << " units");
+//		glm::vec3 att = atten_map[closest_key];
+//
+//		light[i] = {
+//			.color = { lightColor[i] },
+//			.pos = glm::vec4(lightPos[i], radius[i]), 
+//			.fac = { 0.1, 1.0, 0.5, intensity[i]}, 
+//			.att = glm::vec4(att, 0.f)
+//		};
+//	}
+//}
+
+
+//RenderContext::RenderContext() {
+//	Init();
+//};
+
+
+void RenderContext::UpdateLightAttenuation(int lightIndex)
 {
 	static std::unordered_map<int, glm::vec3> atten_map = {
 		// From: https://learnopengl.com/Lighting/Light-casters
@@ -304,53 +354,80 @@ GPUSceneData::GPUSceneData(glm::vec4 ambCol,
 		{ 3250, {1.0, 0.0014, 0.000007} }
 	};
 
-	ambientColor = ambCol;
-	for (int i = 0; i < MAX_LIGHTS; i++) {
-		// Find the attenuation values that are the most fitting for the specified radius
-		int min_diff = std::numeric_limits<int>::max();
-		int closest_key = 0;
+	Light& l = sceneData.lights[lightIndex];
 
-		for (auto& [key, value] : atten_map) {
-			int diff = std::abs(key - radius[i]);
-			if (diff < min_diff) {
-				min_diff = diff;
-				closest_key = key;
-			}
+	// Set the radius to the closest radius that is present in table
+	// Find the attenuation values that correspond to the radius
+	int min_diff = std::numeric_limits<int>::max();
+	int closest_key = 0;
+	
+	for (auto& [key, value] : atten_map) {
+		int diff = std::abs(key - l.radius);
+		if (diff < min_diff) {
+			min_diff = diff;
+			closest_key = key;
 		}
-		radius[i] = closest_key;
-		pr("Light radius[" << i << "] set to: " << radius[i] << " units");
-		glm::vec3 att = atten_map[closest_key];
-
-		light[i] = {
-			.color = { lightColor[i] },
-			.pos = glm::vec4(lightPos[i], radius[i]), // 10 units - radius
-			.fac = { 0.1, 1.0, 0.5, intensity[i]}, // 1 - intensity
-			.att = glm::vec4(att, 0.f)
-		};
 	}
+	l.radius = closest_key;
+	pr("Light radius[" << lightIndex << "] set to: " << l.radius << " units");
+
+	glm::vec3 att = atten_map[closest_key];
+
+	l.constant = att.x;
+	l.linear = att.y;
+	l.quadratic = att.z;
 }
 
 void RenderContext::Init() 
 {
-	lightPos = {
+	std::vector<glm::vec3> lightPos = {
 		{ 0. , 5., 0.  },
 		{ 15., 5., 0.  },
 		{ 0. , 5., 15. },
 		{ 15., 5., 15. }
 	};
 
-	lightColor = {
-		{ 1.f , 1.f , 0.2f, 1.f },
-		{ 0.7f, 1.f , 0.8f, 1.f },
-		{ 1.f , 0.5f, 1.f , 1.f },
-		{ 0.7f, 1.f , 1.f , 1.f }
+	std::vector<glm::vec3> lightColor = {
+		{ 1.f , 1.f , 0.2f },
+		{ 0.7f, 1.f , 0.8f },
+		{ 1.f , 0.5f, 1.f  },
+		{ 0.7f, 1.f , 1.f  }
 	};
 
-	radius = { 20.f, 10.f, 30.f, 5.f };
-	intensity = { 2000.f, 100.f, 30.f, 500.f };
-	float i = 0.1f;
+	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
+	std::vector<float> intensity = { 2000.f, 100.f, 30.f, 500.f };
 
+	//float i = 0.1f;
+
+	
+	//glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
+	//sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
+
+	
+
+	//ambientColor = ambCol;
 	float amb = 0.2f;
-	glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
-	sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
+	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
+
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		
+
+		sceneData.lights[i] = {
+			.position = lightPos[i],
+			.radius = radius[i],
+
+			.color = lightColor[i],
+
+			.ambientFactor = 0.1f,
+			.diffuseFactor = 1.0f,
+			.specularFactor = 0.5f,
+			.intensity = intensity[i],
+
+			//Attenuation skipped. Will be updated based on radius
+
+			.enabled = true
+		};
+
+		UpdateLightAttenuation(i);
+	}
 }

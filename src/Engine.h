@@ -93,9 +93,12 @@ private:
     void imguiCommands();
     void imguiOnDrawStart();
     void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
+    void uiUpdateRenderContext();
+    void uiUpdateHDR();
 
 private:
     int _toneMappingOp = 0; // Reinhard, ACES Narkowicz, ACES Hill
+    float _fovY = 90.f; // degrees
 private: 
     GLFWwindow* _window;
 
