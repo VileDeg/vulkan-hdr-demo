@@ -22,17 +22,25 @@ struct Texture {
 
 struct RenderObject {
     std::string tag = "";
-    glm::vec4 color;
+    glm::vec4 color{};
 
-    Mesh* mesh;
-    Material* material;
-    glm::mat4 transform;
+    Mesh* mesh{ nullptr };
+    Material* material{nullptr};
+
+    glm::vec3 pos{0.f};
+    glm::quat rot{};
+    glm::vec3 scale{1.f};
+
+    glm::mat4 Transform() {
+        return glm::translate(glm::mat4(1.f), pos) * 
+            glm::scale(glm::mat4(1.f), scale);
+    }
 };
 
-struct MeshPushConstants {
-    glm::ivec4 data;
-    glm::mat4 render_matrix;
-};
+//struct MeshPushConstants {
+//    glm::ivec4 data;
+//    glm::mat4 render_matrix;
+//};
 
 struct GPUCameraData {
     glm::mat4 view;
@@ -45,14 +53,23 @@ struct GPUObjectData {
     glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
 };
 
-#define MAX_LIGHTS 4
+#define MAX_OBJECTS 10000
 
-//struct LightData {
-//    glm::vec4 pos;   // x, y, z, radius
-//    glm::vec4 color; // r, g, b, a
-//    glm::vec4 fac;   // Ambient, diffuse, sepcular, intensity
-//    glm::vec4 att;   // Constant, linear, quadratic, __unused
-//};
+struct GPUSSBOData {
+    int exposureON{ true };
+    int toneMappingON{ true };
+    int toneMappingMode{ 0 };
+    float exposure{ 1.0f };
+
+    unsigned int newMax{ 0 };
+    unsigned int oldMax{ 0 };
+    int  _pad0{ 0 };
+    int  _pad1{ 0 };
+
+    GPUObjectData objects[MAX_OBJECTS];
+};
+
+#define MAX_LIGHTS 4
 
 struct Light {
     glm::vec3 position{};
@@ -70,15 +87,6 @@ struct Light {
     float linear{};
     float quadratic{};
     int  enabled{ true };
-
-    /*std::vector<glm::vec4> GPULayout() {
-        return {
-            { position, radius },
-            { color, 1.f },
-            { ambientFactor, diffuseFactor, specularFactor, intensity },
-            { constant, linear, quadratic, 0.f }
-        };
-    }*/
 };
 
 struct GPUSceneData {
@@ -89,63 +97,35 @@ struct GPUSceneData {
     int _pad1{};
 
     Light lights[MAX_LIGHTS];
-    //std::vector<Light> lights{};
-
-    /*std::vector<glm::vec4> GPULayout() {
-        std::vector<glm::vec4> out{
-            { cameraPos, 1.f },
-            { ambientColor, 1.f }
-        };
-        for (auto& l : lights) {
-            auto gpul = l.GPULayout();
-            out.insert(out.end(), gpul.begin(), gpul.end());
-        }
-        return out;
-    }
-
-    size_t GPUSize() {
-        return GPULayout().size() * sizeof(glm::vec4);
-    }*/
-
-    /*GPUSceneData() : cameraPos(0.f), ambientColor(0.05f) {
-        for (int i = 0; i < MAX_LIGHTS; i++) {
-            light[i].color = glm::vec4(1.f);
-            light[i].pos   = glm::vec4(0.f);
-            light[i].fac   = glm::vec4(0.5f);
-            light[i].att   = glm::vec4(0.5f);
-        }
-    }*/
-
-    /*GPUSceneData(glm::vec4 ambCol,
-        std::vector<glm::vec3> lightPos,
-        std::vector<glm::vec4> lightColor,
-        std::vector<float> radius,
-        std::vector<float> intensity);*/
 };
 
-
-
 struct RenderContext {
-    GPUSceneData sceneData;
-
-    std::vector<RenderObject> lightSource;
-
-    /*std::vector<glm::vec3> lightPos;
-    std::vector<glm::vec3> lightColor;
-
-    std::vector<float> radius;
-    std::vector<float> intensity;*/
-
-    //const int numLights = 4; // Do not modify. It is hardcoded in shaders!!
-
-    //RenderContext();
+    GPUSceneData sceneData{};
+    GPUSSBOData ssboData{};
+    std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     void Init();
 
-    void UpdateLightAttenuation(int lightIndex);
+    void UpdateLightPosition(int lightIndex, glm::vec3 newPos);
+    void UpdateLightAttenuation(int lightIndex, int mode /* 0 = Closest */);
 
-    /*void SetCamPos(glm::vec3 pos) {
-        sceneData.cameraPos = glm::vec4(pos, 1.f);
-    }*/
+    int GetClosestRadiusIndex(int radius);
+
+    
+
+    std::vector<std::pair<int, glm::vec3>> atten_map{
+        // From: https://learnopengl.com/Lighting/Light-casters
+        { 7   , {1.0, 0.7   , 1.8     } },
+        { 13  , {1.0, 0.35  , 0.44    } },
+        { 20  , {1.0, 0.22  , 0.20    } },
+        { 32  , {1.0, 0.14  , 0.07    } },
+        { 50  , {1.0, 0.09  , 0.032   } },
+        { 65  , {1.0, 0.07  , 0.017   } },
+        { 100 , {1.0, 0.045 , 0.0075  } },
+        { 160 , {1.0, 0.027 , 0.0028  } },
+        { 200 , {1.0, 0.022 , 0.0019  } },
+        { 325 , {1.0, 0.014 , 0.0007  } },
+        { 600 , {1.0, 0.007 , 0.0002  } },
+        { 3250, {1.0, 0.0014, 0.000007} }
+    };
 };
-

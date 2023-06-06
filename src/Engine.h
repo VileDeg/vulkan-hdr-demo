@@ -27,6 +27,8 @@ struct InputContext {
     bool toneMappingEnabled = true;
     bool exposureEnabled    = true;
 
+    bool uiEnabled = true;
+
     std::function<void(void)> onFramebufferResize = nullptr;
 };
 
@@ -77,9 +79,11 @@ private: /* Secondary methods */
     Mesh* getMesh(const std::string& name);
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
-    void drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects);
+    void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
     void bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline);
     void drawFrame();
+
+    void UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects);
 
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     size_t pad_uniform_buffer_size(size_t originalSize);
@@ -97,8 +101,9 @@ private:
     void uiUpdateHDR();
 
 private:
-    int _toneMappingOp = 0; // Reinhard, ACES Narkowicz, ACES Hill
+    //int _toneMappingOp = 0; // Reinhard, ACES Narkowicz, ACES Hill
     float _fovY = 90.f; // degrees
+    
 private: 
     GLFWwindow* _window;
 
@@ -142,7 +147,7 @@ private:
 
     InputContext _inp;
     
-    std::vector<RenderObject> _renderables;
+    std::vector<std::shared_ptr<RenderObject>> _renderables;
 
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;

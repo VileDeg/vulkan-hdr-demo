@@ -17,6 +17,10 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
     inp->onFramebufferResize();
 }
 
+static void toggle(bool& x) {
+    x = !x;
+}
+
 /**
 * Callback for handling different keyboard input.
 */
@@ -29,15 +33,19 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
         case GLFW_KEY_C: // Toggle cursor
-            inp->cursorEnabled = !inp->cursorEnabled;
+            toggle(inp->cursorEnabled);
             glfwSetInputMode(window, GLFW_CURSOR, 
                 inp->cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
         case GLFW_KEY_T: // Toggle tone mapping
-            inp->toneMappingEnabled = !inp->toneMappingEnabled;
+            toggle(inp->toneMappingEnabled);
             break;
-        case GLFW_KEY_E: // Toggle tone mapping
-            inp->exposureEnabled = !inp->exposureEnabled;
+        case GLFW_KEY_E: // Toggle exposure
+            toggle(inp->exposureEnabled);
+            break;
+        case GLFW_KEY_I: // Toggle user interface
+            toggle(inp->uiEnabled);
+            break;
         }
     }
 }

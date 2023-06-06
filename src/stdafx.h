@@ -15,6 +15,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <stack>
 #include <tuple>
 #include <functional>
@@ -25,6 +26,7 @@
 #include <fstream>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
 
 #include "defs.h"
 #include "vk_initializers.h"

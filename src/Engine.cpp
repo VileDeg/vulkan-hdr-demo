@@ -21,9 +21,7 @@ void Engine::Init()
     createFrameData();
     createPipelines();
     createFramebuffers();
-
-    loadTextures();
-    loadMeshes();
+    
     createScene();
 
     initImgui();

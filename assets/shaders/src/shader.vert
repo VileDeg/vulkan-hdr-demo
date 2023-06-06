@@ -11,6 +11,14 @@ layout(location = 2) out vec2 texCoord;
 layout(location = 3) out flat vec4 objectColor;
 layout(location = 4) out vec3 normal;
 
+#include "defs.glsl"
+
+
+struct ObjectData{
+	mat4 model;
+	vec4 color;
+};
+
 layout(set = 0, binding = 0) uniform CameraBuffer {
 	mat4 view;
 	mat4 proj;
@@ -18,24 +26,23 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
 	vec4 position;
 } cam;
 
-struct ObjectData{
-	mat4 model;
-	vec4 color;
-};
+layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
+    int exposureON;
+    int toneMappingON;
+    int toneMappingMode;
+    float exposure;
 
-layout(std140, set = 1, binding = 0) buffer ObjectBuffer{
-	vec4 maxColorValue; // x = max, the rest is padding
-	ObjectData objects[];
-} objectBuffer;
+    uint newMax;
+    uint oldMax;
+	int  _pad0;
+    int  _pad1;
 
-layout(push_constant) uniform constants {
-	ivec4 data;
-	mat4 render_matrix;
-} pc;
+	ObjectData objects[MAX_OBJECTS];
+} ssbo;
 
 void main()
 {
-	mat4 modelMat = objectBuffer.objects[gl_BaseInstance].model;
+	mat4 modelMat = ssbo.objects[gl_BaseInstance].model;
 	mat4 transformMat = cam.viewproj * modelMat;
 
 	gl_Position = transformMat * vec4(vPosition, 1.0f);
@@ -43,6 +50,6 @@ void main()
 	fragPos = vec3(modelMat * vec4(vPosition, 1.0f));
 	fragColor = vColor;
 	texCoord = vTexCoord;
-	objectColor = objectBuffer.objects[gl_BaseInstance].color;
+	objectColor = ssbo.objects[gl_BaseInstance].color;
 	normal = mat3(transpose(inverse(modelMat))) * vNormal;
 }

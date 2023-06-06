@@ -121,18 +121,17 @@ void Pipeline::Init()
         .pDynamicStates = dynamicStates.data()
     };
 
-    pushConstantRange = {
+    /*pushConstantRange = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
         .size = sizeof(MeshPushConstants)
-    };
+    };*/
 
     pipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = static_cast<uint32_t>(_pd.setLayouts.size()),
-        .pSetLayouts = _pd.setLayouts.data(),
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &pushConstantRange
+        .pSetLayouts = _pd.setLayouts.data()
+        //.pPushConstantRanges
     };
 }
 

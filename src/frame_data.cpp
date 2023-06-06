@@ -40,10 +40,10 @@ void Engine::initFrame(FrameData& f)
         vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);
 
         // Create SSBO with all objects data
-        const int MAX_OBJECTS = 10000; 
-        const int SSBO_SIZE = sizeof(glm::uvec4) + sizeof(GPUObjectData) * MAX_OBJECTS;
+        //const int MAX_OBJECTS = 10000; 
+        //const int SSBO_SIZE = sizeof(glm::uvec4) + sizeof(GPUObjectData) * MAX_OBJECTS;
         //const int SSBO_SIZE = sizeof(GPUObjectData) * MAX_OBJECTS;
-        f.objectBuffer = createBuffer(SSBO_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
         VkDescriptorSetAllocateInfo objectSetAlloc = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -69,7 +69,7 @@ void Engine::initFrame(FrameData& f)
         VkDescriptorBufferInfo objectInfo{
             .buffer = f.objectBuffer.buffer,
             .offset = 0,
-            .range = SSBO_SIZE
+            .range = sizeof(GPUSSBOData)
         };
 
         VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);

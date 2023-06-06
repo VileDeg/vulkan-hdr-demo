@@ -25,7 +25,7 @@ struct Mesh {
     AllocatedBuffer _stagingBuffer;
     AllocatedBuffer _vertexBuffer;
 
-    bool loadFromObj(const std::string& path);
+    bool loadFromObj(const std::string& baseDir, const std::string& objName);
     bool loadFromGLTF(const std::string& path);
     void initBuffers(VmaAllocator allocator);
     size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }

@@ -56,32 +56,45 @@ void Engine::bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline)
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 
-void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& objects)
+void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects)
+{
+	// Following is the maximum pixel value of image that is used for exposure simulation
+	auto& sd = _renderContext.ssboData;
+
+	sd.exposureON = _inp.exposureEnabled;
+	sd.toneMappingON = _inp.toneMappingEnabled;
+
+	for (int i = 0; i < objects.size(); i++) {
+		sd.objects[i].modelMatrix = objects[i]->Transform();
+		sd.objects[i].color = objects[i]->color;
+	}
+}
+
+void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
 	// Load objects' SSBO to GPU
+	UpdateSSBOData(objects);
 	getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, [&](void* data) {
-		glm::uvec4* maxVal = (glm::uvec4*)data;
-		if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
-			*maxVal = glm::uvec4(0, 0, 0, 0);
-		} else { // On every next frame, swap new MAX and old MAX and set new MAX to zero.
-			std::swap(maxVal->x, maxVal->y);
-			maxVal->x = 0;
-		}
-		
-		++maxVal;
-        GPUObjectData* objectSSBO = (GPUObjectData*)maxVal;
+		char* ssboData = (char*)data;
+		unsigned int* newMax = (unsigned int*)(ssboData + 16);
+		unsigned int* oldMax = (unsigned int*)(ssboData + 16 + 4);
 
-		for (int i = 0; i < objects.size(); i++) {
-			objectSSBO[i].modelMatrix = objects[i].transform;
-			objectSSBO[i].color = objects[i].color;
-			
-			//objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
-			/*if (objects[i].tag == "light") {
-				objectSSBO[i].color = glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f };
-			} else {
-				objectSSBO[i].color = glm::vec4{ sin(i), cos(i), sin(-i), 1.0f };
-			}*/
-        }
+		if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
+			*newMax = 0;
+			*oldMax = 0;
+		} else { // On every next frame, swap new MAX and old MAX and set new MAX to zero.
+			std::swap(*newMax, *oldMax);
+			*newMax = 0;
+			if (_frameNumber % 1000 == 0) {
+				pr("New MAX: " << *newMax);
+				pr("Old MAX: " << *oldMax);
+			}
+		}
+		auto& sd = _renderContext.ssboData;
+		sd.newMax = *newMax;
+		sd.oldMax = *oldMax;
+
+		memcpy(data, &sd, sizeof(GPUSSBOData));
     });
 
 	float framed = _frameNumber / 120.f;
@@ -105,7 +118,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < objects.size(); i++) {
-        const RenderObject& obj = objects[i];
+        const RenderObject& obj = *objects[i];
 
 		GPUCameraData camData{
 			.view = _inp.camera.GetViewMat(),
@@ -141,17 +154,17 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<RenderObject>& o
 			lastMesh = obj.mesh;
 		}
 		
-        glm::mat4 modelMat = obj.transform;
+        //glm::mat4 modelMat = obj.transform;
 
-		MeshPushConstants pushConsts{
-			.data = { _inp.toneMappingEnabled, _toneMappingOp, _inp.exposureEnabled, _toneMappingOp },
-			.render_matrix = modelMat
-		};
+		//MeshPushConstants pushConsts{
+		//	.data = { _inp.toneMappingEnabled, _toneMappingOp, _inp.exposureEnabled, _toneMappingOp },
+		//	//.render_matrix = modelMat
+		//};
 		ASSERT(obj.material && obj.mesh);
 
-        vkCmdPushConstants(cmd, obj.material->pipelineLayout, 
+        /*vkCmdPushConstants(cmd, obj.material->pipelineLayout, 
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
-			0, sizeof(MeshPushConstants), &pushConsts);
+			0, sizeof(MeshPushConstants), &pushConsts);*/
 
 		// Ve send loop index as instance index to use it in shader to access object data in SSBO
         vkCmdDraw(cmd, obj.mesh->_vertices.size(), 1, 0, i);
@@ -177,73 +190,49 @@ void Engine::loadMeshes()
 {
 	_meshes["ball"] = {};
 	Mesh& ballMesh = _meshes["ball"];
-	ASSERT(ballMesh.loadFromObj(Engine::modelPath + "CustomBall/CustomBall.obj"));
+	ASSERT(ballMesh.loadFromObj(Engine::modelPath + "CustomBall/", "CustomBall.obj"));
 
 	_meshes["model"] = {};
 	Mesh& modelMesh = _meshes["model"];
 
-	ASSERT(modelMesh.loadFromObj(Engine::modelPath + "lost_empire/lost_empire.obj"));
-	//modelMesh.loadFromGLTF(Engine::modelPath + "back_rooms/scene.gltf");
+	ASSERT(modelMesh.loadFromObj(Engine::modelPath + "lost_empire/", "lost_empire.obj"));
+	//ASSERT(modelMesh.loadFromObj(Engine::modelPath + "sponza/", "sponza.obj"));
 
 	uploadMesh(ballMesh);
 	uploadMesh(modelMesh);
 }
 
-
 void Engine::createScene()
 {
-	glm::mat4 modelMat = glm::mat4(1.f);
-
+	loadTextures();
+	loadMeshes();
 	_renderContext.Init();
-	for (int i = 0; i < MAX_LIGHTS; i++) {
-		auto lightMat = modelMat;
-		lightMat = glm::translate(lightMat, _renderContext.sceneData.lights[i].position);
-		lightMat = glm::scale(lightMat, glm::vec3(10.f));
 
-		RenderObject lightSource{
-			.tag = "light" + std::to_string(i),
-			//.color = _renderContext.lightColor[i] * _renderContext.intensity[i],
-			.color = glm::vec4(0.5, 0.5, 0.5, 1.),
-			.mesh = getMesh("ball"),
-			.material = getMaterial("colored"),
-			.transform = lightMat
-		};
-		_renderables.push_back(lightSource);
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		_renderables.push_back(std::make_shared<RenderObject>(
+			RenderObject{
+				.tag = "light" + std::to_string(i),
+				//.color = _renderContext.lightColor[i] * _renderContext.intensity[i],
+				.color = glm::vec4(0.5, 0.5, 0.5, 1.),
+				.mesh = getMesh("ball"),
+				.material = getMaterial("colored"),
+				.pos = _renderContext.sceneData.lights[i].position,
+				.scale = glm::vec3(10.f)
+			}
+		));
+
+		_renderContext.lightObjects.push_back(_renderables.back());
     }
 
 	Material* mat = getMaterial("textured");
 
-	//Rotate to face the camera
-	
-	modelMat = glm::translate(modelMat, glm::vec3(0, -18.f, 0));
-	//modelMat = glm::rotate(modelMat, glm::radians(180.f), glm::vec3(0, 1, 0));
-	RenderObject model{
-		.mesh = getMesh("model"),
-		.material = mat,
-		.transform = modelMat
-	};
-
-	_renderables.push_back(model);
-
-#if 0
-	for (int x = -20; x < 20; x++) {
-		for (int y = -20; y < 20; y++) {
-			glm::mat4 modelMat = glm::mat4(1.f);
-			modelMat = glm::translate(glm::mat4(1.0f), glm::vec3(x, 20.0f, y));
-			float sf = 0.2f;
-			modelMat = glm::scale(modelMat, glm::vec3(sf, sf, sf));
-			RenderObject tri{
-				.mesh = getMesh("triangle"),
-				.material = getMaterial("colored"),
-				.transform = modelMat
-			};
-			_renderables.push_back(tri);
+	_renderables.push_back(std::make_shared<RenderObject>(
+		RenderObject{
+			.mesh = getMesh("model"),
+			.material = mat,
+			.pos = glm::vec3(0, -18.f, 0)
 		}
-	}
-#endif
-
-	/*_renderContext.lightSource = lightSource;
-	_renderContext.lightPos = glm::vec4(0, 40.f, 0, 1.f);*/
+	));
 
 	//create a sampler for the texture
 	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
@@ -254,7 +243,6 @@ void Engine::createScene()
 		vkDestroySampler(_device, blockySampler, nullptr);
 		});
 
-	
 
 	//allocate the descriptor set for single-texture to use on the material
 	VkDescriptorSetAllocateInfo allocInfo{
@@ -281,97 +269,51 @@ void Engine::createScene()
 	vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
 }
 
-//GPUSceneData::GPUSceneData(glm::vec4 ambCol,
-//	std::vector<glm::vec3> lightPos,
-//	std::vector<glm::vec4> lightColor,
-//	std::vector<float> radius,
-//	std::vector<float> intensity)
-//	: cameraPos(0.f)
-//{
-//	static std::unordered_map<int, glm::vec3> atten_map = {
-//		// From: https://learnopengl.com/Lighting/Light-casters
-//		{ 7   , {1.0, 0.7   , 1.8     } },
-//		{ 13  , {1.0, 0.35  , 0.44    } },
-//		{ 20  , {1.0, 0.22  , 0.20    } },
-//		{ 32  , {1.0, 0.14  , 0.07    } },
-//		{ 50  , {1.0, 0.09  , 0.032   } },
-//		{ 65  , {1.0, 0.07  , 0.017   } },
-//		{ 100 , {1.0, 0.045 , 0.0075  } },
-//		{ 160 , {1.0, 0.027 , 0.0028  } },
-//		{ 200 , {1.0, 0.022 , 0.0019  } },
-//		{ 325 , {1.0, 0.014 , 0.0007  } },
-//		{ 600 , {1.0, 0.007 , 0.0002  } },
-//		{ 3250, {1.0, 0.0014, 0.000007} }
-//	};
-//
-//	ambientColor = ambCol;
-//	for (int i = 0; i < MAX_LIGHTS; i++) {
-//		// Find the attenuation values that are the most fitting for the specified radius
-//		int min_diff = std::numeric_limits<int>::max();
-//		int closest_key = 0;
-//
-//		for (auto& [key, value] : atten_map) {
-//			int diff = std::abs(key - radius[i]);
-//			if (diff < min_diff) {
-//				min_diff = diff;
-//				closest_key = key;
-//			}
-//		}
-//		radius[i] = closest_key;
-//		pr("Light radius[" << i << "] set to: " << radius[i] << " units");
-//		glm::vec3 att = atten_map[closest_key];
-//
-//		light[i] = {
-//			.color = { lightColor[i] },
-//			.pos = glm::vec4(lightPos[i], radius[i]), 
-//			.fac = { 0.1, 1.0, 0.5, intensity[i]}, 
-//			.att = glm::vec4(att, 0.f)
-//		};
-//	}
-//}
-
-
-//RenderContext::RenderContext() {
-//	Init();
-//};
-
-
-void RenderContext::UpdateLightAttenuation(int lightIndex)
+void RenderContext::UpdateLightPosition(int lightIndex, glm::vec3 newPos)
 {
-	static std::unordered_map<int, glm::vec3> atten_map = {
-		// From: https://learnopengl.com/Lighting/Light-casters
-		{ 7   , {1.0, 0.7   , 1.8     } },
-		{ 13  , {1.0, 0.35  , 0.44    } },
-		{ 20  , {1.0, 0.22  , 0.20    } },
-		{ 32  , {1.0, 0.14  , 0.07    } },
-		{ 50  , {1.0, 0.09  , 0.032   } },
-		{ 65  , {1.0, 0.07  , 0.017   } },
-		{ 100 , {1.0, 0.045 , 0.0075  } },
-		{ 160 , {1.0, 0.027 , 0.0028  } },
-		{ 200 , {1.0, 0.022 , 0.0019  } },
-		{ 325 , {1.0, 0.014 , 0.0007  } },
-		{ 600 , {1.0, 0.007 , 0.0002  } },
-		{ 3250, {1.0, 0.0014, 0.000007} }
-	};
+	sceneData.lights[lightIndex].position = newPos;
+	lightObjects[lightIndex]->pos = newPos;
+}
 
+int RenderContext::GetClosestRadiusIndex(int radius) {
+	int min_diff = std::numeric_limits<int>::max();
+
+	int closest_index = 0;
+	int i = 0;
+	for (auto& [key, value] : atten_map) {
+		int diff = std::abs(key - radius);
+		if (diff < min_diff) {
+			min_diff = diff;
+			closest_index = i;
+		}
+		++i;
+	}
+
+	return closest_index;
+}
+
+
+
+void RenderContext::UpdateLightAttenuation(int lightIndex, int mode)
+{
 	Light& l = sceneData.lights[lightIndex];
 
 	// Set the radius to the closest radius that is present in table
 	// Find the attenuation values that correspond to the radius
-	int min_diff = std::numeric_limits<int>::max();
-	int closest_key = 0;
-	
-	for (auto& [key, value] : atten_map) {
-		int diff = std::abs(key - l.radius);
-		if (diff < min_diff) {
-			min_diff = diff;
-			closest_key = key;
+	int ind = GetClosestRadiusIndex(l.radius);
+	if (mode == 1) { // Increase
+		if (ind != atten_map.size() - 1) {
+			++ind;
+		}
+	} else if (mode == 2) { // Decrease
+		if (ind > 0) {
+			--ind;
 		}
 	}
-	l.radius = closest_key;
+	l.radius = atten_map[ind].first;
 	pr("Light radius[" << lightIndex << "] set to: " << l.radius << " units");
 
-	glm::vec3 att = atten_map[closest_key];
+	glm::vec3 att = atten_map[ind].second;
 
 	l.constant = att.x;
 	l.linear = att.y;
@@ -397,21 +339,10 @@ void RenderContext::Init()
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 2000.f, 100.f, 30.f, 500.f };
 
-	//float i = 0.1f;
-
-	
-	//glm::vec4 ambCol = glm::vec4(amb, amb, amb, 1.f);
-	//sceneData = GPUSceneData(ambCol, lightPos, lightColor, radius, intensity);
-
-	
-
-	//ambientColor = ambCol;
 	float amb = 0.2f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
-		
-
 		sceneData.lights[i] = {
 			.position = lightPos[i],
 			.radius = radius[i],
@@ -428,6 +359,6 @@ void RenderContext::Init()
 			.enabled = true
 		};
 
-		UpdateLightAttenuation(i);
+		UpdateLightAttenuation(i, 0);
 	}
 }

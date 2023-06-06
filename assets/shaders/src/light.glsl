@@ -1,4 +1,4 @@
-#define MAX_LIGHTS 4
+#include "defs.glsl"
 
 struct LightData {
     vec3 pos; // x, y, z

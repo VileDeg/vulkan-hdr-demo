@@ -9,8 +9,29 @@ layout(location = 4) in vec3 normal;
 
 layout(location = 0) out vec4 FragColor;
 
+#include "defs.glsl"
 #include "light.glsl"
 #include "tone_mapping.glsl"
+
+
+struct ObjectData{
+	mat4 model;
+	vec4 color;
+};
+
+layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
+    int exposureON;
+    int toneMappingON;
+    int toneMappingMode;
+    float exposure;
+
+    uint newMax;
+    uint oldMax;
+	int  _pad0;
+    int  _pad1;
+
+	ObjectData objects[MAX_OBJECTS];
+} ssbo;
 
 layout(set = 0, binding = 1) uniform SceneData {
     vec3 cameraPos;
@@ -22,47 +43,32 @@ layout(set = 0, binding = 1) uniform SceneData {
     LightData[MAX_LIGHTS] lights;
 } sd;
 
-
 layout(set = 2, binding = 0) uniform sampler2D tex1;
 
-layout(push_constant) uniform constants {
-	ivec4 data; //ivec4
-	mat4 render_matrix;
-} pc;
-
-
-struct ObjectData{
-	mat4 model;
-	vec4 color;
-};
-
-layout(std140, set = 1, binding = 0) buffer ObjectBuffer{
-	uvec4 maxColorValue; // x = 0 (new max to compute, y = old max, the rest uninitialized
-	ObjectData objects[];
-} objectBuffer;
-
-void main() {
+void main() 
+{
     vec3 lightVal = calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
 
-    vec4 tex = texture(tex1, texCoord); 
+    vec4 tex    = texture(tex1, texCoord); 
     vec3 result = lightVal * tex.rgb;
 
-    if (pc.data.z == 1) { // If enable exposure
+    if (ssbo.exposureON == 1) { // If enable exposure
         float eps = 0.001;
          // If difference is not too small, update maximum value
-        float res = dot(vec3(1), result);
-        if (abs(res - uintBitsToFloat(objectBuffer.maxColorValue.x)) > eps) {
-            atomicMax(objectBuffer.maxColorValue.x, floatBitsToUint(res));
+        float sum = dot(vec3(1), result);
+        if (abs(sum - uintBitsToFloat(ssbo.newMax)) > eps) {
+            atomicMax(ssbo.newMax, floatBitsToUint(sum));
         }
     
-        float oldMax = uintBitsToFloat(objectBuffer.maxColorValue.y);
-        if (oldMax > eps) {
-            result = result / oldMax;
+        float f_oldMax = uintBitsToFloat(ssbo.oldMax);
+        if (f_oldMax > eps) {
+            result = result / f_oldMax * ssbo.exposure;
         }
+        //result *= ssbo.exposure;
     }
    
-    if (pc.data.x == 1) { // If enable tone mapping
-        switch (pc.data.y) {
+    if (ssbo.toneMappingON == 1) { // If enable tone mapping
+        switch (ssbo.toneMappingMode) {
         case 0: result = Reinhard(result)  ; break;
         case 1: result = ACESFilm(result)  ; break;
         case 2: result = ACESFitted(result);

@@ -83,14 +83,20 @@ void Engine::uiUpdateHDR()
 	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 
 	if (ImGui::TreeNode("HDR")) {
+		ImGui::SeparatorText("Tone mapping");
+
 		const char* items[] = { "Reinhard", "ACES Narkowicz", "ACES Hill" };
 		static int item_current = 0;
-		if (ImGui::Combo("TM", &item_current, items, IM_ARRAYSIZE(items))) {
-			_toneMappingOp = item_current;
-			pr("ToneMappingOp: " << _toneMappingOp);
+		if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
+			_renderContext.ssboData.toneMappingMode = item_current;
+			//_toneMappingOp = item_current;
+			pr("ToneMappingOp: " << item_current);
 		}
 
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
+		ImGui::SeparatorText("Exposure");
+
+		ImGui::SliderFloat("Exposure", &_renderContext.ssboData.exposure, 1.f, 10.f);
 		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
 
 		ImGui::TreePop();
@@ -111,18 +117,31 @@ void Engine::uiUpdateRenderContext()
 			if (ImGui::TreeNode((void*)(intptr_t)i, "Light source %d", i)) {
 				Light& l = _renderContext.sceneData.lights[i];
 
-				ImGui::DragFloat3("Position", glm::value_ptr(l.position), 1.f, -100.f, 100.f);
+				glm::vec3 tmpPos = l.position;
+				if (ImGui::SliderFloat3("Position", glm::value_ptr(tmpPos), -100.f, 100.f)) {
+					_renderContext.UpdateLightPosition(i, tmpPos);
+				}
 
 				if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
 					ImGui::ColorPicker3("Color", glm::value_ptr(l.color));
 					ImGui::TreePop();
 				}
 
-				if (ImGui::DragFloat("Radius", &l.radius, 1.f, 1.f, 50.f)) {
-					_renderContext.UpdateLightAttenuation(i);
+				ImGui::Text("Radius %f", l.radius);
+				ImGui::SameLine();
+				if (ImGui::Button("+")) {
+					_renderContext.UpdateLightAttenuation(i, 1);
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("-")) {
+					_renderContext.UpdateLightAttenuation(i, 2);
 				}
 
-				ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 50.f);
+				/*if (ImGui::SliderFloat("Radius", &l.radius, 1.f, 50.f)) {
+					_renderContext.UpdateLightAttenuation(i);
+				}*/
+
+				ImGui::SliderFloat("Intensity", &l.intensity, 1.f, 50.f);
 				bool lon = l.enabled;
 				if (ImGui::Checkbox("Enabled", &lon)) {
 					l.enabled = lon;
@@ -139,25 +158,42 @@ void Engine::uiUpdateRenderContext()
 
 void Engine::imguiCommands()
 {
+	if (!_inp.uiEnabled) {
+		return;
+	}
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	
 	{
 		ImGui::Begin("Config");
 
 		uiUpdateHDR();
-
 		uiUpdateRenderContext();
 		
-		ImGui::DragFloat("Filed of view", &_fovY, 1.f, 45.f, 90.f);
-		
+		/*static std::vector<const char*> models_cstr;
+		if (ImGui::Button("Browse models")) {
+			for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(modelPath)) {
+				models_cstr.push_back(dirEntry.path().string().c_str());
+				std::cout << dirEntry << std::endl;
+			}
+		}
+
+		static int i = 0;
+		if (ImGui::Combo("Models", &i, models_cstr.data(), models_cstr.size())) {
+			std::cout << "Model " << models_cstr[i] << " selected for loading" << std::endl;
+		}*/
+
+		ImGui::Text("New MAX: %u", _renderContext.ssboData.newMax);
+		ImGui::Text("Old MAX: %u", _renderContext.ssboData.oldMax);
+
 		ImGui::Separator();
+		ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
+		ImGui::Separator();
+
 		static bool show_demo_window = false;
 		ImGui::Checkbox("Show demo window", &show_demo_window);
 		if (show_demo_window) {
@@ -171,11 +207,17 @@ void Engine::imguiCommands()
 
 void Engine::imguiOnDrawStart()
 {
+	if (!_inp.uiEnabled) {
+		return;
+	}
 	ImGui::Render();
 }
 
 void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
 {
+	if (!_inp.uiEnabled) {
+		return;
+	}
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer);
 }
 

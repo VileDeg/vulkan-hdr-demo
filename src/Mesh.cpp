@@ -9,7 +9,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "tinygltf/tiny_gltf.h"
 
-bool Mesh::loadFromObj(const std::string& path)
+bool Mesh::loadFromObj(const std::string& baseDir, const std::string& objName)
 {
     //From https://github.com/tinyobjloader/tinyobjloader
     tinyobj::attrib_t attrib;
@@ -17,8 +17,10 @@ bool Mesh::loadFromObj(const std::string& path)
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
+    std::string path = baseDir + objName;
+
     PRINF("Loading model at: " << path);
-    bool good = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.data());
+    bool good = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.data(), baseDir.data());
 
     if (!warn.empty()) {
         pr("tinyobj: WARN: " << warn);
@@ -38,6 +40,7 @@ bool Mesh::loadFromObj(const std::string& path)
         size_t index_offset = 0;
         for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
 
+            ASSERT(shapes[s].mesh.num_face_vertices[f] == 3);
             //hardcode loading to triangles
             int fv = 3;
 
@@ -50,13 +53,17 @@ bool Mesh::loadFromObj(const std::string& path)
                 tinyobj::real_t vx = attrib.vertices[3 * idx.vertex_index + 0];
                 tinyobj::real_t vy = attrib.vertices[3 * idx.vertex_index + 1];
                 tinyobj::real_t vz = attrib.vertices[3 * idx.vertex_index + 2];
+
                 //vertex normal
-                tinyobj::real_t nx = attrib.normals[3 * idx.normal_index + 0];
-                tinyobj::real_t ny = attrib.normals[3 * idx.normal_index + 1];
-                tinyobj::real_t nz = attrib.normals[3 * idx.normal_index + 2];
+                tinyobj::real_t nx{ 0 }, ny{ 0 }, nz{ 0 };
+                if (idx.normal_index >= 0) {
+                    nx = attrib.normals[3 * idx.normal_index + 0];
+                    ny = attrib.normals[3 * idx.normal_index + 1];
+                    nz = attrib.normals[3 * idx.normal_index + 2];
+                }
                 //vertex uv
                 tinyobj::real_t ux{ 0 }, uy{ 0 };
-                if (attrib.texcoords.size() > 0) {
+                if (idx.texcoord_index >= 0) {
                     ux = attrib.texcoords[2 * idx.texcoord_index + 0];
                     uy = attrib.texcoords[2 * idx.texcoord_index + 1];
                 }
@@ -73,6 +80,9 @@ bool Mesh::loadFromObj(const std::string& path)
                 _vertices.push_back(new_vert);
             }
             index_offset += fv;
+
+            // per-face material
+            shapes[s].mesh.material_ids[f];
         }
     }
 
