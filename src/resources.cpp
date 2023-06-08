@@ -73,9 +73,12 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 				if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
 					*newMax = 0;
 					*oldMax = 0;
-				} else { // On every next frame, swap new MAX and old MAX and set new MAX to zero.
+				} else { // On every next frame, swap new MAX and old MAX.
+					unsigned int tmp = *oldMax;
 					std::swap(*newMax, *oldMax);
-					*newMax = 0;
+					// For optimization we assume that MAX of new frame
+					// won't be more then two times lower.
+					*newMax = 0.5 * tmp; 
 				}
 				auto& sd = _renderContext.ssboData;
 				sd.newMax = *newMax;

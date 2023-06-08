@@ -1,5 +1,4 @@
 #version 460
-#extension GL_EXT_debug_printf : enable
 
 layout(location = 0) in vec3 fragPos;
 layout(location = 1) in vec3 fragColor;
@@ -51,38 +50,37 @@ void main()
     vec4 tex    = texture(tex1, texCoord); 
     vec3 result = lightVal * tex.rgb;
 
+    // Apply exposure
+    result *= ssbo.exposure;
+
     float eps = 0.001;
     float lum = luminance(result);
 
-    // If difference is not too small, update new maximum value
-    if (abs(lum - uintBitsToFloat(ssbo.newMax)) > eps) {
-        atomicMax(ssbo.newMax, floatBitsToUint(lum));
-    }
+    if (ssbo.exposureON == 1) {
+        // Update current max only if current luminance is bigger than 90% of old max
+        if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
+            // If difference is not too small, upgrade new max
+            if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
+                atomicMax(ssbo.newMax, floatBitsToUint(lum));
+            }
+        }
     
-    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
-
-    if (ssbo.exposureON == 1) { // If enable exposure
-        // Apply exposure
-        result *= ssbo.exposure;
-        //float diff = abs(lum - f_oldMax);
-        //float log_diff = log(diff+1); // add 1 to avoid negative result
-        if (f_oldMax > 1.f) {
+        float f_oldMax = uintBitsToFloat(ssbo.oldMax);    
+        if (f_oldMax > 1.f) { // TODO: remove condition
             switch (ssbo.exposureMode) {
             case 0: result = result / log(f_oldMax); break;
-            case 1: result = result / f_oldMax; 
-            //case 0: result = result / log_diff; break;
-            //case 1: result = result / diff; 
+            case 1: result = result / f_oldMax; break;
             }
         }
     }
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {
-        case 0: result = ReinhardExtended(result, f_oldMax); break;
+        case 0: result = Reinhard(result); break; //ReinhardExtended(result, f_oldMax); break;
         case 1: result = Reinhard(result); break;
         case 2: result = Uncharted2Filmic(result); break;
         case 3: result = ACESFilm(result); break;
-        case 4: result = ACESFitted(result); 
+        case 4: result = ACESFitted(result); break;
         }
     }
 
