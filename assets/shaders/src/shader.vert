@@ -28,14 +28,14 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
 
 layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
     int exposureON;
+    int exposureMode;
     int toneMappingON;
     int toneMappingMode;
-    float exposure;
 
     uint newMax;
     uint oldMax;
+    float exposure;
 	int  _pad0;
-    int  _pad1;
 
 	ObjectData objects[MAX_OBJECTS];
 } ssbo;

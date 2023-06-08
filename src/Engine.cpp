@@ -39,8 +39,6 @@ void Engine::Run()
         drawFrame();
 
         _inp.camera.Update(_window);
-
-        
     }
 
     vkDeviceWaitIdle(_device);

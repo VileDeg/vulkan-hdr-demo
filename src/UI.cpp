@@ -7,7 +7,7 @@
 
 #define USE_IMGUI 1
 
-#if USE_IMGUI 1
+#if USE_IMGUI
 
 void Engine::initImgui()
 {
@@ -84,20 +84,32 @@ void Engine::uiUpdateHDR()
 
 	if (ImGui::TreeNode("HDR")) {
 		ImGui::SeparatorText("Tone mapping");
-
-		const char* items[] = { "Reinhard", "ACES Narkowicz", "ACES Hill" };
-		static int item_current = 0;
-		if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
-			_renderContext.ssboData.toneMappingMode = item_current;
-			//_toneMappingOp = item_current;
-			pr("ToneMappingOp: " << item_current);
+		
+		{
+			const char* items[] = { 
+				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
+			static int item_current = 0;
+			if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
+				_renderContext.ssboData.toneMappingMode = item_current;
+			}
 		}
 
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
 		ImGui::SeparatorText("Exposure");
 
+		{
+			const char* items[] = { "Log", "Linear" };
+			static int curr = 0;
+			if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
+				_renderContext.ssboData.exposureMode = curr;
+			}
+		}
+
+
 		ImGui::SliderFloat("Exposure", &_renderContext.ssboData.exposure, 1.f, 10.f);
+
 		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
+
 
 		ImGui::TreePop();
 	}
@@ -118,12 +130,14 @@ void Engine::uiUpdateRenderContext()
 				Light& l = _renderContext.sceneData.lights[i];
 
 				glm::vec3 tmpPos = l.position;
-				if (ImGui::SliderFloat3("Position", glm::value_ptr(tmpPos), -100.f, 100.f)) {
+				if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.1f, -100.f, 100.f)) {
 					_renderContext.UpdateLightPosition(i, tmpPos);
 				}
 
 				if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
+					ImGui::PushItemWidth(100.f);
 					ImGui::ColorPicker3("Color", glm::value_ptr(l.color));
+					ImGui::PopItemWidth();
 					ImGui::TreePop();
 				}
 
@@ -137,11 +151,11 @@ void Engine::uiUpdateRenderContext()
 					_renderContext.UpdateLightAttenuation(i, 2);
 				}
 
-				/*if (ImGui::SliderFloat("Radius", &l.radius, 1.f, 50.f)) {
-					_renderContext.UpdateLightAttenuation(i);
-				}*/
+				if (ImGui::Button("Reset Intensity")) {
+					l.intensity = 1.f;
+				}
 
-				ImGui::SliderFloat("Intensity", &l.intensity, 1.f, 50.f);
+				ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f);
 				bool lon = l.enabled;
 				if (ImGui::Checkbox("Enabled", &lon)) {
 					l.enabled = lon;
@@ -187,8 +201,7 @@ void Engine::imguiCommands()
 			std::cout << "Model " << models_cstr[i] << " selected for loading" << std::endl;
 		}*/
 
-		ImGui::Text("New MAX: %u", _renderContext.ssboData.newMax);
-		ImGui::Text("Old MAX: %u", _renderContext.ssboData.oldMax);
+		ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
 
 		ImGui::Separator();
 		ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);

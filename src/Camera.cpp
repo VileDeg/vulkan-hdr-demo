@@ -75,3 +75,19 @@ void Camera::rotate(float x, float y) {
     _right = glm::normalize(glm::cross(_front, sWorldUp));
     _up = glm::normalize(glm::cross(_right, _front));
 }
+
+glm::mat4 Camera::GetProjMat(float fovY, int w, int h) {
+    glm::mat4 projMat = _oldProjMat;
+
+    if (_oldFovY != fovY || _oldWinWidth != w || _oldWinHeight != h) { // If window dimensions or fov changed
+        projMat = glm::perspective(glm::radians(fovY), w / (float)h, 0.01f, 200.f);
+        projMat[1][1] *= -1; //Flip y-axis
+    }
+
+    _oldFovY = fovY;
+    _oldWinWidth = w;
+    _oldWinHeight = h;
+    _oldProjMat = projMat;
+
+    return projMat;
+}

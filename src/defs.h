@@ -1,7 +1,8 @@
 #pragma once
 
-//Macros for printing error messages
 
+
+//Macros for printing error messages
 #define HHHPR(_msg, _stream) do{ _stream << _msg << std::endl; }while(0)
 #define HHPR(_msg, _type, _stream) do{ _stream << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": "; HHHPR(_msg, _stream); }while(0)
 #define HPR(_msg, _type) HHPR(_msg, _type, std::cerr)
@@ -14,6 +15,9 @@
 #define PRINF(_msg) HPRINFO(_msg, "Info");
 
 #define pr(_msg) HHHPR(_msg, std::cout)
+
+//Exit macro
+#define EXIT(_x) do{ PRERR("program exit with code: " << _x); exit(_x); }while(0)
 
 //Macro for breaking into the debugger or aborting the program
 #ifdef NDEBUG

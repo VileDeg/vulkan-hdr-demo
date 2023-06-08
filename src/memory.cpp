@@ -44,8 +44,6 @@ size_t Engine::pad_uniform_buffer_size(size_t originalSize)
     return alignedSize;
 }
 
-
-
 void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
 {
     VkCommandBuffer cmd = _uploadContext.commandBuffer;

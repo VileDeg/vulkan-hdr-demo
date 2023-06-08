@@ -18,6 +18,8 @@ public:
         return glm::lookAt(_pos, _pos + _front, _up);
     }
 
+    glm::mat4 GetProjMat(float fovY, int w, int h);
+    
 private:
     void goFront(float dt) {
         _pos += _front * _movSpeed * dt;
@@ -65,4 +67,11 @@ private:
 
     int _fps{};
     float _dt{};
+
+    int _oldWinWidth{ 0 };
+    int _oldWinHeight{ 0 };
+    float _oldFovY{ 0.f };
+
+    glm::mat4 _oldProjMat;
+
 };

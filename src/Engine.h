@@ -1,9 +1,8 @@
 #pragma once
 
 #include "types.h"
-#include "Mesh.h"
 #include "Camera.h"
-#include "render.h"
+#include "resources.h"
 
 /**
 * Struct that holds data related to immediate command execution.
@@ -57,9 +56,6 @@ private: /* Methods used from Init directly */
     void createFramebuffers();
     void createFrameData();
 
-    void loadMeshes();
-    void loadTextures();
-
     void createScene();
 
 private: /* Secondary methods */
@@ -72,11 +68,15 @@ private: /* Secondary methods */
     void initUploadContext();
     void initFrame(FrameData& f);
 
+    bool loadModelFromObj(const std::string assignedName, const std::string path);
+    Texture* loadTextureFromFile(const std::string assignedName, const std::string path);
     void uploadMesh(Mesh& mesh);
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
+    Texture* getTexture(const std::string& name);
+
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
@@ -89,8 +89,7 @@ private: /* Secondary methods */
     size_t pad_uniform_buffer_size(size_t originalSize);
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
-
-    bool loadImageFromFile(std::string filePath, AllocatedImage& outImage);
+    
 
 private: 
     void initImgui();
@@ -149,9 +148,10 @@ private:
     
     std::vector<std::shared_ptr<RenderObject>> _renderables;
 
+    //std::unordered_map<std::string, Model> _models;
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;
-    std::unordered_map<std::string, Texture> _loadedTextures;
+    std::unordered_map<std::string, Texture> _textures;
 
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorSetLayout _objectSetLayout;

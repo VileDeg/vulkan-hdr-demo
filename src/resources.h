@@ -1,7 +1,29 @@
 #pragma once
 
-#include "Mesh.h"
 #include "types.h"
+
+struct VertexInputDescription {
+    std::vector<VkVertexInputBindingDescription> bindings;
+    std::vector<VkVertexInputAttributeDescription> attributes;
+
+    VkPipelineVertexInputStateCreateFlags flags = 0;
+};
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec3 color;
+    glm::vec2 uv;
+
+    static VertexInputDescription getDescription();
+};
+
+struct Mesh {
+    std::vector<Vertex> _vertices;
+    AllocatedBuffer _vertexBuffer;
+
+    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
+};
 
 struct Material {
     VkPipeline pipeline;
@@ -20,12 +42,21 @@ struct Texture {
     VkImageView imageView;
 };
 
+//struct Model {
+//    std::vector<Texture*> textures;
+//    std::vector<Mesh*> meshes{ nullptr };
+//    Material* material{ nullptr };
+//};
+
 struct RenderObject {
     std::string tag = "";
     glm::vec4 color{};
 
+    //Model* model;
+    //std::vector<Texture*> textures;
+
     Mesh* mesh{ nullptr };
-    Material* material{nullptr};
+    Material* material{ nullptr };
 
     glm::vec3 pos{0.f};
     glm::quat rot{};
@@ -36,11 +67,6 @@ struct RenderObject {
             glm::scale(glm::mat4(1.f), scale);
     }
 };
-
-//struct MeshPushConstants {
-//    glm::ivec4 data;
-//    glm::mat4 render_matrix;
-//};
 
 struct GPUCameraData {
     glm::mat4 view;
@@ -56,15 +82,15 @@ struct GPUObjectData {
 #define MAX_OBJECTS 10000
 
 struct GPUSSBOData {
-    int exposureON{ true };
-    int toneMappingON{ true };
+    int exposureON{ 1 };
+    int exposureMode{ 0 };
+    int toneMappingON{ 1 };
     int toneMappingMode{ 0 };
-    float exposure{ 1.0f };
 
     unsigned int newMax{ 0 };
     unsigned int oldMax{ 0 };
+    float exposure{ 1.0f };
     int  _pad0{ 0 };
-    int  _pad1{ 0 };
 
     GPUObjectData objects[MAX_OBJECTS];
 };
@@ -110,8 +136,6 @@ struct RenderContext {
     void UpdateLightAttenuation(int lightIndex, int mode /* 0 = Closest */);
 
     int GetClosestRadiusIndex(int radius);
-
-    
 
     std::vector<std::pair<int, glm::vec3>> atten_map{
         // From: https://learnopengl.com/Lighting/Light-casters

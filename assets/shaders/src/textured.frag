@@ -13,7 +13,6 @@ layout(location = 0) out vec4 FragColor;
 #include "light.glsl"
 #include "tone_mapping.glsl"
 
-
 struct ObjectData{
 	mat4 model;
 	vec4 color;
@@ -21,14 +20,14 @@ struct ObjectData{
 
 layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
     int exposureON;
+    int exposureMode;
     int toneMappingON;
     int toneMappingMode;
-    float exposure;
 
     uint newMax;
     uint oldMax;
+    float exposure;
 	int  _pad0;
-    int  _pad1;
 
 	ObjectData objects[MAX_OBJECTS];
 } ssbo;
@@ -52,26 +51,38 @@ void main()
     vec4 tex    = texture(tex1, texCoord); 
     vec3 result = lightVal * tex.rgb;
 
-    if (ssbo.exposureON == 1) { // If enable exposure
-        float eps = 0.001;
-         // If difference is not too small, update maximum value
-        float sum = dot(vec3(1), result);
-        if (abs(sum - uintBitsToFloat(ssbo.newMax)) > eps) {
-            atomicMax(ssbo.newMax, floatBitsToUint(sum));
-        }
+    float eps = 0.001;
+    float lum = luminance(result);
+
+    // If difference is not too small, update new maximum value
+    if (abs(lum - uintBitsToFloat(ssbo.newMax)) > eps) {
+        atomicMax(ssbo.newMax, floatBitsToUint(lum));
+    }
     
-        float f_oldMax = uintBitsToFloat(ssbo.oldMax);
-        if (f_oldMax > eps) {
-            result = result / f_oldMax * ssbo.exposure;
+    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
+
+    if (ssbo.exposureON == 1) { // If enable exposure
+        // Apply exposure
+        result *= ssbo.exposure;
+        //float diff = abs(lum - f_oldMax);
+        //float log_diff = log(diff+1); // add 1 to avoid negative result
+        if (f_oldMax > 1.f) {
+            switch (ssbo.exposureMode) {
+            case 0: result = result / log(f_oldMax); break;
+            case 1: result = result / f_oldMax; 
+            //case 0: result = result / log_diff; break;
+            //case 1: result = result / diff; 
+            }
         }
-        //result *= ssbo.exposure;
     }
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {
-        case 0: result = Reinhard(result)  ; break;
-        case 1: result = ACESFilm(result)  ; break;
-        case 2: result = ACESFitted(result);
+        case 0: result = ReinhardExtended(result, f_oldMax); break;
+        case 1: result = Reinhard(result); break;
+        case 2: result = Uncharted2Filmic(result); break;
+        case 3: result = ACESFilm(result); break;
+        case 4: result = ACESFitted(result); 
         }
     }
 
