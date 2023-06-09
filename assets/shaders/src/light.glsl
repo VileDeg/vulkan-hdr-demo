@@ -7,9 +7,9 @@ struct LightData {
     vec3 color; // r, g, b
     int  _pad0;
 
-    float ambientFactor;
-    float diffuseFactor;
-    float specularFactor;
+    float ambientFactor;  // TODO: remove
+    float diffuseFactor;  // TODO: remove ??
+    float specularFactor; 
     float intensity;
 
     float constant;

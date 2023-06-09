@@ -26,12 +26,13 @@ void Engine::createDebugMessenger()
             .pfnUserCallback = debug_callback
         };
 
-        DYNAMIC_LOAD(cdum, _instance, vkCreateDebugUtilsMessengerEXT);
-        VKASSERT(cdum(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
+        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance, vkCreateDebugUtilsMessengerEXT);
+        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance, vkDestroyDebugUtilsMessengerEXT);
+
+        VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
         
         _deletionStack.push([&]() { 
-            DYNAMIC_LOAD(ddum, _instance, vkDestroyDebugUtilsMessengerEXT); 
-            ddum(_instance, _debugMessenger, nullptr); 
+            vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
         });
     }
 }

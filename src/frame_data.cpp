@@ -110,14 +110,17 @@ void Engine::initDescriptors()
     { // Camera + scene descriptor set
         const size_t sceneParamBufferSize = MAX_FRAMES_IN_FLIGHT * pad_uniform_buffer_size(sizeof(GPUSceneData));
 
-        _sceneParameterBuffer = createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        _sceneParameterBuffer = 
+            createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
         _deletionStack.push([&]() {
             _sceneParameterBuffer.destroy(_allocator);
         });
 
-        VkDescriptorSetLayoutBinding cameraBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
+        VkDescriptorSetLayoutBinding cameraBinding = 
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
 
-        VkDescriptorSetLayoutBinding sceneBinding = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+        VkDescriptorSetLayoutBinding sceneBinding = 
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
 
         VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
 
@@ -134,7 +137,8 @@ void Engine::initDescriptors()
     }
 
     { // Object descriptor set (SSBO)
-        VkDescriptorSetLayoutBinding objectBind = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+        VkDescriptorSetLayoutBinding objectBind = 
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
         VkDescriptorSetLayoutCreateInfo set2info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -149,20 +153,23 @@ void Engine::initDescriptors()
         });
     }
 
-    //another set, one that holds a single texture
-    VkDescriptorSetLayoutBinding textureBind = vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+    { // 1 texture descriptor set
+        VkDescriptorSetLayoutBinding textureBind = 
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    VkDescriptorSetLayoutCreateInfo set3info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = 0,
-        .bindingCount = 1,
-        .pBindings = &textureBind
-    };
+        VkDescriptorSetLayoutCreateInfo set3info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            // This is a push descriptor set !
+            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+            .bindingCount = 1,
+            .pBindings = &textureBind
+        };
 
-    vkCreateDescriptorSetLayout(_device, &set3info, nullptr, &_singleTextureSetLayout);
-    _deletionStack.push([&]() {
-        vkDestroyDescriptorSetLayout(_device, _singleTextureSetLayout, nullptr);
-    });
+        vkCreateDescriptorSetLayout(_device, &set3info, nullptr, &_singleTextureSetLayout);
+        _deletionStack.push([&]() {
+            vkDestroyDescriptorSetLayout(_device, _singleTextureSetLayout, nullptr);
+            });
+    }
 }
 
 void Engine::initUploadContext()

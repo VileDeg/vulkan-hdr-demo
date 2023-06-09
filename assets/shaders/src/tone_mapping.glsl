@@ -1,4 +1,3 @@
-
 vec3 Reinhard(vec3 color) {
 	return color / (color + vec3(1.0));
 }
@@ -60,7 +59,6 @@ vec3 ACESFilm(vec3 x) {
 
 	return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0, 1);
 }
-
 
 
 // Based on https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl

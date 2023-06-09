@@ -25,8 +25,6 @@ void Engine::createLogicalDevice()
             .pQueuePriorities = &(const float&)1.0f
         },
     };
-
-    
     
     VkPhysicalDeviceFeatures2 deviceFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -57,4 +55,7 @@ void Engine::createLogicalDevice()
 
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);
+
+    // Load push descriptor command for future use
+    DYNAMIC_LOAD(vkCmdPushDescriptorSetKHR, _instance, vkCmdPushDescriptorSetKHR);
 }

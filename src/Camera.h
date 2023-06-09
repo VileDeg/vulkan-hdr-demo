@@ -56,7 +56,7 @@ private:
     glm::vec3 _up{ sWorldUp };
     glm::vec3 _right{ -1.f, 0.f, 0.f };
 
-    glm::vec3 _pos{0.f, 0.f, -5.f};
+    glm::vec3 _pos{0.f, 0.f, 0.f};
 
     float _yaw{90.f}; //rotation around y axis
     float _pitch{}; //rotation around x axis

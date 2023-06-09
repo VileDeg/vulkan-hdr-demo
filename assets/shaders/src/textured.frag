@@ -55,17 +55,17 @@ void main()
 
     float eps = 0.001;
     float lum = luminance(result);
+    // Update current max only if current luminance is bigger than 90% of old max
+    if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
+        // If difference is not too small, upgrade new max
+        if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
+            atomicMax(ssbo.newMax, floatBitsToUint(lum));
+        }
+    }
+    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
+
 
     if (ssbo.exposureON == 1) {
-        // Update current max only if current luminance is bigger than 90% of old max
-        if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
-            // If difference is not too small, upgrade new max
-            if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
-                atomicMax(ssbo.newMax, floatBitsToUint(lum));
-            }
-        }
-    
-        float f_oldMax = uintBitsToFloat(ssbo.oldMax);    
         if (f_oldMax > 1.f) { // TODO: remove condition
             switch (ssbo.exposureMode) {
             case 0: result = result / log(f_oldMax); break;
@@ -73,10 +73,11 @@ void main()
             }
         }
     }
+
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {
-        case 0: result = Reinhard(result); break; //ReinhardExtended(result, f_oldMax); break;
+        case 0: result = ReinhardExtended(result, f_oldMax); break;
         case 1: result = Reinhard(result); break;
         case 2: result = Uncharted2Filmic(result); break;
         case 3: result = ACESFilm(result); break;

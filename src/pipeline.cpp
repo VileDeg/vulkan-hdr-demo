@@ -49,20 +49,6 @@ void Engine::createPipelines()
     newMaterial("textured", pd_textured);
     newMaterial("colored", pd_colored);
 
-    /*Pipeline pipeline(pd);
-    pipeline.Init();
-    pipeline.Build(_device, _renderPass);
-
-    createMaterial(pipeline.pipeline, pipeline.layout, "textured");*/
-
-    /*_deletionStack.push([=]() {
-        pipeline.cleanup();
-    });*/
-
-   /* auto shaders1 = loadShaders(_device, "shader.vert.spv", "textured.frag.spv");
-
-    VkGraphicsPipelineCreateInfo pipelineInfo1 = pipelineInfo;*/
-
     pd_textured.shaders.cleanup(_device);
     pd_colored.shaders.cleanup(_device);
 }

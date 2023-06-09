@@ -40,7 +40,7 @@ public:
     void Cleanup();
 
 private: /* Methods used from Init directly */
-    void createWindow(); /**< Init GLFW, create GLFW window, set callbacks. */
+    void createWindow(); 
     void createInstance();
     void createDebugMessenger();
     void createSurface();
@@ -69,13 +69,15 @@ private: /* Secondary methods */
     void initFrame(FrameData& f);
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
-    Texture* loadTextureFromFile(const std::string assignedName, const std::string path);
+    Texture* loadTextureFromFile(const std::string path);
     void uploadMesh(Mesh& mesh);
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
     Texture* getTexture(const std::string& name);
+    Model* getModel(const std::string& name);
 
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
@@ -89,7 +91,6 @@ private: /* Secondary methods */
     size_t pad_uniform_buffer_size(size_t originalSize);
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
-    
 
 private: 
     void initImgui();
@@ -100,7 +101,6 @@ private:
     void uiUpdateHDR();
 
 private:
-    //int _toneMappingOp = 0; // Reinhard, ACES Narkowicz, ACES Hill
     float _fovY = 90.f; // degrees
     
 private: 
@@ -148,7 +148,7 @@ private:
     
     std::vector<std::shared_ptr<RenderObject>> _renderables;
 
-    //std::unordered_map<std::string, Model> _models;
+    std::unordered_map<std::string, Model> _models;
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;
     std::unordered_map<std::string, Texture> _textures;
@@ -157,11 +157,19 @@ private:
     VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _singleTextureSetLayout;
 
+    VkSampler _blockySampler;
+    VkSampler _linearSampler;
+
     VkDescriptorPool _descriptorPool;
 
-    //GPUSceneData _sceneParameters;
     AllocatedBuffer _sceneParameterBuffer;
     RenderContext _renderContext;
+
+private:
+    PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
+
+    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
+    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
 
 private:
     const std::vector<const char*> _enabledValidationLayers{
@@ -169,12 +177,16 @@ private:
     };
 
     std::vector<const char*> _instanceExtensions{};
-    std::vector<const char*> _deviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_maintenance4"};
+    std::vector<const char*> _deviceExtensions{ 
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_maintenance4", "VK_KHR_push_descriptor" 
+    };
+
 public:
     inline static std::string _assetPath = "assets/";
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
     inline static std::string imagePath  = _assetPath + "models/";
     inline static std::string modelPath  = _assetPath + "models/";
+
 private:
     static constexpr uint32_t WIDTH  = 1280;
     static constexpr uint32_t HEIGHT = 800;

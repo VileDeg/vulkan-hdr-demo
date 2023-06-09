@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 //Macros for printing error messages
 #define HHHPR(_msg, _stream) do{ _stream << _msg << std::endl; }while(0)
 #define HHPR(_msg, _type, _stream) do{ _stream << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": "; HHHPR(_msg, _stream); }while(0)
@@ -53,7 +51,7 @@
 
 //Macro for dynamic load of extension functions
 #define DYNAMIC_LOAD(_varname, _instance, _func)\
-        PFN_##_func _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
+        _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
         if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
 
 //Print macros for glm types

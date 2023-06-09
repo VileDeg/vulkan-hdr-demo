@@ -122,6 +122,8 @@ void Engine::createInstance()
     {
         _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
     }
+
+    
 }
 
 /**

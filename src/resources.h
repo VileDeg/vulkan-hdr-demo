@@ -18,17 +18,11 @@ struct Vertex {
     static VertexInputDescription getDescription();
 };
 
-struct Mesh {
-    std::vector<Vertex> _vertices;
-    AllocatedBuffer _vertexBuffer;
-
-    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
-};
-
 struct Material {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
-    VkDescriptorSet textureSet = { VK_NULL_HANDLE }; //texture defaulted to null
+    bool hasTextures{ true };
+    //VkDescriptorSet textureSet = { VK_NULL_HANDLE }; //texture defaulted to null
 
     void cleanup(VkDevice device) {
         vkDestroyPipeline(device, pipeline, nullptr);
@@ -36,36 +30,41 @@ struct Material {
     }
 };
 
+struct Mesh {
+    std::string tag = "";
+    std::vector<Vertex> _vertices;
+    AllocatedBuffer _vertexBuffer;
+
+    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
+};
+
 struct Texture {
-    /* Based on https://github.com/vblanco20-1/vulkan-guide */
+    std::string tag = "";
     AllocatedImage image;
     VkImageView imageView;
 };
 
-//struct Model {
-//    std::vector<Texture*> textures;
-//    std::vector<Mesh*> meshes{ nullptr };
-//    Material* material{ nullptr };
-//};
+struct Model {
+    std::string tag = "";
+    std::vector<Texture*> textures;
+    std::vector<int> texId; // Meshes' IDs into textures array
+    std::vector<Mesh*> meshes;
+    Material* material{ nullptr };
+
+    float maxExtent{ 0.f };
+};
 
 struct RenderObject {
     std::string tag = "";
     glm::vec4 color{};
 
-    //Model* model;
-    //std::vector<Texture*> textures;
-
-    Mesh* mesh{ nullptr };
-    Material* material{ nullptr };
+    Model* model;
 
     glm::vec3 pos{0.f};
-    glm::quat rot{};
+    glm::vec3 rot{0.f};
     glm::vec3 scale{1.f};
 
-    glm::mat4 Transform() {
-        return glm::translate(glm::mat4(1.f), pos) * 
-            glm::scale(glm::mat4(1.f), scale);
-    }
+    glm::mat4 Transform();
 };
 
 struct GPUCameraData {
