@@ -21,8 +21,10 @@ void Engine::Init()
     createFrameData();
     createPipelines();
     createFramebuffers();
+    createSamplers();
     
-    createScene();
+    //createScene(Engine::modelPath + "sponza/sponza.obj");
+    createScene(Engine::modelPath + "sibenik/sibenik.obj");
 
     initImgui();
 

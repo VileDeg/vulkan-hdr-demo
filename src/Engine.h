@@ -55,8 +55,9 @@ private: /* Methods used from Init directly */
     void createPipelines();
     void createFramebuffers();
     void createFrameData();
+    void createSamplers();
 
-    void createScene();
+    void createScene(const std::string mainModelFullPath);
 
 private: /* Secondary methods */
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -142,7 +143,8 @@ private:
     bool _framebufferResized = false;
 
     bool _isInitialized = false;
-    DeletionStack _deletionStack{};
+    DeletionStack _deletionStack{}; // Disposing resources created during initialization
+    DeletionStack _sceneDisposeStack{};
 
     InputContext _inp;
     
@@ -178,7 +180,9 @@ private:
 
     std::vector<const char*> _instanceExtensions{};
     std::vector<const char*> _deviceExtensions{ 
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_maintenance4", "VK_KHR_push_descriptor" 
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+        "VK_KHR_maintenance4", "VK_KHR_push_descriptor",
+        "VK_EXT_robustness2"
     };
 
 public:

@@ -21,7 +21,7 @@ struct Vertex {
 struct Material {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
-    bool hasTextures{ true };
+    //bool hasTextures{ true };
     //VkDescriptorSet textureSet = { VK_NULL_HANDLE }; //texture defaulted to null
 
     void cleanup(VkDevice device) {
@@ -30,27 +30,34 @@ struct Material {
     }
 };
 
-struct Mesh {
-    std::string tag = "";
-    std::vector<Vertex> _vertices;
-    AllocatedBuffer _vertexBuffer;
-
-    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
-};
-
 struct Texture {
     std::string tag = "";
     AllocatedImage image;
     VkImageView imageView;
 };
 
-struct Model {
+struct Mesh {
     std::string tag = "";
-    std::vector<Texture*> textures;
-    std::vector<int> texId; // Meshes' IDs into textures array
-    std::vector<Mesh*> meshes;
+    std::vector<Vertex> _vertices;
+    AllocatedBuffer _vertexBuffer;
+
+    Texture* p_tex{ nullptr };
+    int mat_id = -1;
+    //bool hasTextures = false;
+
     Material* material{ nullptr };
 
+    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
+};
+
+struct Model {
+    std::string tag = "";
+    //std::vector<Texture*> textures;
+    //std::vector<int> texId; // Meshes' IDs into textures array
+    std::vector<Mesh*> meshes;
+
+    bool lightAffected = true;
+    
     float maxExtent{ 0.f };
 };
 
@@ -67,35 +74,6 @@ struct RenderObject {
     glm::mat4 Transform();
 };
 
-struct GPUCameraData {
-    glm::mat4 view;
-    glm::mat4 proj;
-    glm::mat4 viewproj;
-};
-
-struct GPUObjectData {
-    glm::mat4 modelMatrix;
-    glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
-};
-
-#define MAX_OBJECTS 10000
-
-struct GPUSSBOData {
-    int exposureON{ 1 };
-    int exposureMode{ 0 };
-    int toneMappingON{ 1 };
-    int toneMappingMode{ 0 };
-
-    unsigned int newMax{ 0 };
-    unsigned int oldMax{ 0 };
-    float exposure{ 1.0f };
-    int  _pad0{ 0 };
-
-    GPUObjectData objects[MAX_OBJECTS];
-};
-
-#define MAX_LIGHTS 4
-
 struct Light {
     glm::vec3 position{};
     float radius{};
@@ -111,8 +89,65 @@ struct Light {
     float constant{};
     float linear{};
     float quadratic{};
-    int  enabled{ true };
+    int   enabled{ true };
 };
+
+struct GPUCameraData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+};
+
+struct GPUPushConstantData {
+    int hasTexture;
+    int lightAffected;
+    int _pad0{ 0 };
+    int _pad1{ 0 };
+};
+
+#define MAX_MESHES_PER_MODEL 5000
+
+//struct GPUMeshData {
+//    int hasTextures = 1;
+//    int _pad0{ 0 };
+//    int _pad1{ 0 };
+//    int _pad2{ 0 };
+//};
+
+//struct GPUModelData {
+//    GPUMeshData meshes[MAX_MESHES_PER_MODEL];
+//};
+
+struct GPUObjectData {
+    glm::mat4 modelMatrix;
+    glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
+
+    /*int lightAffected = 1;
+    int  _pad0{ 0 };
+    int  _pad1{ 0 };
+    int  _pad2{ 0 };*/
+    //int modelIndex; // Index into the model array
+};
+
+#define MAX_OBJECTS 1500
+//#define MAX_MODELS  3
+
+struct GPUSSBOData {
+    unsigned int newMax{ 0 };
+    unsigned int oldMax{ 0 };
+    int showNormals = 0;
+    float exposure{ 1.0f };
+
+    int exposureON{ 1 };
+    int exposureMode{ 0 };
+    int toneMappingON{ 1 };
+    int toneMappingMode{ 0 };
+
+    GPUObjectData objects[MAX_OBJECTS];
+    //GPUModelData  models[MAX_MODELS];
+};
+
+#define MAX_LIGHTS 4
 
 struct GPUSceneData {
     glm::vec3 cameraPos{};
@@ -127,6 +162,8 @@ struct GPUSceneData {
 struct RenderContext {
     GPUSceneData sceneData{};
     GPUSSBOData ssboData{};
+    GPUPushConstantData pushConstantData{};
+
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     void Init();

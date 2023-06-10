@@ -28,15 +28,20 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 
 void Engine::createPipelines()
 {
-    PipelineData pd_textured{
-        .shaders = loadShaders(_device, "shader.vert.spv", "textured.frag.spv"),
+    PipelineData pd_general{
+        .shaders = loadShaders(_device, "shader.vert.spv", "shader.frag.spv"),
         .setLayouts = { _globalSetLayout, _objectSetLayout, _singleTextureSetLayout }
     };
 
-    PipelineData pd_colored{
-        .shaders = loadShaders(_device, "shader.vert.spv", "colored.frag.spv"),
+    /*PipelineData pd_color_light{
+        .shaders = loadShaders(_device, "shader.vert.spv", "color_light.frag.spv"),
         .setLayouts = { _globalSetLayout, _objectSetLayout }
     };
+
+    PipelineData pd_color_no_light{
+        .shaders = loadShaders(_device, "shader.vert.spv", "color_no_light.frag.spv"),
+        .setLayouts = { _globalSetLayout, _objectSetLayout }
+    };*/
 
     auto newMaterial = [&](std::string matName, PipelineData pd) {
         Pipeline pipeline(pd);
@@ -44,19 +49,17 @@ void Engine::createPipelines()
         pipeline.Build(_device, _renderPass);
 
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
+
+        pd.shaders.cleanup(_device);
     };
 
-    newMaterial("textured", pd_textured);
-    newMaterial("colored", pd_colored);
-
-    pd_textured.shaders.cleanup(_device);
-    pd_colored.shaders.cleanup(_device);
+    newMaterial("general", pd_general);
+    /*newMaterial("color_light", pd_color_light);
+    newMaterial("color_no_light", pd_color_no_light);*/
 }
 
 Pipeline::Pipeline(PipelineData pd)
-    : _pd(pd)
-{
-}
+    : _pd(pd) {}
 
 void Pipeline::Init()
 {
@@ -107,17 +110,18 @@ void Pipeline::Init()
         .pDynamicStates = dynamicStates.data()
     };
 
-    /*pushConstantRange = {
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    pushConstantRange = {
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
-        .size = sizeof(MeshPushConstants)
-    };*/
+        .size = sizeof(GPUPushConstantData)
+    };
 
     pipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = static_cast<uint32_t>(_pd.setLayouts.size()),
-        .pSetLayouts = _pd.setLayouts.data()
-        //.pPushConstantRanges
+        .pSetLayouts = _pd.setLayouts.data(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
     };
 }
 

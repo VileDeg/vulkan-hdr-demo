@@ -25,14 +25,21 @@ void Engine::createLogicalDevice()
             .pQueuePriorities = &(const float&)1.0f
         },
     };
+
+    // Enable nullDescriptor to pass descriptors with no image view
+    VkPhysicalDeviceRobustness2FeaturesEXT robust2features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+        .nullDescriptor = VK_TRUE
+    };
     
     VkPhysicalDeviceFeatures2 deviceFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &robust2features
     };
-    VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
+    /*VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES
     };
-    deviceFeatures.pNext = &shaderDrawParametersFeatures;
+    deviceFeatures.pNext = &shaderDrawParametersFeatures;*/
 
     if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {
         throw std::runtime_error("Physcial device does not support required features");
@@ -46,7 +53,7 @@ void Engine::createLogicalDevice()
         .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
         .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
         .enabledExtensionCount = (uint32_t)_deviceExtensions.size(),
-        .ppEnabledExtensionNames = _deviceExtensions.data(),
+        .ppEnabledExtensionNames = _deviceExtensions.data()
     };
 
     VKASSERT(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_device));

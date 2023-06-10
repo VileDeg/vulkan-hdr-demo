@@ -117,6 +117,8 @@ void Engine::uiUpdateHDR()
 
 void Engine::uiUpdateRenderContext()
 {
+	
+
 	if (ImGui::TreeNode("Scene lighting")) {
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
 
@@ -188,24 +190,45 @@ void Engine::imguiCommands()
 		uiUpdateHDR();
 		uiUpdateRenderContext();
 		
-		/*static std::vector<const char*> models_cstr;
+		
+		static std::vector<std::string> models;
+		static std::vector<const char*> models_cstr;
+
 		if (ImGui::Button("Browse models")) {
+			models.clear();
+			models_cstr.clear();
+
 			for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(modelPath)) {
-				models_cstr.push_back(dirEntry.path().string().c_str());
-				std::cout << dirEntry << std::endl;
+				std::string pstr = dirEntry.path().string();
+				if (pstr.find_last_of(".") != std::string::npos &&
+					pstr.substr(pstr.find_last_of(".")) == ".obj") 
+				{ // If file is of .obj format
+					models.push_back(pstr);
+					std::cout << dirEntry << std::endl;
+				}
+			}
+
+			for (auto& s : models) {
+				models_cstr.push_back(s.c_str());
 			}
 		}
-
+		
 		static int i = 0;
 		if (ImGui::Combo("Models", &i, models_cstr.data(), models_cstr.size())) {
 			std::cout << "Model " << models_cstr[i] << " selected for loading" << std::endl;
-		}*/
+			createScene(models_cstr[i]);
+		}
 
 		ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
 
 		ImGui::Separator();
 		ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
 		ImGui::Separator();
+
+		bool showNormals = _renderContext.ssboData.showNormals;
+		if (ImGui::Checkbox("Show normals", &showNormals)) {
+			_renderContext.ssboData.showNormals = showNormals;
+		}
 
 		static bool show_demo_window = false;
 		ImGui::Checkbox("Show demo window", &show_demo_window);

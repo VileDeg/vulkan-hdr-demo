@@ -197,8 +197,13 @@ void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& ob
 	sd.toneMappingON = _inp.toneMappingEnabled;
 
 	for (int i = 0; i < objects.size(); i++) {
+
 		sd.objects[i].modelMatrix = objects[i]->Transform();
 		sd.objects[i].color = objects[i]->color;
+		//sd.objects[i].lightAffected = objects[i]->model->lightAffected;
+		/*for (int i = 0; i < objects[i]->model->meshes.size(); i++) {
+			sd.models[i].meshes->hasTextures = (objects[i]->model->meshes[i]->p_tex != nullptr);
+		}*/
 	}
 }
 
@@ -210,8 +215,8 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, 
 			[&](void* data) {
 				char* ssboData = (char*)data;
-				unsigned int* newMax = (unsigned int*)(ssboData + 16);
-				unsigned int* oldMax = (unsigned int*)(ssboData + 16 + 4);
+				unsigned int* newMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, newMax));
+				unsigned int* oldMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, oldMax));
 				float* f_oldMax = reinterpret_cast<float*>(oldMax);
 
 				if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
@@ -267,91 +272,64 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		for (int m = 0; m < model->meshes.size(); ++m) {
 			Mesh* mesh = model->meshes[m];
 
-			// If the material is different, bind the new material
-			//if (model->material != lastMaterial) {
-			bindPipeline(cmd, model->material->pipeline);
-			lastMaterial = model->material;
+			ASSERT(mesh && mesh->material);
+			
+			
 
 			//offset for our scene buffer
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
 
-			// Always add the global and object descriptor
+			// Always add the sceneData and SSBO descriptor
 			std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor };
 
-			// If the material has a texture, add texture descriptor
-			if (model->material->hasTextures) {
-				int meshTextureIndex = model->texId[m];
-				Texture* currTex = model->textures[meshTextureIndex];
-				// If mesh has texture
-				if (currTex != nullptr) { 
-					ASSERT(currTex != nullptr);
-
-					VkDescriptorImageInfo imageBufferInfo{
-						.sampler = _linearSampler,
-						.imageView = currTex->imageView,
-						.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-					};
-
-					VkWriteDescriptorSet texture1 =
-						vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-							VK_NULL_HANDLE, &imageBufferInfo, 0);
-
-					
-					vkCmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model->material->pipelineLayout, 2, 1, &texture1);
-				}
+			VkImageView imageView = VK_NULL_HANDLE;
+			if (mesh->p_tex != nullptr) {
+				imageView = mesh->p_tex->imageView;
 			}
-			// Bind the descriptor sets
-			vkCmdBindDescriptorSets(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, model->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
-			//}
+			VkDescriptorImageInfo imageBufferInfo{
+				.sampler = _linearSampler,
+				.imageView = imageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
+			VkWriteDescriptorSet texture1 =
+				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					VK_NULL_HANDLE, &imageBufferInfo, 0);
+			vkCmdPushDescriptorSetKHR(
+				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
+
+			_renderContext.pushConstantData.hasTexture = (mesh->p_tex != nullptr);
+			_renderContext.pushConstantData.lightAffected = model->lightAffected;
+
+			vkCmdPushConstants(
+				cmd, mesh->material->pipelineLayout,
+				VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
+				&_renderContext.pushConstantData);
+
+			// If the material is different, bind the new material
+			if (mesh->material != lastMaterial) {
+				bindPipeline(cmd, mesh->material->pipeline);
+				lastMaterial = mesh->material;
+				// Bind the descriptor sets
+				vkCmdBindDescriptorSets(
+					cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
+			}
 
 			if (mesh != lastMesh) {
 				VkDeviceSize zeroOffset = 0;
 				vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->_vertexBuffer.buffer, &zeroOffset);
 				lastMesh = mesh;
 			}
-		
-			ASSERT(model->material && mesh);
 
+			
+		
 			// Ve send loop index as instance index to use it in shader to access object data in SSBO
 			vkCmdDraw(cmd, mesh->_vertices.size(), 1, 0, i);
 		}
     }
 }
 
-void Engine::createScene()
-{
-	//ASSERT(loadModelFromObj("main"	, Engine::modelPath + "sponza/sponza.obj"));
-	ASSERT(loadModelFromObj("main", Engine::modelPath + "crytek_sponza/sponza.obj"));
-	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
 
-	getMaterial("colored")->hasTextures = false;
-
-	_renderContext.Init();
-
-	for (int i = 0; i < MAX_LIGHTS; i++) {
-		_renderables.push_back(std::make_shared<RenderObject>(
-			RenderObject{
-				.tag   = "light" + std::to_string(i),
-				.color = glm::vec4(0.5, 0.5, 0.5, 1.),
-				.model = getModel("sphere"),
-				.pos   = _renderContext.sceneData.lights[i].position,
-				.scale = glm::vec3(0.2f)
-			}
-		));
-
-		_renderContext.lightObjects.push_back(_renderables.back());
-    }
-
-	_renderables.push_back(std::make_shared<RenderObject>(
-		RenderObject{
-			.model = getModel("main"),
-			.pos = glm::vec3(0, -5.f, 0),
-			.rot = glm::vec3(0, 90, 0),
-			.scale = glm::vec3(15.f)
-		}
-	));
-
+void Engine::createSamplers() {
 	// Create samplers for textures
 	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
 
@@ -366,6 +344,75 @@ void Engine::createScene()
 	_deletionStack.push([=]() {
 		vkDestroySampler(_device, _linearSampler, nullptr);
 		});
+}
+
+void Engine::createScene(const std::string mainModelFullPath)
+{
+	{ // Reset
+		vkDeviceWaitIdle(_device);
+		_renderables.clear();
+		_models.clear();
+
+		_sceneDisposeStack.flush();
+
+		_meshes.clear();
+		_textures.clear();
+	}
+
+	//ASSERT(loadModelFromObj("main"	, Engine::modelPath + "sponza/sponza.obj"));
+	ASSERT(loadModelFromObj("main", mainModelFullPath));
+	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
+
+	//getMaterial("colored")->hasTextures = false;
+
+	// Set materials
+	for (auto& [key, model] : _models) {
+		for (auto& mesh : model.meshes) {
+			mesh->material = getMaterial("general");
+			/*if (mesh->p_tex != nullptr) {
+				mesh->material = getMaterial("diffuse_light");
+			} else {
+				if (model.lightAffected) {
+					mesh->material = getMaterial("color_light");
+				} else {
+					mesh->material = getMaterial("color");
+				}
+			}*/
+		}
+	}
+
+	Model* sphr = getModel("sphere");
+	// Light source model should not be affected by light
+	sphr->lightAffected = false;
+
+	_renderContext.Init();
+
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		/*_renderables.push_back(std::make_shared<RenderObject>(
+			RenderObject{
+				.tag   = "light" + std::to_string(i),
+				.color = glm::vec4(0.5, 0.5, 0.5, 1.),
+				.model = sphr,
+				.pos   = _renderContext.sceneData.lights[i].position,
+				.scale = glm::vec3(0.1f)
+			}
+		));*/
+
+		//_renderContext.lightObjects.push_back(_renderables.back());
+    }
+
+	_renderables.push_back(std::make_shared<RenderObject>(
+		RenderObject{
+			.model = getModel("main"),
+			.pos = glm::vec3(0, -5.f, 0),
+			.rot = glm::vec3(0, 90, 0),
+			.scale = glm::vec3(15.f)
+		}
+	));
+
+	_deletionStack.push([this]() {
+		_sceneDisposeStack.flush();
+	});
 }
 
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
@@ -404,50 +451,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 		return false;
 	}
 
-	// Materials
-	materials.push_back(tinyobj::material_t());
-
-	for (size_t i = 0; i < materials.size(); i++) {
-		pr("\tmaterial[" << i << "].diffuse_texname = " << materials[i].diffuse_texname);
-	}
-
-	// Load diffuse textures
-	{
-		bool hasTextures = false;
-		for (size_t m = 0; m < materials.size(); m++) {
-			tinyobj::material_t* mp = &materials[m];
-
-			Texture* texture = nullptr;
-
-			// Texname empty means there's no texture
-			if (mp->diffuse_texname.length() > 0) {
-				hasTextures = true;
-				std::string texture_filename = baseDir + mp->diffuse_texname;
-				// Only load the texture if it is not already loaded
-				if (getTexture(texture_filename) == nullptr) {
-					
-					if (!FileExists(texture_filename)) {
-						PRERR("Unable to find file: " << texture_filename);
-						EXIT(1);
-					}
-
-					if (!(texture = loadTextureFromFile(texture_filename))) {
-						PRERR("Unable to load texture: " << texture_filename);
-						EXIT(1);
-					}
-				}
-			}
-			// Push even if there's no texture to not break indexing with texId
-			newModel.textures.push_back(texture);
-		}
-		if (hasTextures) {
-			newModel.material = getMaterial("textured");
-		} else {
-			newModel.material = getMaterial("colored");
-		}
-		newModel.material->hasTextures = hasTextures;
-	}
-
+	
 	bool regen_all_normals = inattrib.normals.size() == 0;
 	tinyobj::attrib_t outattrib;
 	std::vector<tinyobj::shape_t> outshapes;
@@ -459,25 +463,54 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	std::vector<tinyobj::shape_t>& shapes = regen_all_normals ? outshapes : inshapes;
 	tinyobj::attrib_t& attrib = regen_all_normals ? outattrib : inattrib;
 
+	std::vector<int> mesh_tex_id;
 
 	// Loop over shapes
-	for (size_t s = 0; s < shapes.size(); s++) {
+	for (size_t s = 0; s < shapes.size(); s++) { // Shapes
 		pr("\ttinyobj: Loading shape[" << s << "]: " << shapes[s].name);
 
-		// Create mesh cache
-		Mesh& newMesh = _meshes[shapes[s].name];
-		newMesh.tag = shapes[s].name;
+		size_t faces_in_shape = shapes[s].mesh.num_face_vertices.size();
 
+		int prev_mat_id = -1;
+		int mat_id		= -1;
+
+		size_t shape_submesh = 0;
+
+		Mesh* newMesh = nullptr;
+		
 		// Loop over faces(polygon)
 		size_t index_offset = 0;
-		for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+		for (size_t f = 0; f < faces_in_shape; f++) { // Faces
+			size_t vertices_in_face = shapes[s].mesh.num_face_vertices[f];
+			ASSERT(vertices_in_face == 3); // triangles
 
-			ASSERT(shapes[s].mesh.num_face_vertices[f] == 3);
-			//hardcode loading to triangles
-			int fv = 3;
+			mat_id = shapes[s].mesh.material_ids[f];
 
+			// If this face has different material, create new mesh
+
+			if (mat_id != prev_mat_id) {
+				if (newMesh != nullptr) {
+					uploadMesh(*newMesh);
+					newModel.meshes.push_back(newMesh);
+				}
+
+				// Pick any per-face material ID and use it as texture ID for current mesh
+				mesh_tex_id.push_back(mat_id);
+
+				std::string meshName = shapes[s].name + "_::" + std::to_string(shape_submesh);
+				ASSERT(getMesh(shapes[s].name) == nullptr); // Mesh must not exist yet
+
+				newMesh = &_meshes[meshName];
+				newMesh->tag = meshName;
+				newMesh->mat_id = mat_id;
+
+				prev_mat_id = mat_id;
+				++shape_submesh;
+			}
+			
 			// Loop over vertices in the face.
-			for (size_t v = 0; v < fv; v++) {
+			for (size_t v = 0; v < vertices_in_face; v++) { // Vertices
+				
 				// access to vertex
 				tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 
@@ -509,7 +542,8 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 					.uv = {ux, 1 - uy}
 				};
 
-				newMesh._vertices.push_back(new_vert);
+				ASSERT(newMesh != nullptr);
+				newMesh->_vertices.push_back(new_vert);
 
 				// Update model bounds
 				bmin[v] = std::min(vx, bmin[v]);
@@ -520,13 +554,50 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 				bmax[v] = std::max(vy, bmax[v]);
 				bmax[v] = std::max(vz, bmax[v]);
 			}
-			index_offset += fv;
+			index_offset += vertices_in_face;
 		}
-		uploadMesh(newMesh);
-		newModel.meshes.push_back(&newMesh);
-		// Pick first per-face material ID and use it as texture ID for current mesh
-		newModel.texId.push_back(shapes[s].mesh.material_ids[0]);
+
+		uploadMesh(*newMesh);
+		newModel.meshes.push_back(newMesh);
 	}
+
+	// Add default material in case there are none ?
+	materials.push_back(tinyobj::material_t());
+
+	for (size_t i = 0; i < materials.size(); i++) {
+		pr("\tmaterial[" << i << "].diffuse_texname = " << materials[i].diffuse_texname);
+	}
+	
+	// Only load textures that are used by meshes
+	for (size_t mesh_i = 0; mesh_i < mesh_tex_id.size(); ++mesh_i) {
+		tinyobj::material_t* mp = &materials[mesh_tex_id[mesh_i]];
+
+		// Texname empty means there's no texture
+		if (mp->diffuse_texname.length() > 0) {
+			//newModel.meshes[mesh_i]->hasTextures = true;
+
+			std::string texture_filename = baseDir + mp->diffuse_texname;
+			Texture* texture = nullptr;
+			// Only load the texture if it is not already loaded
+			if (getTexture(texture_filename) == nullptr) {
+				if (!FileExists(texture_filename)) {
+					PRERR("Unable to find file: " << texture_filename);
+					EXIT(1);
+				}
+
+				if (!(texture = loadTextureFromFile(texture_filename))) {
+					PRERR("Unable to load texture: " << texture_filename);
+					EXIT(1);
+				}
+			} else {
+				texture = getTexture(texture_filename);
+			}
+
+			// Assign texture pointer to the mesh that uses it
+			newModel.meshes[mesh_i]->p_tex = texture;
+		}
+	}
+
 
 	pr("\tbmin = " << bmin[0] << ", " << bmin[1] << ", " << bmin[2]);
 	pr("\tbmax = " << bmax[0] << ", " << bmax[1] << ", " << bmax[2]);
@@ -654,7 +725,7 @@ Texture* Engine::loadTextureFromFile(const std::string path)
 
 	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.imageView));
 
-	_deletionStack.push([=]() mutable {
+	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.imageView, nullptr);
 		newTexture.image.destroy(_allocator);
 		});
@@ -719,7 +790,7 @@ void Engine::uploadMesh(Mesh& mesh)
 		vkCmdCopyBuffer(cmd, stagingBuffer.buffer, mesh._vertexBuffer.buffer, 1, &copy);
 		});
 
-	_deletionStack.push([&]() {
+	_sceneDisposeStack.push([&]() {
 		mesh._vertexBuffer.destroy(_allocator);
 		});
 

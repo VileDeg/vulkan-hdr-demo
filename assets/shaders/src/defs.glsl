@@ -1,5 +1,6 @@
-#define MAX_OBJECTS 10000
 #define MAX_LIGHTS 4
 
-
+#define MAX_OBJECTS 5000
+#define MAX_MODELS  3
+#define MAX_MESHES_PER_MODEL 1500
 

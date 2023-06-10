@@ -11,24 +11,20 @@ layout(location = 0) out vec4 FragColor;
 #include "light.glsl"
 
 layout(set = 0, binding = 1) uniform SceneData {
-    vec4 cameraPos;
-    vec4 ambientColor;
+    vec3 cameraPos;
+    int _pad0;
+
+    vec3 ambientColor;
+    int _pad1;
+
     LightData[MAX_LIGHTS] lights;
 } sd;
 
-layout(push_constant) uniform constants {
-	ivec4 data;
-	mat4 render_matrix;
-} pc;
-
 void main() {
-    /*vec3 lightVal = 
-        calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos.xyz);*/
+    vec3 lightVal = 
+        calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos.xyz);
     vec3 result = objectColor.xyz;
-    //if (pc.data.x == 1) { // If enable HDR
-    //    result = reinhart(result);
-    //}
-    //result = reinhart(result);
+    result *= lightVal;
 
     FragColor = vec4(result, 1.0);
 }
