@@ -16,13 +16,36 @@ struct Vertex {
     glm::vec2 uv;
 
     static VertexInputDescription getDescription();
+
+    bool operator==(const Vertex& other) const {
+        return pos == other.pos && color == other.color && uv == other.uv;
+    }
 };
+
+template <class T>
+inline void hash_combine(std::size_t& s, const T& v)
+{
+    // Similar to boost::hash_combine
+    std::hash<T> h;
+    s ^= h(v) + 0x9e3779b9 + (s << 6) + (s >> 2);
+}
+
+namespace std {
+    template<> struct hash<Vertex> {
+        size_t operator()(Vertex const& vertex) const {
+            std::size_t res = 0;
+            hash_combine(res, vertex.pos);
+            hash_combine(res, vertex.normal);
+            hash_combine(res, vertex.color);
+            hash_combine(res, vertex.uv);
+            return res;
+        }
+    };
+}
 
 struct Material {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
-    //bool hasTextures{ true };
-    //VkDescriptorSet textureSet = { VK_NULL_HANDLE }; //texture defaulted to null
 
     void cleanup(VkDevice device) {
         vkDestroyPipeline(device, pipeline, nullptr);
@@ -38,32 +61,33 @@ struct Texture {
 
 struct Mesh {
     std::string tag = "";
-    std::vector<Vertex> _vertices;
-    AllocatedBuffer _vertexBuffer;
+
+    std::vector<Vertex> vertices;
+    AllocatedBuffer vertexBuffer;
+
+    std::vector<uint32_t> indices;
+    AllocatedBuffer indexBuffer;
 
     Texture* p_tex{ nullptr };
     int mat_id = -1;
-    //bool hasTextures = false;
 
     Material* material{ nullptr };
-
-    size_t getBufferSize() const { return _vertices.size() * sizeof(Vertex); }
 };
 
 struct Model {
     std::string tag = "";
-    //std::vector<Texture*> textures;
-    //std::vector<int> texId; // Meshes' IDs into textures array
-    std::vector<Mesh*> meshes;
 
+    std::vector<Mesh*> meshes;
     bool lightAffected = true;
-    
+    bool useObjectColor = false;
     float maxExtent{ 0.f };
 };
 
 struct RenderObject {
     std::string tag = "";
+
     glm::vec4 color{};
+    
 
     Model* model;
 
@@ -101,36 +125,23 @@ struct GPUCameraData {
 struct GPUPushConstantData {
     int hasTexture;
     int lightAffected;
+    int useObjectColor;
     int _pad0{ 0 };
-    int _pad1{ 0 };
 };
 
 #define MAX_MESHES_PER_MODEL 5000
-
-//struct GPUMeshData {
-//    int hasTextures = 1;
-//    int _pad0{ 0 };
-//    int _pad1{ 0 };
-//    int _pad2{ 0 };
-//};
-
-//struct GPUModelData {
-//    GPUMeshData meshes[MAX_MESHES_PER_MODEL];
-//};
 
 struct GPUObjectData {
     glm::mat4 modelMatrix;
     glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
 
-    /*int lightAffected = 1;
-    int  _pad0{ 0 };
-    int  _pad1{ 0 };
-    int  _pad2{ 0 };*/
-    //int modelIndex; // Index into the model array
+    int useObjectColor;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 #define MAX_OBJECTS 1500
-//#define MAX_MODELS  3
 
 struct GPUSSBOData {
     unsigned int newMax{ 0 };
@@ -144,7 +155,6 @@ struct GPUSSBOData {
     int toneMappingMode{ 0 };
 
     GPUObjectData objects[MAX_OBJECTS];
-    //GPUModelData  models[MAX_MODELS];
 };
 
 #define MAX_LIGHTS 4

@@ -5,6 +5,7 @@ layout(location = 1) in vec3 fragColor;
 layout(location = 2) in vec2 texCoord;
 layout(location = 3) in flat vec4 objectColor;
 layout(location = 4) in vec3 normal;
+//layout(location = 5) in flat int objectIndex;
 
 layout(location = 0) out vec4 FragColor;
 
@@ -15,6 +16,11 @@ layout(location = 0) out vec4 FragColor;
 struct ObjectData{
 	mat4 model;
 	vec4 color;
+
+    int useObjectColor;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
@@ -62,7 +68,12 @@ void main()
     if (pc.hasTextures == 1) {
         result = texture(diffuse, texCoord).rgb; 
     } else {
-        result = fragColor; // vertex color
+        result = objectColor.rgb;
+        /*if (ssbo.objects[objectIndex].useObjectColor == 1) {
+            result = ssbo.objects[objectIndex].color.rgb;
+        } else {
+            result = fragColor; // vertex color
+        }*/
     }
 
     result = texture(diffuse, texCoord).rgb; 

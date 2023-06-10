@@ -59,8 +59,6 @@ struct AllocatedImage {
     }
 };
 
-
-
 struct FrameData {
     VkSemaphore imageAvailableSemaphore, renderFinishedSemaphore;
     VkFence inFlightFence;

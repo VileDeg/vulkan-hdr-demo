@@ -71,7 +71,9 @@ private: /* Secondary methods */
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
     Texture* loadTextureFromFile(const std::string path);
+
     void uploadMesh(Mesh& mesh);
+    void createMeshBuffer(Mesh& mesh, bool isVertexBuffer);
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
 

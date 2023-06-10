@@ -10,12 +10,18 @@ layout(location = 1) out vec3 fragColor;
 layout(location = 2) out vec2 texCoord;
 layout(location = 3) out flat vec4 objectColor;
 layout(location = 4) out vec3 normal;
+//layout(location = 5) out flat int objectIndex;
 
 #include "defs.glsl"
 
 struct ObjectData{
 	mat4 model;
 	vec4 color;
+
+	int useObjectColor;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
@@ -51,4 +57,5 @@ void main()
 	texCoord = vTexCoord;
 	objectColor = ssbo.objects[gl_BaseInstance].color;
 	normal = mat3(transpose(inverse(modelMat))) * vNormal;
+	//objectIndex = gl_BaseInstance;
 }

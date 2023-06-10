@@ -7,9 +7,11 @@
 
 #include <vma/vk_mem_alloc.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include <optional>
 #include <iostream>

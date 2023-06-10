@@ -200,6 +200,7 @@ void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& ob
 
 		sd.objects[i].modelMatrix = objects[i]->Transform();
 		sd.objects[i].color = objects[i]->color;
+		sd.objects[i].useObjectColor = objects[i]->model->useObjectColor;
 		//sd.objects[i].lightAffected = objects[i]->model->lightAffected;
 		/*for (int i = 0; i < objects[i]->model->meshes.size(); i++) {
 			sd.models[i].meshes->hasTextures = (objects[i]->model->meshes[i]->p_tex != nullptr);
@@ -273,8 +274,6 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 			Mesh* mesh = model->meshes[m];
 
 			ASSERT(mesh && mesh->material);
-			
-			
 
 			//offset for our scene buffer
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
@@ -316,14 +315,15 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 			if (mesh != lastMesh) {
 				VkDeviceSize zeroOffset = 0;
-				vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->_vertexBuffer.buffer, &zeroOffset);
+				vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
+
+				vkCmdBindIndexBuffer(cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
 				lastMesh = mesh;
 			}
-
-			
 		
 			// Ve send loop index as instance index to use it in shader to access object data in SSBO
-			vkCmdDraw(cmd, mesh->_vertices.size(), 1, 0, i);
+			vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, i);
 		}
     }
 }
@@ -363,32 +363,22 @@ void Engine::createScene(const std::string mainModelFullPath)
 	ASSERT(loadModelFromObj("main", mainModelFullPath));
 	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
 
-	//getMaterial("colored")->hasTextures = false;
-
 	// Set materials
 	for (auto& [key, model] : _models) {
 		for (auto& mesh : model.meshes) {
 			mesh->material = getMaterial("general");
-			/*if (mesh->p_tex != nullptr) {
-				mesh->material = getMaterial("diffuse_light");
-			} else {
-				if (model.lightAffected) {
-					mesh->material = getMaterial("color_light");
-				} else {
-					mesh->material = getMaterial("color");
-				}
-			}*/
 		}
 	}
 
 	Model* sphr = getModel("sphere");
 	// Light source model should not be affected by light
-	sphr->lightAffected = false;
+	sphr->lightAffected  = false;
+	sphr->useObjectColor = true;
 
 	_renderContext.Init();
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
-		/*_renderables.push_back(std::make_shared<RenderObject>(
+		_renderables.push_back(std::make_shared<RenderObject>(
 			RenderObject{
 				.tag   = "light" + std::to_string(i),
 				.color = glm::vec4(0.5, 0.5, 0.5, 1.),
@@ -396,9 +386,9 @@ void Engine::createScene(const std::string mainModelFullPath)
 				.pos   = _renderContext.sceneData.lights[i].position,
 				.scale = glm::vec3(0.1f)
 			}
-		));*/
+		));
 
-		//_renderContext.lightObjects.push_back(_renderables.back());
+		_renderContext.lightObjects.push_back(_renderables.back());
     }
 
 	_renderables.push_back(std::make_shared<RenderObject>(
@@ -463,7 +453,9 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	std::vector<tinyobj::shape_t>& shapes = regen_all_normals ? outshapes : inshapes;
 	tinyobj::attrib_t& attrib = regen_all_normals ? outattrib : inattrib;
 
+
 	std::vector<int> mesh_tex_id;
+	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
 	// Loop over shapes
 	for (size_t s = 0; s < shapes.size(); s++) { // Shapes
@@ -492,6 +484,8 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 				if (newMesh != nullptr) {
 					uploadMesh(*newMesh);
 					newModel.meshes.push_back(newMesh);
+
+					uniqueVertices.clear();
 				}
 
 				// Pick any per-face material ID and use it as texture ID for current mesh
@@ -500,6 +494,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 				std::string meshName = shapes[s].name + "_::" + std::to_string(shape_submesh);
 				ASSERT(getMesh(shapes[s].name) == nullptr); // Mesh must not exist yet
 
+				// Create new mesh
 				newMesh = &_meshes[meshName];
 				newMesh->tag = meshName;
 				newMesh->mat_id = mat_id;
@@ -543,7 +538,14 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 				};
 
 				ASSERT(newMesh != nullptr);
-				newMesh->_vertices.push_back(new_vert);
+				// Add vertex only if it wasn't already added
+				if (uniqueVertices.count(new_vert) == 0) {
+					uniqueVertices[new_vert] = static_cast<uint32_t>(newMesh->vertices.size());
+					newMesh->vertices.push_back(new_vert);
+				}
+				// Add vertex index
+				newMesh->indices.push_back(uniqueVertices[new_vert]);
+				//newMesh->vertices.push_back(new_vert);
 
 				// Update model bounds
 				bmin[v] = std::min(vx, bmin[v]);
@@ -736,14 +738,17 @@ Texture* Engine::loadTextureFromFile(const std::string path)
 	return &_textures[path];
 }
 
-void Engine::uploadMesh(Mesh& mesh)
+void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 {
-	//mesh.initBuffers(_allocator);
-	const size_t bufferSize = mesh.getBufferSize();
+	ASSERT(isVertexBuffer && mesh.vertices.size() > 0 || !isVertexBuffer && mesh.indices.size() > 0);
+
+	const size_t bufferSize = isVertexBuffer ?
+		mesh.vertices.size() * sizeof(Vertex) :
+		mesh.indices.size() * sizeof(uint32_t);
 
 	VkBufferCreateInfo stagingBufferInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = sizeof(Vertex) * mesh._vertices.size(),
+		.size = bufferSize,
 		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 	};
@@ -751,24 +756,30 @@ void Engine::uploadMesh(Mesh& mesh)
 	VmaAllocationCreateInfo allocInfo = {
 		.usage = VMA_MEMORY_USAGE_CPU_ONLY,
 	};
-	//allocate temporary buffer for holding texture data to upload
 
+	// Allocate temporary buffer for holding texture data to upload
 	AllocatedBuffer stagingBuffer;
 	VKASSERT(vmaCreateBuffer(_allocator, &stagingBufferInfo, &allocInfo,
 		&stagingBuffer.buffer, &stagingBuffer.allocation, nullptr));
 
+
 	void* data;
 	vmaMapMemory(_allocator, stagingBuffer.allocation, &data);
-	memcpy(data, mesh._vertices.data(), mesh._vertices.size() * sizeof(Vertex));
+	if (isVertexBuffer) {
+		memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
+	} else {
+		memcpy(data, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
+	}
 	vmaUnmapMemory(_allocator, stagingBuffer.allocation);
 
+	VkBufferUsageFlags usg = (isVertexBuffer ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	//allocate vertex buffer
 	VkBufferCreateInfo vertexBufferInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		//this is the total size, in bytes, of the buffer we are allocating
-		.size = mesh.getBufferSize(),
+		.size = bufferSize,
 		//this buffer is going to be used as a Vertex Buffer
-		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+		.usage = usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 	};
 
 	//let the VMA library know that this data should be GPU native
@@ -776,26 +787,35 @@ void Engine::uploadMesh(Mesh& mesh)
 		.usage = VMA_MEMORY_USAGE_GPU_ONLY,
 	};
 
+	AllocatedBuffer& allocBuffer = isVertexBuffer ? mesh.vertexBuffer : mesh.indexBuffer;
 	//allocate the buffer
 	VKASSERT(vmaCreateBuffer(_allocator, &vertexBufferInfo, &vmaAllocInfo,
-		&mesh._vertexBuffer.buffer,
-		&mesh._vertexBuffer.allocation,
+		&allocBuffer.buffer,
+		&allocBuffer.allocation,
 		nullptr));
 
 	immediate_submit([&](VkCommandBuffer cmd) {
 		VkBufferCopy copy;
 		copy.dstOffset = 0;
 		copy.srcOffset = 0;
-		copy.size = mesh.getBufferSize();
-		vkCmdCopyBuffer(cmd, stagingBuffer.buffer, mesh._vertexBuffer.buffer, 1, &copy);
+		copy.size = bufferSize;
+		vkCmdCopyBuffer(cmd, stagingBuffer.buffer, allocBuffer.buffer, 1, &copy);
 		});
 
 	_sceneDisposeStack.push([&]() {
-		mesh._vertexBuffer.destroy(_allocator);
+		allocBuffer.destroy(_allocator);
 		});
 
 	// Destroy staging buffer now as we don't need it anymore
 	stagingBuffer.destroy(_allocator);
+}
+
+void Engine::uploadMesh(Mesh& mesh)
+{
+	// Create vertex buffer
+	createMeshBuffer(mesh, true);
+	// Create index buffer
+	createMeshBuffer(mesh, false);
 }
 
 

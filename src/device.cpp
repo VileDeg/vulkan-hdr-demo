@@ -26,9 +26,15 @@ void Engine::createLogicalDevice()
         },
     };
 
+    // Needed for gl_BaseIndex
+    VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES
+    };
+
     // Enable nullDescriptor to pass descriptors with no image view
     VkPhysicalDeviceRobustness2FeaturesEXT robust2features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+        .pNext = &shaderDrawParametersFeatures,
         .nullDescriptor = VK_TRUE
     };
     
@@ -36,10 +42,6 @@ void Engine::createLogicalDevice()
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &robust2features
     };
-    /*VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES
-    };
-    deviceFeatures.pNext = &shaderDrawParametersFeatures;*/
 
     if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {
         throw std::runtime_error("Physcial device does not support required features");
