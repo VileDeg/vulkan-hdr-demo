@@ -15,6 +15,8 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
      * First call will only recreate the swapchain, second call will render the image. */
     inp->onFramebufferResize();
     inp->onFramebufferResize();
+
+    inp->framebufferResized = false;
 }
 
 static void toggle(bool& x) {

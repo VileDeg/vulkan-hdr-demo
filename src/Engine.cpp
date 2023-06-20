@@ -42,7 +42,7 @@ void Engine::Run()
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
 
-        imguiCommands();
+        
 
         drawFrame();
 

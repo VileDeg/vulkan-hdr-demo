@@ -75,7 +75,7 @@ void Engine::initImgui()
 	}
 
 	//Set style
-	EmbraceTheDarkness();
+	//EmbraceTheDarkness();
 
 	
 
@@ -375,12 +375,9 @@ void Engine::imguiCommands()
 				m_Camera->UpdateProjMat(viewportSize.x, viewportSize.y);
 			}*/
 			
-
-
 			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
-			ImGui::Image((void*)_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2{viewportPanelSize.x, viewportPanelSize.y},
-				ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2{ viewportPanelSize.x, viewportPanelSize.y });
 		}
 		ImGui::End();
 		ImGui::PopStyleVar();
@@ -406,10 +403,10 @@ void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
 	ImGuiIO& io = ImGui::GetIO();
 	if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
-		GLFWwindow* backup_current_context = glfwGetCurrentContext();
+		//GLFWwindow* backup_current_context = glfwGetCurrentContext();
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
-		glfwMakeContextCurrent(backup_current_context);
+		//fwMakeContextCurrent(backup_current_context);
 	}
 }
 

@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "Engine.h"
 
+#include "imgui/imgui.h"
+
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
 	// Load SSBO to GPU
@@ -123,7 +125,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 void Engine::drawFrame()
 {
-    imguiOnDrawStart();
+	imguiCommands();
 
     _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
     FrameData& frame = _frames[_frameInFlightNum];
@@ -143,8 +145,21 @@ void Engine::drawFrame()
         }
     }
 
+	//if (_inp.framebufferResized) {
+	//	ImGuiIO& io = ImGui::GetIO();
+	//	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	//	{
+	//		//GLFWwindow* backup_current_context = glfwGetCurrentContext();
+	//		ImGui::UpdatePlatformWindows();
+	//		ImGui::RenderPlatformWindowsDefault();
+	//		//fwMakeContextCurrent(backup_current_context);
+	//	}
+	//}
+
+	imguiOnDrawStart();
+
 	{ // Viewport command buffer
-		VKASSERT(vkResetCommandBuffer(frame.viewportCmdBuffer, 0));
+		//VKASSERT(vkResetCommandBuffer(frame.viewportCmdBuffer, 0));
 
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
@@ -178,8 +193,6 @@ void Engine::drawFrame()
 
 			vkCmdBeginRenderPass(frame.viewportCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
-				
-
 				drawObjects(frame.viewportCmdBuffer, _renderables);
 			}
 			vkCmdEndRenderPass(frame.viewportCmdBuffer);
@@ -188,41 +201,41 @@ void Engine::drawFrame()
 	}
 
 	{ // Main command buffer
-		VKASSERT(vkResetCommandBuffer(frame.mainCmdBuffer, 0));
+		//VKASSERT(vkResetCommandBuffer(frame.mainCmdBuffer, 0));
 
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
 		VKASSERT(vkBeginCommandBuffer(frame.mainCmdBuffer, &beginInfo));
 		{
-			// Create a VkImageMemoryBarrier struct
-			VkImageMemoryBarrier barrier = {};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.srcAccessMask = 0; // Specify the previous access mask for the image
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // Specify the desired access mask for shader reads
-			barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Specify the current layout of the image
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Specify the desired layout for shader reads
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the source queue family index
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the destination queue family index
-			barrier.image = _viewport.images[imageIndex].image; // Specify the VkImage object
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Specify the image aspect mask
-			barrier.subresourceRange.baseMipLevel = 0; // Specify the base mip level
-			barrier.subresourceRange.levelCount = 1; // Specify the number of mip levels
-			barrier.subresourceRange.baseArrayLayer = 0; // Specify the base array layer
-			barrier.subresourceRange.layerCount = 1; // Specify the number of array layers
+			//// Create a VkImageMemoryBarrier struct
+			//VkImageMemoryBarrier barrier = {};
+			//barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			//barrier.srcAccessMask = 0; // Specify the previous access mask for the image
+			//barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // Specify the desired access mask for shader reads
+			//barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Specify the current layout of the image
+			//barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Specify the desired layout for shader reads
+			//barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the source queue family index
+			//barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the destination queue family index
+			//barrier.image = _viewport.images[imageIndex].image; // Specify the VkImage object
+			//barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Specify the image aspect mask
+			//barrier.subresourceRange.baseMipLevel = 0; // Specify the base mip level
+			//barrier.subresourceRange.levelCount = 1; // Specify the number of mip levels
+			//barrier.subresourceRange.baseArrayLayer = 0; // Specify the base array layer
+			//barrier.subresourceRange.layerCount = 1; // Specify the number of array layers
 
-			// Transition the image layout
-			vkCmdPipelineBarrier(
-				frame.mainCmdBuffer,
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				0,
-				0,
-				nullptr,
-				0,
-				nullptr,
-				1,
-				&barrier
-			);
+			//// Transition the image layout
+			//vkCmdPipelineBarrier(
+			//	frame.mainCmdBuffer,
+			//	VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			//	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			//	0,
+			//	0,
+			//	nullptr,
+			//	0,
+			//	nullptr,
+			//	1,
+			//	&barrier
+			//);
 
 			VkClearValue colorClear{
 				.color = { 0.1f, 0.0f, 0.1f, 1.0f }
@@ -263,13 +276,16 @@ void Engine::drawFrame()
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     VkSemaphore signalSemaphores[] = { frame.renderFinishedSemaphore };
 
+
+	std::vector<VkCommandBuffer> cmdBuffers = { frame.viewportCmdBuffer, frame.mainCmdBuffer };
+
     VkSubmitInfo submitInfo{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = waitSemaphores,
         .pWaitDstStageMask = waitStages,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &frame.mainCmdBuffer,
+        .commandBufferCount = static_cast<uint32_t>(cmdBuffers.size()),
+        .pCommandBuffers = cmdBuffers.data(),
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = signalSemaphores
     };
@@ -288,8 +304,8 @@ void Engine::drawFrame()
 
     result = vkQueuePresentKHR(_presentQueue, &presentInfo);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _framebufferResized) {
-        _framebufferResized = false;
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _inp.framebufferResized) {
+        //_framebufferResized = false;
         recreateSwapchain();
     }
     else {

@@ -184,7 +184,7 @@ private:
 
     uint32_t _frameInFlightNum = 0;
     uint32_t _frameNumber = 0;
-    bool _framebufferResized = false;
+    //bool _framebufferResized = false;
 
     bool _isInitialized = false;
     DeletionStack _deletionStack{}; // Disposing resources created during initialization
