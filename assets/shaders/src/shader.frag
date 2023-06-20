@@ -56,6 +56,8 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
+const float keyValue = 0.18; //middle gray
+
 void main() 
 {
     if (ssbo.showNormals == 1) {
@@ -69,11 +71,6 @@ void main()
         result = texture(diffuse, texCoord).rgb; 
     } else {
         result = objectColor.rgb;
-        /*if (ssbo.objects[objectIndex].useObjectColor == 1) {
-            result = ssbo.objects[objectIndex].color.rgb;
-        } else {
-            result = fragColor; // vertex color
-        }*/
     }
 
     result = texture(diffuse, texCoord).rgb; 
@@ -83,10 +80,12 @@ void main()
     }
 
     // Apply exposure
-    result *= ssbo.exposure;
+    //result *= ssbo.exposure;
 
     float eps = 0.001;
     float lum = luminance(result);
+
+    
     // Update current max only if current luminance is bigger than 90% of old max
     if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
         // If difference is not too small, upgrade new max
@@ -97,13 +96,15 @@ void main()
     float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
     if (ssbo.exposureON == 1) {
-        if (f_oldMax > 1.f) { // TODO: remove condition
+        /*if (f_oldMax > 1.f) { // TODO: remove condition
             switch (ssbo.exposureMode) {
             case 0: result = result / log(f_oldMax); break;
             case 1: result = result / f_oldMax; break;
             }
-        }
-    }
+        }*/
+        float exposure = keyValue / (f_oldMax - ssbo.exposure);
+        result *= exposure;
+    } 
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {
@@ -114,6 +115,19 @@ void main()
         case 4: result = ACESFitted(result); break;
         }
     }
+
+    /*if (ssbo.exposureON == 0) {
+        vec3 evPlus  = result * 2;
+        vec3 evMinus = result / 2;
+
+        float weight = RGBHowCloseToHalf(result);
+
+        if (lum < 0.5) {
+            result = result * weight + evPlus * (1-weight);
+        } else {
+            result = result * weight + evMinus * (1-weight);
+        }
+    }*/
 
     FragColor = vec4(result, 1.f);
 }

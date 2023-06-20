@@ -31,6 +31,33 @@ struct InputContext {
     std::function<void(void)> onFramebufferResize = nullptr;
 };
 
+struct Viewport {
+    std::vector<AllocatedImage> images;
+    std::vector<VkImageView> imageViews;
+    std::vector<VkFramebuffer> framebuffers;
+
+    VkImageView depthImageView;
+    AllocatedImage depthImage;
+    VkFormat depthFormat;
+};
+
+struct Swapchain {
+    VkSwapchainKHR handle{VK_NULL_HANDLE};
+
+    std::vector<VkImage> images;
+    std::vector<VkImageView> imageViews;
+    std::vector<VkFramebuffer> framebuffers;
+
+    VkFormat imageFormat;
+
+    VkImageView depthImageView;
+    AllocatedImage depthImage;
+    VkFormat depthFormat;
+};
+
+VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
+VkRenderPass createRenderPass(VkDevice device, VkFormat colorAttFormat, VkImageLayout colorAttFinalLayout, VkFormat depthAttFormat);
+
 class Engine {
 public:
     Engine() : _inp([this]() { drawFrame(); }) {}
@@ -50,10 +77,13 @@ private: /* Methods used from Init directly */
     void createLogicalDevice();
     void createVmaAllocator();
     void createSwapchain();
-    void createImageViews();
-    void createRenderPass();
+
+    void createSwapchainImages();
+
+    void createViewportImages();
+
     void createPipelines();
-    void createFramebuffers();
+    //void createFramebuffers();
     void createFrameData();
     void createSamplers();
 
@@ -64,6 +94,9 @@ private: /* Secondary methods */
 
     void recreateSwapchain();
     void cleanupSwapchainResources();
+
+    void recreateViewport();
+    void cleanupViewportResources();
 
     void initDescriptors();
     void initUploadContext();
@@ -105,6 +138,8 @@ private:
 
 private:
     float _fovY = 90.f; // degrees
+
+    std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
     
 private: 
     GLFWwindow* _window;
@@ -120,20 +155,27 @@ private:
     uint32_t _presentQueueFamily;
     VkQueue _graphicsQueue;
     VkQueue _presentQueue;
-    VkSwapchainKHR _swapchain{VK_NULL_HANDLE}; // is passed as .oldSwapchain to vkCreateSwapchainKHR
-    std::vector<VkImage> _swapchainImages;
-    VkFormat _swapchainImageFormat;
-    VkExtent2D _windowExtent;
-    std::vector<VkImageView> _swapchainImageViews;
-    std::vector<VkFramebuffer> _swapchainFramebuffers;
+    
+    //VkSwapchainKHR _swapchain{VK_NULL_HANDLE}; // is passed as .oldSwapchain to vkCreateSwapchainKHR
 
-    VkImageView _depthImageView;
-    AllocatedImage _depthImage;
-    VkFormat _depthFormat;
+    Swapchain _swapchain;
+    Viewport _viewport;
+    
+    
+    VkExtent2D _windowExtent;
+
+    
+
+
+
+    
     
     UploadContext _uploadContext;
 
-    VkRenderPass _renderPass;
+    VkRenderPass _mainRenderpass;
+    VkRenderPass _viewportRenderpass;
+
+    VkPipeline _mainPipeline;
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
     FrameData _frames[MAX_FRAMES_IN_FLIGHT];

@@ -3,6 +3,7 @@
 #include "resources.h"
 #include "Engine.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
 #include "tinyobj/tiny_obj_loader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -208,125 +209,7 @@ void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& ob
 	}
 }
 
-void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
-{
-	// Load SSBO to GPU
-	{ 
-		UpdateSSBOData(objects);
-		getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator, 
-			[&](void* data) {
-				char* ssboData = (char*)data;
-				unsigned int* newMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, newMax));
-				unsigned int* oldMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, oldMax));
-				float* f_oldMax = reinterpret_cast<float*>(oldMax);
 
-				if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
-					*newMax = 0;
-					*oldMax = 0;
-				} else { // On every next frame, swap new MAX and old MAX.
-					unsigned int tmp = *oldMax;
-					std::swap(*newMax, *oldMax);
-					// For optimization we assume that MAX of new frame
-					// won't be more then two times lower.
-					*newMax = 0.5 * tmp; 
-				}
-				auto& sd = _renderContext.ssboData;
-				sd.newMax = *newMax;
-				sd.oldMax = *oldMax;
-
-				memcpy(data, &sd, sizeof(GPUSSBOData));
-			}
-		);
-	}
-
-	// Load UNIFORM BUFFER of scene parameters to GPU
-	{ 
-		_renderContext.sceneData.cameraPos = _inp.camera.GetPos();
-		_sceneParameterBuffer.runOnMemoryMap(_allocator, 
-			[&](void* data) {
-				char* sceneData = (char*)data;
-				sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-				memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));
-			}
-		);
-	}
-	
-	glm::mat4 viewMat = _inp.camera.GetViewMat();
-	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, _windowExtent.width, _windowExtent.height);
-	GPUCameraData camData{
-		.view = viewMat,
-		.proj = projMat,
-		.viewproj = projMat * viewMat,
-	};
-	getCurrentFrame().cameraBuffer.runOnMemoryMap(_allocator, 
-		[&](void* data) {
-			memcpy(data, &camData, sizeof(GPUCameraData));
-		}
-	);
-
-	Mesh* lastMesh = nullptr;
-	Material* lastMaterial = nullptr;
-	for (int i = 0; i < objects.size(); i++) {
-        const RenderObject& obj = *objects[i];
-		Model* model = obj.model;
-
-		for (int m = 0; m < model->meshes.size(); ++m) {
-			Mesh* mesh = model->meshes[m];
-
-			ASSERT(mesh && mesh->material);
-
-			//offset for our scene buffer
-			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-
-			// Always add the sceneData and SSBO descriptor
-			std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor };
-
-			VkImageView imageView = VK_NULL_HANDLE;
-			if (mesh->p_tex != nullptr) {
-				imageView = mesh->p_tex->imageView;
-			}
-			VkDescriptorImageInfo imageBufferInfo{
-				.sampler = _linearSampler,
-				.imageView = imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-			VkWriteDescriptorSet texture1 =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					VK_NULL_HANDLE, &imageBufferInfo, 0);
-			vkCmdPushDescriptorSetKHR(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
-
-			_renderContext.pushConstantData.hasTexture = (mesh->p_tex != nullptr);
-			_renderContext.pushConstantData.lightAffected = model->lightAffected;
-
-			vkCmdPushConstants(
-				cmd, mesh->material->pipelineLayout,
-				VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
-				&_renderContext.pushConstantData);
-
-			// If the material is different, bind the new material
-			if (mesh->material != lastMaterial) {
-				bindPipeline(cmd, mesh->material->pipeline);
-				lastMaterial = mesh->material;
-				// Bind the descriptor sets
-				vkCmdBindDescriptorSets(
-					cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
-			}
-
-			if (mesh != lastMesh) {
-				VkDeviceSize zeroOffset = 0;
-				vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
-
-				vkCmdBindIndexBuffer(cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-				lastMesh = mesh;
-			}
-		
-			// Ve send loop index as instance index to use it in shader to access object data in SSBO
-			vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, i);
-		}
-    }
-}
 
 
 void Engine::createSamplers() {
@@ -481,6 +364,10 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 			// If this face has different material, create new mesh
 
 			if (mat_id != prev_mat_id) {
+				/*if (std::find(mesh_tex_id.begin(), mesh_tex_id.end(), mat_id) != mesh_tex_id.end()) {
+
+				}*/
+
 				if (newMesh != nullptr) {
 					uploadMesh(*newMesh);
 					newModel.meshes.push_back(newMesh);
@@ -498,9 +385,9 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 				newMesh = &_meshes[meshName];
 				newMesh->tag = meshName;
 				newMesh->mat_id = mat_id;
+				++shape_submesh;
 
 				prev_mat_id = mat_id;
-				++shape_submesh;
 			}
 			
 			// Loop over vertices in the face.

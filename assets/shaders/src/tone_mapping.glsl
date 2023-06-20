@@ -98,3 +98,12 @@ vec3 ACESFitted(vec3 color)
 
     return color;
 }
+
+float howCloseToHalf(float val) {
+    float sigma = 0.2;
+    return exp(-pow(val-0.5, 2) / 2*pow(sigma,2));
+}
+
+float RGBHowCloseToHalf(vec3 rgb) {
+    return howCloseToHalf(rgb.r) * howCloseToHalf(rgb.g) * howCloseToHalf(rgb.b);
+}

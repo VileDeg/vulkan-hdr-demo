@@ -64,7 +64,9 @@ struct FrameData {
     VkFence inFlightFence;
 
     VkCommandPool commandPool;
+
     VkCommandBuffer mainCmdBuffer;
+    VkCommandBuffer viewportCmdBuffer;
 
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer objectBuffer;
@@ -74,3 +76,6 @@ struct FrameData {
 
     void cleanup(const VkDevice& device, const VmaAllocator& allocator);
 };
+
+
+

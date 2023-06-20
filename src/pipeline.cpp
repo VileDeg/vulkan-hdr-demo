@@ -46,7 +46,7 @@ void Engine::createPipelines()
     auto newMaterial = [&](std::string matName, PipelineData pd) {
         Pipeline pipeline(pd);
         pipeline.Init();
-        pipeline.Build(_device, _renderPass);
+        pipeline.Build(_device, _mainRenderpass);
 
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
 
@@ -54,6 +54,8 @@ void Engine::createPipelines()
     };
 
     newMaterial("general", pd_general);
+
+    _mainPipeline = _materials["general"].pipeline;
     /*newMaterial("color_light", pd_color_light);
     newMaterial("color_no_light", pd_color_no_light);*/
 }

@@ -4,17 +4,17 @@
 void Engine::initFrame(FrameData& f)
 {
     {
+        // Command pool
         VkCommandPoolCreateInfo poolInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             .queueFamilyIndex = _graphicsQueueFamily
         };
 
-        VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
-        VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-
         VKASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
 
+
+        // Main command buffer
         VkCommandBufferAllocateInfo cmdBufferAllocInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .commandPool = f.commandPool,
@@ -23,6 +23,12 @@ void Engine::initFrame(FrameData& f)
         };
 
         VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.mainCmdBuffer));
+        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.viewportCmdBuffer));
+
+
+        // Synchronization primitives
+        VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
+        VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
 
         VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
         VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
