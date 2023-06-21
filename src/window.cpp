@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Engine.h"
+#include "engine.h"
 
 static void glfw_error_callback(int error, const char* description)
 {

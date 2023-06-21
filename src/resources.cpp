@@ -1,7 +1,7 @@
 #include "stdafx.h"
 
 #include "resources.h"
-#include "Engine.h"
+#include "engine.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tinyobj/tiny_obj_loader.h"
@@ -189,6 +189,7 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 	}
 }
 
+
 void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
 	// Following is the maximum pixel value of image that is used for exposure simulation
@@ -208,8 +209,6 @@ void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& ob
 		}*/
 	}
 }
-
-
 
 
 void Engine::createSamplers() {
@@ -242,9 +241,11 @@ void Engine::createScene(const std::string mainModelFullPath)
 		_textures.clear();
 	}
 
-	//ASSERT(loadModelFromObj("main"	, Engine::modelPath + "sponza/sponza.obj"));
-	ASSERT(loadModelFromObj("main", mainModelFullPath));
+	// Sphere model of the light source
 	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
+
+	// Main model of the scene
+	ASSERT(loadModelFromObj("main", mainModelFullPath));
 
 	// Set materials
 	for (auto& [key, model] : _models) {
@@ -253,35 +254,40 @@ void Engine::createScene(const std::string mainModelFullPath)
 		}
 	}
 
-	Model* sphr = getModel("sphere");
-	// Light source model should not be affected by light
-	sphr->lightAffected  = false;
-	sphr->useObjectColor = true;
-
 	_renderContext.Init();
 
-	for (int i = 0; i < MAX_LIGHTS; i++) {
+	if (getModel("sphere")) {
+		Model* sphr = getModel("sphere");
+		// Light source model should not be affected by light
+		sphr->lightAffected = false;
+		sphr->useObjectColor = true;
+
+		for (int i = 0; i < MAX_LIGHTS; i++) {
+			_renderables.push_back(std::make_shared<RenderObject>(
+				RenderObject{
+					.tag = "light" + std::to_string(i),
+					.color = glm::vec4(10, 10, 10, 1.),
+					.model = sphr,
+					.pos = _renderContext.sceneData.lights[i].position,
+					.scale = glm::vec3(0.1f)
+				}
+			));
+
+			_renderContext.lightObjects.push_back(_renderables.back());
+
+		}
+	}
+
+	if (getModel("main")) {
 		_renderables.push_back(std::make_shared<RenderObject>(
 			RenderObject{
-				.tag   = "light" + std::to_string(i),
-				.color = glm::vec4(10, 10, 10, 1.),
-				.model = sphr,
-				.pos   = _renderContext.sceneData.lights[i].position,
-				.scale = glm::vec3(0.1f)
+				.model = getModel("main"),
+				.pos = glm::vec3(0, -5.f, 0),
+				.rot = glm::vec3(0, 90, 0),
+				.scale = glm::vec3(15.f)
 			}
 		));
-
-		_renderContext.lightObjects.push_back(_renderables.back());
-    }
-
-	_renderables.push_back(std::make_shared<RenderObject>(
-		RenderObject{
-			.model = getModel("main"),
-			.pos = glm::vec3(0, -5.f, 0),
-			.rot = glm::vec3(0, 90, 0),
-			.scale = glm::vec3(15.f)
-		}
-	));
+	}
 
 	_deletionStack.push([this]() {
 		_sceneDisposeStack.flush();
@@ -290,7 +296,8 @@ void Engine::createScene(const std::string mainModelFullPath)
 
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
 {
-	//Partially based on https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	// Partially based on https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+
 	Model& newModel = _models[assignedName];
 	newModel.tag = assignedName;
 	
@@ -337,8 +344,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	tinyobj::attrib_t& attrib = regen_all_normals ? outattrib : inattrib;
 
 
-	std::vector<int> mesh_tex_id;
-	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+	std::unordered_map<Mesh*, std::unordered_map<Vertex, uint32_t>> meshVertexMap;
 
 	// Loop over shapes
 	for (size_t s = 0; s < shapes.size(); s++) { // Shapes
@@ -349,10 +355,10 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 		int prev_mat_id = -1;
 		int mat_id		= -1;
 
-		size_t shape_submesh = 0;
+		Mesh* currentMesh = nullptr;
 
-		Mesh* newMesh = nullptr;
-		
+		ASSERT(faces_in_shape > 0);
+
 		// Loop over faces(polygon)
 		size_t index_offset = 0;
 		for (size_t f = 0; f < faces_in_shape; f++) { // Faces
@@ -361,34 +367,36 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 			mat_id = shapes[s].mesh.material_ids[f];
 
-			// If this face has different material, create new mesh
 
+			// If this face has different material, 
+			// check if a mesh with such material was already created
 			if (mat_id != prev_mat_id) {
-				/*if (std::find(mesh_tex_id.begin(), mesh_tex_id.end(), mat_id) != mesh_tex_id.end()) {
-
-				}*/
-
-				if (newMesh != nullptr) {
-					uploadMesh(*newMesh);
-					newModel.meshes.push_back(newMesh);
-
-					uniqueVertices.clear();
+				bool mesh_already_created = false; //std::find(mesh_mat_ids.begin(), mesh_mat_ids.end(), mat_id) != mesh_mat_ids.end();
+				for (auto& [mesh, uniqV] : meshVertexMap) {
+					if (mesh->mat_id == mat_id) {
+						// Mesh with such material found!
+						currentMesh = mesh;
+						mesh_already_created = true;
+					}
 				}
 
-				// Pick any per-face material ID and use it as texture ID for current mesh
-				mesh_tex_id.push_back(mat_id);
+				if (!mesh_already_created) {
+					std::string meshName = "MESH_MAT: " + materials[mat_id].name; // + "_::" + std::to_string(shape_submesh);
+					ASSERT(getMesh(shapes[s].name) == nullptr); // Mesh must not exist yet
 
-				std::string meshName = shapes[s].name + "_::" + std::to_string(shape_submesh);
-				ASSERT(getMesh(shapes[s].name) == nullptr); // Mesh must not exist yet
+					// Create new mesh
+					currentMesh = &_meshes[meshName];
+					currentMesh->tag = meshName;
+					currentMesh->mat_id = mat_id;
 
-				// Create new mesh
-				newMesh = &_meshes[meshName];
-				newMesh->tag = meshName;
-				newMesh->mat_id = mat_id;
-				++shape_submesh;
+					// Add new mesh and create uniqueVertices map for it
+					meshVertexMap[currentMesh] = {};
+				}
 
 				prev_mat_id = mat_id;
 			}
+
+			auto& uniqVert = meshVertexMap[currentMesh];
 			
 			// Loop over vertices in the face.
 			for (size_t v = 0; v < vertices_in_face; v++) { // Vertices
@@ -424,15 +432,17 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 					.uv = {ux, 1 - uy}
 				};
 
-				ASSERT(newMesh != nullptr);
+				
+
+				ASSERT(currentMesh != nullptr);
 				// Add vertex only if it wasn't already added
-				if (uniqueVertices.count(new_vert) == 0) {
-					uniqueVertices[new_vert] = static_cast<uint32_t>(newMesh->vertices.size());
-					newMesh->vertices.push_back(new_vert);
+				if (uniqVert.count(new_vert) == 0) {
+					uniqVert[new_vert] = static_cast<uint32_t>(currentMesh->vertices.size());
+					currentMesh->vertices.push_back(new_vert);
 				}
 				// Add vertex index
-				newMesh->indices.push_back(uniqueVertices[new_vert]);
-				//newMesh->vertices.push_back(new_vert);
+				currentMesh->indices.push_back(uniqVert[new_vert]);
+				//currentMesh->vertices.push_back(new_vert);
 
 				// Update model bounds
 				bmin[v] = std::min(vx, bmin[v]);
@@ -445,10 +455,15 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 			}
 			index_offset += vertices_in_face;
 		}
-
-		uploadMesh(*newMesh);
-		newModel.meshes.push_back(newMesh);
 	}
+
+	for (auto& [mesh, uniqV] : meshVertexMap) {
+		ASSERT(mesh != nullptr);
+
+		uploadMesh(*mesh);
+		newModel.meshes.push_back(mesh);
+	}
+
 
 	// Add default material in case there are none ?
 	materials.push_back(tinyobj::material_t());
@@ -458,13 +473,12 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	}
 	
 	// Only load textures that are used by meshes
-	for (size_t mesh_i = 0; mesh_i < mesh_tex_id.size(); ++mesh_i) {
-		tinyobj::material_t* mp = &materials[mesh_tex_id[mesh_i]];
+	size_t mesh_i = 0;
+	for (auto& [mesh, uniqV] : meshVertexMap) {
+		tinyobj::material_t* mp = &materials[mesh->mat_id];
 
 		// Texname empty means there's no texture
 		if (mp->diffuse_texname.length() > 0) {
-			//newModel.meshes[mesh_i]->hasTextures = true;
-
 			std::string texture_filename = baseDir + mp->diffuse_texname;
 			Texture* texture = nullptr;
 			// Only load the texture if it is not already loaded
@@ -485,6 +499,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 			// Assign texture pointer to the mesh that uses it
 			newModel.meshes[mesh_i]->p_tex = texture;
 		}
+		++mesh_i;
 	}
 
 
@@ -503,6 +518,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	
 	newModel.maxExtent = maxExtent;
 
+	
 	return true;
 }
 
@@ -815,46 +831,8 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 	return &_materials[name];
 }
 
-Material* Engine::getMaterial(const std::string& name)
-{
-	//search for the object, and return nullptr if not found
-	auto it = _materials.find(name);
-	if (it == _materials.end()) {
-		return nullptr;
-	} else {
-		return &(*it).second;
-	}
-}
 
-Mesh* Engine::getMesh(const std::string& name)
-{
-	auto it = _meshes.find(name);
-	if (it == _meshes.end()) {
-		return nullptr;
-	} else {
-		return &(*it).second;
-	}
-}
 
-Texture* Engine::getTexture(const std::string& name)
-{
-	auto it = _textures.find(name);
-	if (it == _textures.end()) {
-		return nullptr;
-	} else {
-		return &(*it).second;
-	}
-}
-
-Model* Engine::getModel(const std::string& name)
-{
-	auto it = _models.find(name);
-	if (it == _models.end()) {
-		return nullptr;
-	} else {
-		return &(*it).second;
-	}
-}
 
 
 glm::mat4 RenderObject::Transform() {
@@ -919,4 +897,41 @@ VertexInputDescription Vertex::getDescription()
 	description.attributes.push_back(uvAttribute);
 
 	return description;
+}
+
+
+namespace {
+	template<typename T>
+	T* _getCache(const std::string& name, std::unordered_map<std::string, T>& map)
+	{
+		//search for the object, and return nullptr if not found
+		auto it = map.find(name);
+		if (it == map.end()) {
+			//ASSERT(false);
+			return nullptr;
+		} else {
+			return &(*it).second;
+		}
+	}
+}
+
+
+inline Material* Engine::getMaterial(const std::string& name)
+{
+	return _getCache(name, _materials);
+}
+
+inline Mesh* Engine::getMesh(const std::string& name)
+{
+	return _getCache(name, _meshes);
+}
+
+inline Texture* Engine::getTexture(const std::string& name)
+{
+	return _getCache(name, _textures);
+}
+
+inline Model* Engine::getModel(const std::string& name)
+{
+	return _getCache(name, _models);
 }

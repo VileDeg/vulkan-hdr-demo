@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-#include "Engine.h"
+#include "engine.h"
 #include "defs.h"
 
 void Engine::Init()
@@ -16,11 +16,7 @@ void Engine::Init()
     
     createSwapchain();
 
-    _mainRenderpass     = createRenderPass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat);
-    _viewportRenderpass = createRenderPass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _swapchain.depthFormat);
-
-    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _mainRenderpass, nullptr); });
-    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _viewportRenderpass, nullptr); });
+    createRenderpass();
 
     createSwapchainImages();
     createViewportImages(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
@@ -68,6 +64,96 @@ void Engine::Cleanup()
     _deletionStack.flush();
 }
 
+
+
+static VkRenderPass s_createRenderpass(VkDevice device, VkFormat colorAttFormat, VkImageLayout colorAttFinalLayout, VkFormat depthAttFormat)
+{
+    VkAttachmentDescription colorAttachment{
+        .format = colorAttFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = colorAttFinalLayout
+    };
+
+    VkAttachmentDescription depthAttachment{
+        .format = depthAttFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+
+    VkSubpassDescription subpass;
+    {
+        VkAttachmentReference colorAttachmentRef{
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        };
+
+        VkAttachmentReference depthAttachmentRef{
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        };
+
+        subpass = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachmentRef,
+            .pDepthStencilAttachment = &depthAttachmentRef
+        };
+    }
+
+    VkSubpassDependency dependency{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+    };
+
+    VkSubpassDependency depthDependency{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+    };
+
+    std::vector<VkSubpassDependency> dependencies = { dependency, depthDependency };
+    std::vector<VkAttachmentDescription> attachments = { colorAttachment, depthAttachment };
+
+    VkRenderPassCreateInfo renderPassInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = uint32_t(attachments.size()),
+        .pAttachments = attachments.data(),
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = uint32_t(dependencies.size()),
+        .pDependencies = dependencies.data()
+    };
+
+    VkRenderPass renderpass;
+    VKASSERT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderpass));
+
+    return renderpass;
+}
+
+void Engine::createRenderpass() {
+    _mainRenderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat);
+    _viewportRenderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _swapchain.depthFormat);
+
+    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _mainRenderpass, nullptr); });
+    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _viewportRenderpass, nullptr); });
+}
 
 
 void Engine::createViewportImages(uint32_t extentX, uint32_t extentY) {
@@ -181,245 +267,210 @@ void Engine::cleanupViewportResources()
 }
 
 
-VkRenderPass createRenderPass(VkDevice device, VkFormat colorAttFormat, VkImageLayout colorAttFinalLayout, VkFormat depthAttFormat)
+
+
+void Engine::initDescriptors()
 {
-    VkAttachmentDescription colorAttachment{
-        .format = colorAttFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = colorAttFinalLayout
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }, // For camera data
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 }, // For scene data
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 }, // For object data SSBO
+        //add combined-image-sampler descriptor types to the pool
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 } // For textures
     };
 
-    VkAttachmentDescription depthAttachment{
-        .format = depthAttFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    VkDescriptorPoolCreateInfo descriptorPoolInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 10,
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data()
     };
 
-    VkSubpassDescription subpass;
-    {
-        VkAttachmentReference colorAttachmentRef{
-            .attachment = 0,
-            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    VKASSERT(vkCreateDescriptorPool(_device, &descriptorPoolInfo, nullptr, &_descriptorPool));
+    _deletionStack.push([&]() {
+        vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
+        });
+
+
+    { // Camera + scene descriptor set
+        const size_t sceneParamBufferSize = MAX_FRAMES_IN_FLIGHT * pad_uniform_buffer_size(sizeof(GPUSceneData));
+
+        _sceneParameterBuffer =
+            createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        _deletionStack.push([&]() {
+            _sceneParameterBuffer.destroy(_allocator);
+            });
+
+        VkDescriptorSetLayoutBinding cameraBinding =
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
+
+        VkDescriptorSetLayoutBinding sceneBinding =
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+
+        VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
+
+        VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = bindings
         };
 
-        VkAttachmentReference depthAttachmentRef{
-            .attachment = 1,
-            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        };
-
-        subpass = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachmentRef,
-            .pDepthStencilAttachment = &depthAttachmentRef
-        };
+        VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
+        _deletionStack.push([&]() {
+            vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr);
+            });
     }
 
-    VkSubpassDependency dependency{
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-    };
+    { // Object descriptor set (SSBO)
+        VkDescriptorSetLayoutBinding objectBind =
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    VkSubpassDependency depthDependency{
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-    };
-
-    std::vector<VkSubpassDependency> dependencies = { dependency, depthDependency };
-    std::vector<VkAttachmentDescription> attachments = { colorAttachment, depthAttachment };
-
-    VkRenderPassCreateInfo renderPassInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = uint32_t(attachments.size()),
-        .pAttachments = attachments.data(),
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .dependencyCount = uint32_t(dependencies.size()),
-        .pDependencies = dependencies.data()
-    };
-
-    VkRenderPass renderpass;
-    VKASSERT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderpass));
-
-    return renderpass;
-}
-
-
-
-
-
-static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData)
-{
-    std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl;
-
-    return VK_FALSE;
-}
-
-void Engine::createDebugMessenger()
-{
-    if (ENABLE_VALIDATION_LAYERS) {
-        VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo{
-            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
-            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-            .pfnUserCallback = debug_callback
+        VkDescriptorSetLayoutCreateInfo set2info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .flags = 0,
+            .bindingCount = 1,
+            .pBindings = &objectBind
         };
 
-        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance, vkCreateDebugUtilsMessengerEXT);
-        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance, vkDestroyDebugUtilsMessengerEXT);
-
-        VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
-
+        VKASSERT(vkCreateDescriptorSetLayout(_device, &set2info, nullptr, &_objectSetLayout));
         _deletionStack.push([&]() {
-            vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
+            vkDestroyDescriptorSetLayout(_device, _objectSetLayout, nullptr);
+            });
+    }
+
+    { // 1 texture descriptor set
+        VkDescriptorSetLayoutBinding textureBind =
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+
+        VkDescriptorSetLayoutCreateInfo set3info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            // This is a push descriptor set !
+            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+            .bindingCount = 1,
+            .pBindings = &textureBind
+        };
+
+        vkCreateDescriptorSetLayout(_device, &set3info, nullptr, &_singleTextureSetLayout);
+        _deletionStack.push([&]() {
+            vkDestroyDescriptorSetLayout(_device, _singleTextureSetLayout, nullptr);
             });
     }
 }
 
-static bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) {
-    uint32_t propertyCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensionProperties(propertyCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
-
-#ifndef NDEBUG
-    pr("Available extensions: ");
-    for (const auto& extensionProperty : availableExtensionProperties) {
-        pr("\t" << extensionProperty.extensionName);
-    }
-    pr("Required extensions: ");
-    for (const auto& reqExt : requiredExtensions) {
-        pr("\t" << reqExt);
-    }
-#endif // NDEBUG
-
-    for (const auto& requiredExtension : requiredExtensions) {
-        bool extensionFound = false;
-
-        for (const auto& extensionProperty : availableExtensionProperties) {
-            if (strcmp(requiredExtension, extensionProperty.extensionName) == 0) {
-                extensionFound = true;
-                break;
-            }
-        }
-
-        if (!extensionFound) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
-
-    uint32_t propertyCount = 0;
-    vkEnumerateInstanceLayerProperties(&propertyCount, nullptr);
-    std::vector<VkLayerProperties> availableLayerProperties(propertyCount);
-    vkEnumerateInstanceLayerProperties(&propertyCount, availableLayerProperties.data());
-
-    for (const char* requiredLayerName : requiredLayers) {
-        bool layerFound = false;
-
-        for (const auto& layerProperty : availableLayerProperties) {
-            if (strcmp(requiredLayerName, layerProperty.layerName) == 0) {
-                layerFound = true;
-                break;
-            }
-        }
-
-        if (!layerFound) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
-static std::vector<const char*> get_required_extensions() {
-    std::vector<const char*> requiredExtensions{};
-
-    uint32_t glfwExtCount;
-    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtCount);
-    for (uint32_t i = 0; i < glfwExtCount; i++) {
-        requiredExtensions.emplace_back(glfwExtensions[i]);
-    }
-
-    if (ENABLE_VALIDATION_LAYERS) {
-        requiredExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-
-    if (!checkInstanceExtensionSupport(requiredExtensions)) {
-        throw std::runtime_error("No instance extensions properties are available.");
-    }
-
-    return requiredExtensions;
-}
-
-void Engine::createInstance()
+void Engine::initUploadContext()
 {
-    _instanceExtensions = get_required_extensions();
+    VkFenceCreateInfo uploadFenceCreateInfo = vkinit::fence_create_info();
+    VKASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
+    _deletionStack.push([&]() {
+        vkDestroyFence(_device, _uploadContext.uploadFence, nullptr);
+        });
 
-    ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
-        "Not all requested validation layers are available!");
+    VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily);
+    //create pool for upload context
+    VKASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
 
-    VkApplicationInfo appInfo{
-        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Vulkan HDR Demo",
-        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_API_VERSION_1_1
-    };
+    _deletionStack.push([=]() {
+        vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
+        });
 
-    VkInstanceCreateInfo instanceInfo{
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &appInfo,
-        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
-        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
-        .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
-        .ppEnabledExtensionNames = _instanceExtensions.data()
-    };
+    //allocate the default command buffer that we will use for the instant commands
+    VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
 
-    VKASSERT(vkCreateInstance(&instanceInfo, nullptr, &_instance));
+    VKASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
+}
+
+
+void Engine::initFrame(FrameData& f)
+{
     {
-        _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
+        // Command pool
+        VkCommandPoolCreateInfo poolInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = _graphicsQueueFamily
+        };
+
+        VKASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
+
+
+        // Main command buffer
+        VkCommandBufferAllocateInfo cmdBufferAllocInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = f.commandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmdBuffer));
+
+
+        // Synchronization primitives
+        VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
+        VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+
+        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
+        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
+        VKASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
     }
 
+    {
+        f.cameraBuffer = createBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        VkDescriptorSetAllocateInfo camSceneSetAllocInfo{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = _descriptorPool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &_globalSetLayout
+        };
+        vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);
 
+        // Create SSBO with all objects data
+        //const int MAX_OBJECTS = 10000; 
+        //const int SSBO_SIZE = sizeof(glm::uvec4) + sizeof(GPUObjectData) * MAX_OBJECTS;
+        //const int SSBO_SIZE = sizeof(GPUObjectData) * MAX_OBJECTS;
+        f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        VkDescriptorSetAllocateInfo objectSetAlloc = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = _descriptorPool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &_objectSetLayout
+        };
+
+        vkAllocateDescriptorSets(_device, &objectSetAlloc, &f.objectDescriptor);
+
+        VkDescriptorBufferInfo cameraInfo{
+            .buffer = f.cameraBuffer.buffer,
+            .offset = 0,
+            .range = sizeof(GPUCameraData)
+        };
+
+        VkDescriptorBufferInfo sceneInfo{
+            .buffer = _sceneParameterBuffer.buffer,
+            .offset = 0,
+            .range = sizeof(GPUSceneData)
+        };
+
+        VkDescriptorBufferInfo objectInfo{
+            .buffer = f.objectBuffer.buffer,
+            .offset = 0,
+            .range = sizeof(GPUSSBOData)
+        };
+
+        VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);
+        VkWriteDescriptorSet sceneWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, f.globalDescriptor, &sceneInfo, 1);
+        VkWriteDescriptorSet objectWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, f.objectDescriptor, &objectInfo, 0);
+
+        VkWriteDescriptorSet setWrites[] = { cameraWrite, sceneWrite, objectWrite };
+
+        vkUpdateDescriptorSets(_device, 3, setWrites, 0, nullptr);
+    }
+
+    _deletionStack.push([&]() { f.cleanup(_device, _allocator); });
 }
 
-
-void Engine::createSurface()
+void Engine::createFrameData()
 {
-    VKASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
-        "GLFW: Failed to create window surface");
-
-    _deletionStack.push([&]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        initFrame(_frames[i]);
+    }
 }
-
-

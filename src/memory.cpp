@@ -1,5 +1,8 @@
 #include "stdafx.h"
-#include "Engine.h"
+#include "engine.h"
+
+#define VMA_IMPLEMENTATION
+#include <vma/vk_mem_alloc.h>
 
 void Engine::createVmaAllocator()
 {

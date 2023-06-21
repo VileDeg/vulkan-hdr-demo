@@ -1,69 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "Camera.h"
 #include "resources.h"
-
-/**
-* Struct that holds data related to immediate command execution.
-* This is used for uploading data to the GPU.
-*/
-struct UploadContext {
-    VkFence uploadFence;
-    VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
-};
-
-struct InputContext {
-    InputContext(std::function<void(void)> onFbResize)
-        : onFramebufferResize(onFbResize) {}
-
-    Camera camera = {};
-
-    bool cursorEnabled = false;
-    bool framebufferResized = false;
-
-    bool toneMappingEnabled = true;
-    bool exposureEnabled    = true;
-
-    bool uiEnabled = true;
-
-    std::function<void(void)> onFramebufferResize = nullptr;
-};
-
-struct Viewport {
-    std::vector<AllocatedImage> images; // Allocated with VMA
-
-    std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> framebuffers;
-
-    VkImageView depthImageView;
-    AllocatedImage depthImage;
-    VkFormat depthFormat;
-
-    // Corresponds to dimensions of ImGui::Image viewport
-    VkExtent2D imageExtent; 
-};
-
-struct Swapchain {
-    VkSwapchainKHR handle{VK_NULL_HANDLE};
-
-    std::vector<VkImage> images; // Retrieved from created swapchain
-
-    std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> framebuffers;
-
-    VkFormat imageFormat;
-
-    VkImageView depthImageView;
-    AllocatedImage depthImage;
-    VkFormat depthFormat;
-
-    VkExtent2D imageExtent; // Corresponds to window dimensions
-};
-
-VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
-VkRenderPass createRenderPass(VkDevice device, VkFormat colorAttFormat, VkImageLayout colorAttFinalLayout, VkFormat depthAttFormat);
 
 class Engine {
 public:
@@ -84,6 +22,8 @@ private: /* Methods used from Init directly */
     void createLogicalDevice();
     void createVmaAllocator();
     void createSwapchain();
+
+    void createRenderpass();
 
     void createSwapchainImages();
 
@@ -117,6 +57,8 @@ private: /* Secondary methods */
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
 
+    
+
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
     Texture* getTexture(const std::string& name);
@@ -139,8 +81,6 @@ private:
 
     void imgui_RegisterViewportImageViews();
     void imgui_UnregisterViewportImageViews();
-
-    //void imgui_OnViewportResize(uint32_t extentX, uint32_t extentY);
 
     void imguiCommands();
     void imguiOnDrawStart();
@@ -169,20 +109,11 @@ private:
     VkQueue _graphicsQueue;
     VkQueue _presentQueue;
     
-    //VkSwapchainKHR _swapchain{VK_NULL_HANDLE}; // is passed as .oldSwapchain to vkCreateSwapchainKHR
 
     Swapchain _swapchain;
     Viewport _viewport;
     
-    
-    //VkExtent2D _windowExtent;
-
-    
-
-
-
-    
-    
+ 
     UploadContext _uploadContext;
 
     VkRenderPass _mainRenderpass;

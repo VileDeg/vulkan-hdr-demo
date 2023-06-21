@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Camera.h"
+
 struct DeletionStack {
     std::stack<std::function<void()>> deletors;
 
@@ -76,4 +78,60 @@ struct FrameData {
 };
 
 
+/**
+* Struct that holds data related to immediate command execution.
+* This is used for uploading data to the GPU.
+*/
+struct UploadContext {
+    VkFence uploadFence;
+    VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
+};
 
+struct InputContext {
+    InputContext(std::function<void(void)> onFbResize)
+        : onFramebufferResize(onFbResize) {}
+
+    Camera camera = {};
+
+    bool cursorEnabled = false;
+    bool framebufferResized = false;
+
+    bool toneMappingEnabled = true;
+    bool exposureEnabled = true;
+
+    bool uiEnabled = true;
+
+    std::function<void(void)> onFramebufferResize = nullptr;
+};
+
+struct Viewport {
+    std::vector<AllocatedImage> images; // Allocated with VMA
+
+    std::vector<VkImageView> imageViews;
+    std::vector<VkFramebuffer> framebuffers;
+
+    VkImageView depthImageView;
+    AllocatedImage depthImage;
+    VkFormat depthFormat;
+
+    // Corresponds to dimensions of ImGui::Image viewport
+    VkExtent2D imageExtent;
+};
+
+struct Swapchain {
+    VkSwapchainKHR handle{ VK_NULL_HANDLE };
+
+    std::vector<VkImage> images; // Retrieved from created swapchain
+
+    std::vector<VkImageView> imageViews;
+    std::vector<VkFramebuffer> framebuffers;
+
+    VkFormat imageFormat;
+
+    VkImageView depthImageView;
+    AllocatedImage depthImage;
+    VkFormat depthFormat;
+
+    VkExtent2D imageExtent; // Corresponds to window dimensions
+};
