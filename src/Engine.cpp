@@ -23,7 +23,10 @@ void Engine::Init()
     _deletionStack.push([&]() { vkDestroyRenderPass(_device, _viewportRenderpass, nullptr); });
 
     createSwapchainImages();
-    createViewportImages();
+    createViewportImages(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
+
+    initDescriptors();
+    initUploadContext();
 
     createFrameData();
     createPipelines();
@@ -32,6 +35,7 @@ void Engine::Init()
     createScene(Engine::modelPath + "sponza/sponza.obj");
     //createScene(Engine::modelPath + "sibenik/sibenik.obj");
 
+    
     initImgui();
 
     _isInitialized = true;
@@ -41,8 +45,6 @@ void Engine::Run()
 {
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
-
-        
 
         drawFrame();
 
@@ -68,18 +70,20 @@ void Engine::Cleanup()
 
 
 
-void Engine::createViewportImages() {
+void Engine::createViewportImages(uint32_t extentX, uint32_t extentY) {
+    _viewport.imageExtent = { extentX, extentY };
+    
+    VkExtent3D extent3D = {
+        extentX,
+        extentY,
+        1
+    };
+
     //Create depth image
     {
-        VkExtent3D depthImageExtent = {
-            _windowExtent.width,
-            _windowExtent.height,
-            1
-        };
-
         _viewport.depthFormat = VK_FORMAT_D32_SFLOAT;
 
-        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_viewport.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthImageExtent);
+        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_viewport.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, extent3D);
 
         VmaAllocationCreateInfo dimgAllocinfo = {
             .usage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -101,27 +105,26 @@ void Engine::createViewportImages() {
     _viewport.imageViews.resize(imgCount);
     _viewport.framebuffers.resize(imgCount);
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewportRenderpass, _windowExtent);
+    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewportRenderpass, { extentX, extentY });
 
     for (uint32_t i = 0; i < imgCount; i++)
     {
         VkImageCreateInfo dimg_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
-            .format = imageFormat, // Same formate as swapchain? TODO: correct format? VK_FORMAT_B8G8R8A8_SRGB
-            .extent = { _windowExtent.width, _windowExtent.height, 1 }, // Extent to whole window
+            .format = imageFormat,
+            .extent = extent3D, // Extent to whole window
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, // 
+            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         };
 
 
-
         VmaAllocationCreateInfo dimg_allocinfo = {};
-        dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY; // was GPU only
+        dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         //allocate and create the image
         VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
@@ -142,20 +145,14 @@ void Engine::createViewportImages() {
     }
 }
 
-void Engine::recreateViewport()
+void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
 {
-    int width, height;
-    glfwGetFramebufferSize(_window, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(_window, &width, &height);
-        glfwWaitEvents();
-    }
-
     vkDeviceWaitIdle(_device);
 
     cleanupViewportResources();
+    createViewportImages(extentX, extentY);
 
-    createViewportImages();
+    vkDeviceWaitIdle(_device);
 }
 
 void Engine::cleanupViewportResources()
@@ -163,6 +160,8 @@ void Engine::cleanupViewportResources()
     for (auto& framebuffer : _viewport.framebuffers) {
         vkDestroyFramebuffer(_device, framebuffer, nullptr);
     }
+
+    _viewport.framebuffers.clear();
 
     //Destroy depth image
     vkDestroyImageView(_device, _viewport.depthImageView, nullptr);
@@ -172,9 +171,13 @@ void Engine::cleanupViewportResources()
         vkDestroyImageView(_device, imageView, nullptr);
     }
 
+    _viewport.imageViews.clear();
+
     for (auto& image : _viewport.images) {
         vmaDestroyImage(_allocator, image.image, image.allocation);
     }
+
+    _viewport.images.clear();
 }
 
 
@@ -191,11 +194,6 @@ VkRenderPass createRenderPass(VkDevice device, VkFormat colorAttFormat, VkImageL
         .finalLayout = colorAttFinalLayout
     };
 
-    VkAttachmentReference colorAttachmentRef{
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    };
-
     VkAttachmentDescription depthAttachment{
         .format = depthAttFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -207,17 +205,25 @@ VkRenderPass createRenderPass(VkDevice device, VkFormat colorAttFormat, VkImageL
         .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
 
-    VkAttachmentReference depthAttachmentRef{
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
+    VkSubpassDescription subpass;
+    {
+        VkAttachmentReference colorAttachmentRef{
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        };
 
-    VkSubpassDescription subpass{
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachmentRef,
-        .pDepthStencilAttachment = &depthAttachmentRef
-    };
+        VkAttachmentReference depthAttachmentRef{
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        };
+
+        subpass = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachmentRef,
+            .pDepthStencilAttachment = &depthAttachmentRef
+        };
+    }
 
     VkSubpassDependency dependency{
         .srcSubpass = VK_SUBPASS_EXTERNAL,

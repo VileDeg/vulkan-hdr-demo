@@ -264,7 +264,7 @@ void Engine::createScene(const std::string mainModelFullPath)
 		_renderables.push_back(std::make_shared<RenderObject>(
 			RenderObject{
 				.tag   = "light" + std::to_string(i),
-				.color = glm::vec4(0.5, 0.5, 0.5, 1.),
+				.color = glm::vec4(10, 10, 10, 1.),
 				.model = sphr,
 				.pos   = _renderContext.sceneData.lights[i].position,
 				.scale = glm::vec3(0.1f)
@@ -855,31 +855,6 @@ Model* Engine::getModel(const std::string& name)
 		return &(*it).second;
 	}
 }
-
-
-
-void Engine::bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline)
-{
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	VkViewport viewport{
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = (float)_windowExtent.width,
-		.height = (float)_windowExtent.height,
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f
-	};
-
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor{
-		.offset = { 0, 0 },
-		.extent = _windowExtent
-	};
-
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-}
-
 
 
 glm::mat4 RenderObject::Transform() {

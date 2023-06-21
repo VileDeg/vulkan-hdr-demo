@@ -104,22 +104,39 @@ void Engine::initImgui()
 	//clear font textures from cpu data
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
+	imgui_RegisterViewportImageViews();
+
+
 	//add the destroy the imgui created structures
 	_deletionStack.push([=]() {
+		imgui_UnregisterViewportImageViews();
+
 		vkDestroyDescriptorPool(_device, imguiPool, nullptr);
 
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
 	});
+}
 
+void Engine::imgui_RegisterViewportImageViews()
+{
+	ASSERT(_imguiViewportImageViewDescriptorSets.size() == 0);
+	_imguiViewportImageViewDescriptorSets.resize(_viewport.imageViews.size());
 
-	for (auto& view : _viewport.imageViews) {
-		_imguiViewportImageViewDescriptorSets.push_back(
-			ImGui_ImplVulkan_AddTexture(_linearSampler, view,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+	for (size_t i = 0; i < _viewport.imageViews.size(); ++i) {
+		_imguiViewportImageViewDescriptorSets[i] =
+			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
-	
+}
+
+void Engine::imgui_UnregisterViewportImageViews()
+{
+	for (auto& dset : _imguiViewportImageViewDescriptorSets) {
+		ImGui_ImplVulkan_RemoveTexture(dset);
+	}
+
+	_imguiViewportImageViewDescriptorSets.clear();
 }
 
 void Engine::uiUpdateHDR()
@@ -363,21 +380,25 @@ void Engine::imguiCommands()
 			m_ViewportFocused = ImGui::IsWindowFocused();
 			m_ViewportHovered = ImGui::IsWindowHovered();*/
 
-			//ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-			/*unsigned textureID = 0;
-			textureID = m_ViewportFramebuffer->GetColorAttachmentId(0);
-			if (m_ViewportSize != *((glm::vec2*)&viewportSize))
-			{
-				m_ViewportFramebuffer->Invalidate({ viewportSize.x, viewportSize.y });
 
-				m_ViewportSize = { viewportSize.x, viewportSize.y };
+			ImVec2 vSize = ImGui::GetContentRegionAvail();
+			uint32_t usX = (uint32_t)vSize.x;
+			uint32_t usY = (uint32_t)vSize.y;
 
-				m_Camera->UpdateProjMat(viewportSize.x, viewportSize.y);
-			}*/
-			
-			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+			if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
+				vkDeviceWaitIdle(_device);
 
-			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2{ viewportPanelSize.x, viewportPanelSize.y });
+				imgui_UnregisterViewportImageViews();
+				vkDeviceWaitIdle(_device);
+
+				// Create viewport images and etc. with new extent
+				recreateViewport(usX, usY);
+
+				imgui_RegisterViewportImageViews();
+			}
+
+
+			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));
 		}
 		ImGui::End();
 		ImGui::PopStyleVar();

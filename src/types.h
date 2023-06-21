@@ -30,8 +30,6 @@ struct PipelineShaders {
     }
 };
 
-
-
 struct AllocatedBuffer {
     /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkBuffer buffer;
@@ -65,8 +63,8 @@ struct FrameData {
 
     VkCommandPool commandPool;
 
-    VkCommandBuffer mainCmdBuffer;
-    VkCommandBuffer viewportCmdBuffer;
+    VkCommandBuffer cmdBuffer;
+    //VkCommandBuffer viewportCmdBuffer;
 
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer objectBuffer;

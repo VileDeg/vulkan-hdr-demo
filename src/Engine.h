@@ -32,19 +32,24 @@ struct InputContext {
 };
 
 struct Viewport {
-    std::vector<AllocatedImage> images;
+    std::vector<AllocatedImage> images; // Allocated with VMA
+
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> framebuffers;
 
     VkImageView depthImageView;
     AllocatedImage depthImage;
     VkFormat depthFormat;
+
+    // Corresponds to dimensions of ImGui::Image viewport
+    VkExtent2D imageExtent; 
 };
 
 struct Swapchain {
     VkSwapchainKHR handle{VK_NULL_HANDLE};
 
-    std::vector<VkImage> images;
+    std::vector<VkImage> images; // Retrieved from created swapchain
+
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> framebuffers;
 
@@ -53,6 +58,8 @@ struct Swapchain {
     VkImageView depthImageView;
     AllocatedImage depthImage;
     VkFormat depthFormat;
+
+    VkExtent2D imageExtent; // Corresponds to window dimensions
 };
 
 VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
@@ -80,7 +87,7 @@ private: /* Methods used from Init directly */
 
     void createSwapchainImages();
 
-    void createViewportImages();
+    void createViewportImages(uint32_t extentX, uint32_t extentY);
 
     void createPipelines();
     //void createFramebuffers();
@@ -95,7 +102,7 @@ private: /* Secondary methods */
     void recreateSwapchain();
     void cleanupSwapchainResources();
 
-    void recreateViewport();
+    void recreateViewport(uint32_t extentX, uint32_t extentY);
     void cleanupViewportResources();
 
     void initDescriptors();
@@ -118,7 +125,6 @@ private: /* Secondary methods */
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
-    void bindPipeline(VkCommandBuffer commandBuffer, VkPipeline pipeline);
     void drawFrame();
 
     void UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects);
@@ -130,9 +136,16 @@ private: /* Secondary methods */
 
 private: 
     void initImgui();
+
+    void imgui_RegisterViewportImageViews();
+    void imgui_UnregisterViewportImageViews();
+
+    //void imgui_OnViewportResize(uint32_t extentX, uint32_t extentY);
+
     void imguiCommands();
     void imguiOnDrawStart();
     void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
+
     void uiUpdateRenderContext();
     void uiUpdateHDR();
 
@@ -162,7 +175,7 @@ private:
     Viewport _viewport;
     
     
-    VkExtent2D _windowExtent;
+    //VkExtent2D _windowExtent;
 
     
 

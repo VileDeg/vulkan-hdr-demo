@@ -56,7 +56,7 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
-const float keyValue = 0.18; //middle gray
+const float keyValue = 1.; //middle gray
 
 void main() 
 {
@@ -73,38 +73,37 @@ void main()
         result = objectColor.rgb;
     }
 
-    result = texture(diffuse, texCoord).rgb; 
+    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
     if (pc.lightAffected == 1) {
         result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
-    }
 
-    // Apply exposure
-    //result *= ssbo.exposure;
+        // Apply exposure
+        //result *= ssbo.exposure;
 
-    float eps = 0.001;
-    float lum = luminance(result);
+        float eps = 0.001;
+        float lum = luminance(result);
 
     
-    // Update current max only if current luminance is bigger than 90% of old max
-    if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
-        // If difference is not too small, upgrade new max
-        if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
-            atomicMax(ssbo.newMax, floatBitsToUint(lum));
-        }
-    }
-    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
-
-    if (ssbo.exposureON == 1) {
-        /*if (f_oldMax > 1.f) { // TODO: remove condition
-            switch (ssbo.exposureMode) {
-            case 0: result = result / log(f_oldMax); break;
-            case 1: result = result / f_oldMax; break;
+        // Update current max only if current luminance is bigger than 50% of old max
+        if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
+            // If difference is not too small, upgrade new max
+            if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
+                atomicMax(ssbo.newMax, floatBitsToUint(lum));
             }
-        }*/
-        float exposure = keyValue / (f_oldMax - ssbo.exposure);
-        result *= exposure;
-    } 
+        }
+        
+
+        if (ssbo.exposureON == 1) {
+            /*if (f_oldMax > 1.f) { // TODO: remove condition
+                switch (ssbo.exposureMode) {
+                case 0: result = result / log(f_oldMax); break;
+                case 1: result = result / f_oldMax; break;
+                }
+            }*/
+            result *= keyValue / (f_oldMax - ssbo.exposure);
+        } 
+    }
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {

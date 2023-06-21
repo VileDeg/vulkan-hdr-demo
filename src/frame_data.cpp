@@ -22,8 +22,7 @@ void Engine::initFrame(FrameData& f)
             .commandBufferCount = 1
         };
 
-        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.mainCmdBuffer));
-        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.viewportCmdBuffer));
+        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmdBuffer));
 
 
         // Synchronization primitives
@@ -202,8 +201,7 @@ void Engine::initUploadContext()
 
 void Engine::createFrameData()
 {
-    initDescriptors();
-    initUploadContext();
+    
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         initFrame(_frames[i]);

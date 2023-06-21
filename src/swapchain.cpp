@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "Engine.h"
 
-#include "imgui/imgui_impl_vulkan.h"
-
 struct SwapchainPropertiesSupport {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
@@ -30,15 +28,48 @@ static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevi
     return support;
 }
 
-static VkSurfaceFormatKHR pickSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
 {
-    for (const auto& af : availableFormats) {
-        if (af.format == VK_FORMAT_B8G8R8A8_SRGB && af.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return af;
-        }
-    }
+    // Copied from file: "imgui/imgui_impl_vulkan.h", function: "ImGui_ImplVulkanH_SelectSurfaceFormat"
 
-    return availableFormats[0];
+    ASSERT(request_formats != nullptr);
+    ASSERT(request_formats_count > 0);
+
+    // Per Spec Format and View Format are expected to be the same unless VK_IMAGE_CREATE_MUTABLE_BIT was set at image creation
+    // Assuming that the default behavior is without setting this bit, there is no need for separate Swapchain image and image view format
+    // Additionally several new color spaces were introduced with Vulkan Spec v1.0.40,
+    // hence we must make sure that a format with the mostly available color space, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, is found and used.
+    uint32_t avail_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, nullptr);
+    std::vector<VkSurfaceFormatKHR> avail_format;
+    avail_format.resize((int)avail_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, avail_format.data());
+
+    // First check if only one format, VK_FORMAT_UNDEFINED, is available, which would imply that any format is available
+    if (avail_count == 1)
+    {
+        if (avail_format[0].format == VK_FORMAT_UNDEFINED)
+        {
+            VkSurfaceFormatKHR ret;
+            ret.format = request_formats[0];
+            ret.colorSpace = request_color_space;
+            return ret;
+        } else
+        {
+            // No point in searching another format
+            return avail_format[0];
+        }
+    } else
+    {
+        // Request several formats, the first found will be used
+        for (int request_i = 0; request_i < request_formats_count; request_i++)
+            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
+                if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
+                    return avail_format[avail_i];
+
+        // If none of the requested image formats could be found, use the first available
+        return avail_format[0];
+    }
 }
 
 static VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
@@ -74,14 +105,12 @@ void Engine::createSwapchain()
     const auto support = querySwapchainPropertiesSupport(_physicalDevice, _surface);
 
     // Select Surface Format
-    //auto surfaceFormat = pickSurfaceFormat(support.formats);
-
     const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    auto surfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(_physicalDevice, _surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    auto surfaceFormat = pickSurfaceFormat(_physicalDevice, _surface, requestSurfaceImageFormat, (size_t)ARRAY_SIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
     auto presentMode = pickPresentMode(support.presentModes);
-    auto windowExtent = pickExtent(support.capabilities, _window);
+    _swapchain.imageExtent = pickExtent(support.capabilities, _window);
 
     auto caps = support.capabilities;
     uint32_t imageCount = caps.minImageCount + 1;
@@ -95,7 +124,7 @@ void Engine::createSwapchain()
         .minImageCount = imageCount,
         .imageFormat = surfaceFormat.format,
         .imageColorSpace = surfaceFormat.colorSpace,
-        .imageExtent = windowExtent,
+        .imageExtent = _swapchain.imageExtent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, // Added sampled
         .preTransform = caps.currentTransform,
@@ -129,21 +158,20 @@ void Engine::createSwapchain()
     vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, _swapchain.images.data());
 
     _swapchain.imageFormat = surfaceFormat.format;
-    _windowExtent = windowExtent;
 
     _swapchain.depthFormat = VK_FORMAT_D32_SFLOAT;
 }
 
 void Engine::createSwapchainImages() {
+    VkExtent3D imageExtent3D = {
+        _swapchain.imageExtent.width,
+        _swapchain.imageExtent.height,
+        1 
+    };
+
     //Create depth image
     {
-        VkExtent3D depthImageExtent = {
-            _windowExtent.width,
-            _windowExtent.height,
-            1
-        };
-
-        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_swapchain.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthImageExtent);
+        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_swapchain.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, imageExtent3D);
 
         VmaAllocationCreateInfo dimgAllocinfo = {
             .usage = VMA_MEMORY_USAGE_GPU_ONLY,
@@ -160,7 +188,7 @@ void Engine::createSwapchainImages() {
     _swapchain.imageViews.resize(_swapchain.images.size());
     _swapchain.framebuffers.resize(_swapchain.images.size());
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_mainRenderpass, _windowExtent);
+    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_mainRenderpass, _swapchain.imageExtent);
 
     for (size_t i = 0; i < _swapchain.images.size(); ++i) {
         //Image view
@@ -185,7 +213,6 @@ void Engine::createSwapchainImages() {
         };
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
-
 
         // Framebuffer
         std::vector<VkImageView> attachments = {

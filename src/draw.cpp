@@ -46,8 +46,11 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		);
 	}
 
+	uint32_t extentX = _viewport.imageExtent.width;
+	uint32_t extentY = _viewport.imageExtent.height;
+
 	glm::mat4 viewMat = _inp.camera.GetViewMat();
-	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, _windowExtent.width, _windowExtent.height);
+	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, extentX, extentY);
 	GPUCameraData camData{
 		.view = viewMat,
 		.proj = projMat,
@@ -101,7 +104,29 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 			// If the material is different, bind the new material
 			if (mesh->material != lastMaterial) {
-				bindPipeline(cmd, mesh->material->pipeline);
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipeline);
+
+				{
+					VkViewport viewport{
+						.x = 0.0f,
+						.y = 0.0f,
+						.width = static_cast<float>(extentX),
+						.height = static_cast<float>(extentY),
+						.minDepth = 0.0f,
+						.maxDepth = 1.0f
+					};
+
+					vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+					VkRect2D scissor{
+						.offset = { 0, 0 },
+						.extent = { extentX, extentY }
+					};
+
+					vkCmdSetScissor(cmd, 0, 1, &scissor);
+				}
+
+
 				lastMaterial = mesh->material;
 				// Bind the descriptor sets
 				vkCmdBindDescriptorSets(
@@ -125,6 +150,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 void Engine::drawFrame()
 {
+	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	imguiCommands();
 
     _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
@@ -145,36 +171,16 @@ void Engine::drawFrame()
         }
     }
 
-	//if (_inp.framebufferResized) {
-	//	ImGuiIO& io = ImGui::GetIO();
-	//	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	//	{
-	//		//GLFWwindow* backup_current_context = glfwGetCurrentContext();
-	//		ImGui::UpdatePlatformWindows();
-	//		ImGui::RenderPlatformWindowsDefault();
-	//		//fwMakeContextCurrent(backup_current_context);
-	//	}
-	//}
-
+	// Following calls ImGui::Render()
 	imguiOnDrawStart();
 
-	{ // Viewport command buffer
-		//VKASSERT(vkResetCommandBuffer(frame.viewportCmdBuffer, 0));
-
+	{ // Command buffer
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
-		VKASSERT(vkBeginCommandBuffer(frame.viewportCmdBuffer, &beginInfo));
+		VKASSERT(vkBeginCommandBuffer(frame.cmdBuffer, &beginInfo));
 		{
-			
-
-			VkClearValue colorClear{
-				.color = { 0.1f, 0.0f, 0.1f, 1.0f }
-			};
-
-			VkClearValue depthClear{
-				.depthStencil = { 1.0f, 0 }
-			};
-
+			VkClearValue colorClear{ .color = { 0.1f, 0.0f, 0.1f, 1.0f } };
+			VkClearValue depthClear{ .depthStencil = { 1.0f, 0 } };
 			VkClearValue clearValues[] = { colorClear, depthClear };
 
 			VkRenderPassBeginInfo renderPassBeginInfo{
@@ -183,112 +189,48 @@ void Engine::drawFrame()
 				.framebuffer = _viewport.framebuffers[imageIndex],
 				.renderArea = {
 					.offset = { 0, 0 },
-					.extent = _windowExtent
+					.extent = _viewport.imageExtent
 				},
 				.clearValueCount = 2,
 				.pClearValues = clearValues
 			};
 
-
-
-			vkCmdBeginRenderPass(frame.viewportCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			// Viewport pass
+			vkCmdBeginRenderPass(frame.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
-				drawObjects(frame.viewportCmdBuffer, _renderables);
+				drawObjects(frame.cmdBuffer, _renderables);
 			}
-			vkCmdEndRenderPass(frame.viewportCmdBuffer);
-		}
-		VKASSERT(vkEndCommandBuffer(frame.viewportCmdBuffer));
-	}
+			vkCmdEndRenderPass(frame.cmdBuffer);
 
-	{ // Main command buffer
-		//VKASSERT(vkResetCommandBuffer(frame.mainCmdBuffer, 0));
+			renderPassBeginInfo.renderPass = _mainRenderpass;
+			renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];
+			renderPassBeginInfo.renderArea.extent = _swapchain.imageExtent;
 
-		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
-
-		VKASSERT(vkBeginCommandBuffer(frame.mainCmdBuffer, &beginInfo));
-		{
-			//// Create a VkImageMemoryBarrier struct
-			//VkImageMemoryBarrier barrier = {};
-			//barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			//barrier.srcAccessMask = 0; // Specify the previous access mask for the image
-			//barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // Specify the desired access mask for shader reads
-			//barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Specify the current layout of the image
-			//barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Specify the desired layout for shader reads
-			//barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the source queue family index
-			//barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Specify the destination queue family index
-			//barrier.image = _viewport.images[imageIndex].image; // Specify the VkImage object
-			//barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Specify the image aspect mask
-			//barrier.subresourceRange.baseMipLevel = 0; // Specify the base mip level
-			//barrier.subresourceRange.levelCount = 1; // Specify the number of mip levels
-			//barrier.subresourceRange.baseArrayLayer = 0; // Specify the base array layer
-			//barrier.subresourceRange.layerCount = 1; // Specify the number of array layers
-
-			//// Transition the image layout
-			//vkCmdPipelineBarrier(
-			//	frame.mainCmdBuffer,
-			//	VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			//	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			//	0,
-			//	0,
-			//	nullptr,
-			//	0,
-			//	nullptr,
-			//	1,
-			//	&barrier
-			//);
-
-			VkClearValue colorClear{
-				.color = { 0.1f, 0.0f, 0.1f, 1.0f }
-			};
-
-			VkClearValue depthClear{
-				.depthStencil = { 1.0f, 0 }
-			};
-
-			VkClearValue clearValues[] = { colorClear, depthClear };
-
-			VkRenderPassBeginInfo renderPassBeginInfo{
-				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				.renderPass = _mainRenderpass,
-				.framebuffer = _swapchain.framebuffers[imageIndex],
-				.renderArea = {
-					.offset = { 0, 0 },
-					.extent = _windowExtent
-				},
-				.clearValueCount = 2,
-				.pClearValues = clearValues
-			};
-
-			vkCmdBeginRenderPass(frame.mainCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			// Swapchain pass
+			vkCmdBeginRenderPass(frame.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
 				// Record dear imgui primitives into command buffer
-				imguiOnRenderPassEnd(frame.mainCmdBuffer);
+				imguiOnRenderPassEnd(frame.cmdBuffer);
 			}
-			vkCmdEndRenderPass(frame.mainCmdBuffer);
+			vkCmdEndRenderPass(frame.cmdBuffer);
 		}
-		VKASSERT(vkEndCommandBuffer(frame.mainCmdBuffer));
+		VKASSERT(vkEndCommandBuffer(frame.cmdBuffer));
 	}
-
-	
-
 
     VkSemaphore waitSemaphores[] = { frame.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     VkSemaphore signalSemaphores[] = { frame.renderFinishedSemaphore };
 
-
-	std::vector<VkCommandBuffer> cmdBuffers = { frame.viewportCmdBuffer, frame.mainCmdBuffer };
-
-    VkSubmitInfo submitInfo{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = waitSemaphores,
-        .pWaitDstStageMask = waitStages,
-        .commandBufferCount = static_cast<uint32_t>(cmdBuffers.size()),
-        .pCommandBuffers = cmdBuffers.data(),
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = signalSemaphores
-    };
+	VkSubmitInfo submitInfo{
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = waitSemaphores,
+		.pWaitDstStageMask = waitStages,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &frame.cmdBuffer,
+		.signalSemaphoreCount = 1,
+		.pSignalSemaphores = signalSemaphores
+	};
 
     VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, frame.inFlightFence));
 

@@ -1,5 +1,8 @@
 #pragma once
 
+
+#define ARRAY_SIZE(_ARR)          ((int)(sizeof(_ARR) / sizeof(*(_ARR))))     // Size of a static C-style array. Don't use on pointers!
+
 //Macros for printing error messages
 #define HHHPR(_msg, _stream) do{ _stream << _msg << std::endl; }while(0)
 #define HHPR(_msg, _type, _stream) do{ _stream << "[" << __FILE__ << " " << __func__ << " " << __LINE__ << "] " << _type << ": "; HHHPR(_msg, _stream); }while(0)
