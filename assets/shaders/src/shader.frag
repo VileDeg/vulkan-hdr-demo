@@ -34,9 +34,11 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
-const float keyValue = 0.18; // middle gray
+//const float keyValue = 0.18; // middle gray
 const float eps = 0.001;
 const float lumMaxTreshold = 0.5;
+
+const float expTerm = 9.6; // Simplified term. From: https://bruop.github.io/exposure/
 
 void main() 
 {
@@ -65,6 +67,7 @@ void main()
         float lum = luminance(result);
 
         // Update current max only if current luminance is bigger than 50% of old max
+        
         if (lum > lumMaxTreshold * uintBitsToFloat(ssbo.oldMax)) {
             // If difference is not too small, upgrade new max
             if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
@@ -74,7 +77,7 @@ void main()
         
         // Update luminance histogram
         int bin = int(lum / f_oldMax * MAX_BINS);
-        atomicAdd(ssbo.luminance[bin].val, 1);
+        atomicAdd(ssbo.luminance[bin], 1); //.val
 
         if (ssbo.exposureON == 1) {
             /*if (f_oldMax > 1.f) { // TODO: remove condition
@@ -85,7 +88,11 @@ void main()
             }*/
             //float commonLum = ssbo.commonLumBin / MAX_BINS * f_oldMax;
 
-            result *= keyValue / (ssbo.commonLuminance + 0.001 + ssbo.exposure);
+            //float denom = expTerm * (ssbo.commonLuminance + 0.0001);
+            //if (denom - 1.f > eps) {
+            result *= 1 / ssbo.exposureAverage;
+            result *= pow(2, ssbo.exposure);
+            //}
         } 
     }
    

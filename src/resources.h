@@ -139,21 +139,20 @@ struct GPUObjectData {
     int _pad2;
 };
 
-#define MAX_OBJECTS 10
-#define MAX_LUMINANCE_BINS 64
+
 
 // Must use struct with size multiple of 16 because of std140 buffer layout
-struct Lum {
-    int val;
-    int _pad0;
-    int _pad1;
-    int _pad2;
-};
+//struct Lum {
+//    int val;
+//    int _pad0;
+//    int _pad1;
+//    int _pad2;
+//};
 
 struct GPUSSBOData {
     unsigned int newMax{ 0 };
     unsigned int oldMax{ 0 };
-    int commonLuminance{ 0 };
+    float exposureAverage{ 0 };
     int _pad0;
 
     int showNormals{ 0 };
@@ -166,12 +165,14 @@ struct GPUSSBOData {
     int toneMappingON{ 1 };
     int toneMappingMode{ 0 };
 
+#define MAX_OBJECTS 10
     GPUObjectData objects[MAX_OBJECTS]{};
 
-    Lum luminance[MAX_LUMINANCE_BINS]{};
+#define MAX_LUMINANCE_BINS 64
+    int luminance[MAX_LUMINANCE_BINS]{};
 };
 
-#define MAX_LIGHTS 4
+
 
 struct GPUSceneData {
     glm::vec3 cameraPos{};
@@ -180,8 +181,18 @@ struct GPUSceneData {
     glm::vec3 ambientColor{};
     int _pad1{};
 
+#define MAX_LIGHTS 4
     Light lights[MAX_LIGHTS];
 };
+
+
+//#define MAX_EXP_WINDOW 1
+//
+//struct ExposureFrame {
+//    float exp = 1.f;
+//    //float time = 0;
+//    float decay = 1.f / MAX_EXP_WINDOW;
+//};
 
 struct RenderContext {
     GPUSceneData sceneData{};
@@ -191,6 +202,13 @@ struct RenderContext {
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     glm::vec2 luminanceHistogramBounds{ .3, .95 };
+
+    float exposureBlendingFactor = 1.2f;
+
+    //ExposureFrame exposureWindow[MAX_EXP_WINDOW]{};
+    //int expWinI = 0;
+    
+    //float kWindow[MAX_EXP_WINDOW] = {.1, .2, .3, .4};
 
     void Init();
 

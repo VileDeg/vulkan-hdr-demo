@@ -19,6 +19,8 @@ public:
     }
 
     glm::mat4 GetProjMat(float fovY, int w, int h);
+
+    float GetDeltaTime() { return _dt; }
     
 private:
     void goFront(float dt) {

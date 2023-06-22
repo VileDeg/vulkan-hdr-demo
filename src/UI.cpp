@@ -11,6 +11,48 @@
 
 #if USE_IMGUI
 
+// utility structure for realtime plot
+struct ScrollingBuffer {
+	int MaxSize;
+	int Offset;
+	ImVector<ImVec2> Data;
+	ScrollingBuffer(int max_size = 2000) {
+		MaxSize = max_size;
+		Offset = 0;
+		Data.reserve(MaxSize);
+	}
+	void AddPoint(float x, float y) {
+		if (Data.size() < MaxSize)
+			Data.push_back(ImVec2(x, y));
+		else {
+			Data[Offset] = ImVec2(x, y);
+			Offset = (Offset + 1) % MaxSize;
+		}
+	}
+	void Erase() {
+		if (Data.size() > 0) {
+			Data.shrink(0);
+			Offset = 0;
+		}
+	}
+};
+
+// utility structure for realtime plot
+struct RollingBuffer {
+	float Span;
+	ImVector<ImVec2> Data;
+	RollingBuffer() {
+		Span = 10.0f;
+		Data.reserve(2000);
+	}
+	void AddPoint(float x, float y) {
+		float xmod = fmodf(x, Span);
+		if (!Data.empty() && xmod < Data.back().x)
+			Data.shrink(0);
+		Data.push_back(ImVec2(xmod, y));
+	}
+};
+
 static void EmbraceTheDarkness();
 
 void Engine::initImgui()
@@ -149,42 +191,160 @@ void Engine::uiUpdateHDR()
 	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 
 	if (ImGui::TreeNode("HDR")) {
-		ImGui::SeparatorText("Tone mapping");
-		
-		{
-			const char* items[] = { 
+		ImGui::SeparatorText("Tone mapping"); {
+
+			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
 			static int item_current = 3;
 			if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
 				_renderContext.ssboData.toneMappingMode = item_current;
 			}
 		}
-
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
-		ImGui::SeparatorText("Exposure");
+		ImGui::SeparatorText("Exposure"); {
 
-		{
 			const char* items[] = { "Log", "Linear" };
 			static int curr = 0;
 			if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
 				_renderContext.ssboData.exposureMode = curr;
 			}
+
+			/*float exp = _renderContext.ssboData.exposure;
+			float speed = 0.3f;
+			if (exp - speed < 1.f) {
+				speed = 0.01f;
+			}
+			ImGui::DragFloat("Exposure (EV)", &_renderContext.ssboData.exposure, speed, 0.001f, 100.f);*/
+
+			ImGui::SeparatorText("Adjust EV steps");
+			if (ImGui::Button("-")) {
+				_renderContext.ssboData.exposure -= 1;
+			}
+			ImGui::SameLine();
+			ImGui::Text("%f", _renderContext.ssboData.exposure);
+			ImGui::SameLine();
+			if (ImGui::Button("+")) {
+				_renderContext.ssboData.exposure += 1;
+			}
+			ImGui::Separator();
+
+			ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
+
+
+			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
+
+			ImGui::Separator();
+			ImGui::Text("Average exposure: %f", _renderContext.ssboData.exposureAverage);
+			ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
+			ImGui::Separator();
+
 		}
+		ImGui::SeparatorText("Exposure Window"); {
+			//static ScrollingBuffer sdata1, sdata2;
+			//static RollingBuffer rdata[MAX_EXP_WINDOW];
 
+			//ImVec2 mouse = ImGui::GetMousePos();
 
-		ImGui::SliderFloat("Exposure", &_renderContext.ssboData.exposure, 0.f, 100.f);
+			//ImGui::SliderFloat("Blending factor", &_renderContext.blendingFactor, 0.0001f, 100000.f);
 
-		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
+			//static float t = 0;
+			//t += ImGui::GetIO().DeltaTime;
 
+			///*auto& expW = _renderContext.exposureWindow;
+			//auto& ei = _renderContext.expWinI;*/
 
+			//static float history = 30.0f;
+			//ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+
+			///*for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
+			//	rdata[i].AddPoint(t, expW[i].decay);
+			//	rdata[i].Span = history;
+
+			//	ImGui::Text("%f %f", expW[i].exp, expW[i].decay);
+			//}*/
+
+			//static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+
+			///*if (ImPlot::BeginPlot("##Scrolling", ImVec2(-1, 150))) {
+			//	ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
+			//	ImPlot::SetupAxisLimits(ImAxis_X1, t - history, t, ImGuiCond_Always);
+			//	ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1);
+			//	ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
+			//	ImPlot::PlotShaded("Mouse X", &sdata1.Data[0].x, &sdata1.Data[0].y, sdata1.Data.size(), -INFINITY, 0, sdata1.Offset, 2 * sizeof(float));
+			//	ImPlot::PlotLine("Mouse Y", &sdata2.Data[0].x, &sdata2.Data[0].y, sdata2.Data.size(), 0, sdata2.Offset, 2 * sizeof(float));
+			//	ImPlot::EndPlot();
+			//}*/
+
+			//
+
+			//if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200), ImPlotFlags_CanvasOnly)) {
+			//	ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
+			//	ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+			//	ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1);
+			//	for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
+			//		std::string label = "Exposure " + std::to_string(i);
+			//		ImPlot::PlotLine(label.c_str(), &rdata[i].Data[0].x, &rdata[i].Data[0].y, rdata[i].Data.size(), 0, 0, 2 * sizeof(float));
+			//	}
+			//	//ImPlot::PlotLine("Mouse Y", &rdata2.Data[0].x, &rdata2.Data[0].y, rdata2.Data.size(), 0, 0, 2 * sizeof(float));
+			//	ImPlot::EndPlot();
+			//}
+
+		}
+		ImGui::SeparatorText("Histogram"); {
+
+			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
+				GPUSSBOData& sd = _renderContext.ssboData;
+				constexpr int arr_size = ARRAY_SIZE(sd.luminance);
+
+				int bins = arr_size;
+				int xs[arr_size];
+
+				for (int i = 0; i < arr_size; ++i) {
+					xs[i] = i;
+				}
+
+				// Skip N%
+				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
+				int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
+
+				std::vector<int> vals(sd.luminance, sd.luminance + arr_size);
+
+				auto it = std::max_element(vals.begin(), vals.end());
+				int maxBin = *it;
+
+				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
+
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+				/*auto style = ImPlot::GetStyle();
+				ImPlot::StyleColorsAuto(&style);*/
+
+				//ImPlot::SetNextLineStyle({ 0., 0., 0.5, 1. });
+				/*ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(5.f, 10.f));
+				ImPlot::PushStyleVar(ImPlotStyleVar_LabelPadding, ImVec2(5.f, 10.f));*/
+
+				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
+
+				/*ImPlot::SetNextLineStyle({ 1., 0., 0., 1. });
+
+				ImPlot::PlotStems("Luminance", xs, vals.data(), 2, start_i, end_i - start_i);*/
+
+				//ImPlot::PlotStems("Luminance", xs, boundVals.data(), bins);
+
+				//ImPlot::PopStyleVar();
+
+				ImPlot::EndPlot();
+			}
+		}
 		ImGui::TreePop();
 	}
 }
 
 void Engine::uiUpdateRenderContext()
 {
-	
-
 	if (ImGui::TreeNode("Scene lighting")) {
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
 
@@ -238,7 +398,7 @@ void Engine::uiUpdateRenderContext()
 	}
 }
 
-void Engine::imguiCommands()
+void Engine::imguiUpdate()
 {
 	if (!_inp.uiEnabled) {
 		return;
@@ -348,9 +508,7 @@ void Engine::imguiCommands()
 				createScene(models_cstr[i]);
 			}
 
-			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
-
-			ImGui::Text("Common Luminance: %f", _renderContext.ssboData.commonLuminance);
+			
 
 			ImGui::Separator();
 			ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
@@ -361,83 +519,7 @@ void Engine::imguiCommands()
 				_renderContext.ssboData.showNormals = showNormals;
 			}
 
-
-			{ // Histogram
-				GPUSSBOData& sd = _renderContext.ssboData;
-				
-				if (ImPlot::BeginPlot("Luminance")) {
-					constexpr int arr_size = ARRAY_SIZE(sd.luminance);
-
-					int bins = arr_size;
-					int xs[arr_size];
-
-					for (int i = 0; i < arr_size; ++i) {
-						xs[i] = i;
-					}
-
-					//glm::vec2 dim = { _viewport.imageExtent.width, _viewport.imageExtent.height };
-					
-					
-
-					/*auto it = std::max_element(vals.begin(), vals.end());
-					int max_i = it - vals.begin();
-					int max = *it;*/
-
-					// Skip N%
-					int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
-					int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
-					// Find the bin with maximum pixels
-					int max_i = start_i;
-					int maxBin = 0;
-
-					float sum = 0;
-
-					for (int i = 0; i < arr_size; ++i) {
-						int val = sd.luminance[i].val;
-						if (val > maxBin) {
-							maxBin = val;
-							max_i = i;
-						}
-						/*float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
-						sum += lum;*/
-					}
-
-					std::vector<int> vals{};
-					std::vector<int> boundVals{};
-
-
-					for (size_t i = 0; i < arr_size; ++i) {
-						//if (i != start_i && i != end_i) {
-							vals.push_back(sd.luminance[i].val);
-						/*} else {
-							boundVals.push_back(sd.luminance[i].val);
-						}*/
-					}
-
-					//float avg = sum / (end_i - start_i);
-
-					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
-
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-
-					/*auto style = ImPlot::GetStyle();
-					ImPlot::StyleColorsAuto(&style);*/
-
-					//ImPlot::SetNextLineStyle({ 0., 0., 0.5, 1. });
-
-					ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
-
-					/*ImPlot::SetNextLineStyle({ 1., 0., 0., 1. });
-
-					ImPlot::PlotStems("Luminance", xs, vals.data(), 2, start_i, end_i - start_i);*/
-
-					//ImPlot::PlotStems("Luminance", xs, boundVals.data(), bins);
-
-					ImPlot::EndPlot();
-				}
-				
-			}
+			
 
 
 			static bool imgui_demo = false;
@@ -455,6 +537,8 @@ void Engine::imguiCommands()
 			ImGui::Separator();
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
+			_frameRate = io.Framerate;
+			_deltaTime = io.DeltaTime;
 		}
 		ImGui::End();
 
@@ -618,7 +702,7 @@ static void EmbraceTheDarkness()
 
 void Engine::initImgui() {}
 
-void Engine::imguiCommands() {}
+void Engine::imguiUpdate() {}
 
 void Engine::imguiOnDrawStart() {}
 

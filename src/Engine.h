@@ -80,7 +80,8 @@ private:
     void imgui_RegisterViewportImageViews();
     void imgui_UnregisterViewportImageViews();
 
-    void imguiCommands();
+    void imguiUpdate();
+
     void imguiOnDrawStart();
     void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
 
@@ -126,6 +127,9 @@ private:
 
     uint32_t _frameInFlightNum = 0;
     uint32_t _frameNumber = 0;
+
+    float _frameRate = 60.f; // Updated from ImGui io.framerate
+    float _deltaTime = 0.016f;
     //bool _framebufferResized = false;
 
     bool _isInitialized = false;

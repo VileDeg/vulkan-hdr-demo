@@ -29,6 +29,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <numeric>
 
 #include "defs.h"
 #include "vk_initializers.h"

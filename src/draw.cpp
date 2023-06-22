@@ -3,6 +3,8 @@
 
 #include "imgui/imgui.h"
 
+
+
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
 	// Load SSBO to GPU
@@ -46,30 +48,75 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 				// Skip N%
 				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
 				int end_i	= arr_size * _renderContext.luminanceHistogramBounds.y;
-				// Find the bin with maximum pixels
-				int max_i = start_i;
-				int maxBin = 0;
 
 				float sum = 0;
 
+				std::vector<int> lums(end_i - start_i);
+				
 				for (int i = start_i; i < end_i; ++i) {
-					int val = gpuSD->luminance[i].val;
-					if (val > maxBin) {
-						maxBin = val;
-						max_i = i;
-					}
 					float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
 					sum += lum;
+					lums.push_back(lum);
 				}
 
-				float avg = sum / (end_i - start_i);
-
 				// Compute common luminance
-				//sd.commonLuminance = (float)max_i / MAX_LUMINANCE_BINS * f_oldMax;
-				sd.commonLuminance = avg;
+				float avg = sum / (float)lums.size();
+				float exposureAvg = 9.6 * (avg + 0.0001);
+
+				//auto& expW = _renderContext.exposureWindow;
+				//auto& kW = _renderContext.kWindow;
+				//auto& ei = _renderContext.expWinI;
+
+				//static float timePassed = 0;
+				//static float timeT = 0.2f;
+
+				//timePassed += _deltaTime;
+
+				//if (timePassed > timeT) {
+				//	expW[ei].exp = sd.exposureAverage;
+				//	//expW[ei].time = 0;
+				//	//expW[ei].decay = 1.f;
+
+				//	//expW[ei].decay = kW[ei];
+
+				//	/*int prev = ei - 1;
+				//	if (prev < 0) {
+				//		prev = MAX_EXP_WINDOW - 1;
+				//	}
+
+				//	expW[prev].time += timePassed;
+				//	expW[prev].decay = exp(-expW[prev].time);*/
+
+				//	ei = (ei + 1) % MAX_EXP_WINDOW;
+				//	timePassed = 0;
+				//}
+
+				//float total = 0;
+
+				//for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
+				//	//expW[i].time += _deltaTime;
+				//	//expW[i].decay = exp(-expW[i].time * (timeT * 4.60517) / MAX_EXP_WINDOW / 10.f);
+
+				//	// Exponencial decay
+				//	total += expW[i].exp * expW[i].decay;
+				//}
+				//total /= MAX_EXP_WINDOW;
+
+				//static int prevExp = 1;
+				
+				//sd.exposureAverage = expW[MAX_EXP_WINDOW - 1].exp + (total - expW[MAX_EXP_WINDOW-1].exp) / 10.f;
+
+				//float a = 2.f / (MAX_EXP_WINDOW + 1);
+				//float a = 100.f * _deltaTime;
+				float a = _renderContext.exposureBlendingFactor * _deltaTime;
+				a = std::clamp(a, 0.0001f, 0.99f);
+				// Final exposure
+				sd.exposureAverage = a * exposureAvg + (1 - a) * sd.exposureAverage;
+
+				//prevExp = sd.exposureAverage;
 
 				// Store GPU luminance values before clearing them up
-				Lum tmpLum[arr_size];
+				int tmpLum[arr_size];
 				memcpy(tmpLum, gpuSD->luminance, sizeof(tmpLum));
 				
 				// Load SSBO data to GPU
@@ -199,7 +246,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 void Engine::drawFrame()
 {
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
-	imguiCommands();
+	imguiUpdate();
 
     _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
     FrameData& frame = _frames[_frameInFlightNum];
