@@ -13,29 +13,7 @@ layout(location = 0) out vec4 FragColor;
 #include "light.glsl"
 #include "tone_mapping.glsl"
 
-struct ObjectData{
-	mat4 model;
-	vec4 color;
-
-    int useObjectColor;
-    int _pad0;
-    int _pad1;
-    int _pad2;
-};
-
-layout(std140, set = 1, binding = 0) buffer GlobalBuffer{
-    uint newMax;
-    uint oldMax;
-    int showNormals;
-    float exposure;
-
-    int exposureON;
-    int exposureMode;
-    int toneMappingON;
-    int toneMappingMode;
-
-	ObjectData objects[MAX_OBJECTS];
-} ssbo;
+#include "structs.glsl"
 
 layout(set = 0, binding = 1) uniform SceneData {
     vec3 cameraPos;
@@ -56,7 +34,9 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
-const float keyValue = 1.; //middle gray
+const float keyValue = 0.18; // middle gray
+const float eps = 0.001;
+const float lumMaxTreshold = 0.5;
 
 void main() 
 {
@@ -81,18 +61,20 @@ void main()
         // Apply exposure
         //result *= ssbo.exposure;
 
-        float eps = 0.001;
+        
         float lum = luminance(result);
 
-    
         // Update current max only if current luminance is bigger than 50% of old max
-        if (lum > 0.5*uintBitsToFloat(ssbo.oldMax)) {
+        if (lum > lumMaxTreshold * uintBitsToFloat(ssbo.oldMax)) {
             // If difference is not too small, upgrade new max
             if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
                 atomicMax(ssbo.newMax, floatBitsToUint(lum));
             }
         }
         
+        // Update luminance histogram
+        int bin = int(lum / f_oldMax * MAX_BINS);
+        atomicAdd(ssbo.luminance[bin].val, 1);
 
         if (ssbo.exposureON == 1) {
             /*if (f_oldMax > 1.f) { // TODO: remove condition
@@ -101,7 +83,9 @@ void main()
                 case 1: result = result / f_oldMax; break;
                 }
             }*/
-            result *= keyValue / (f_oldMax - ssbo.exposure);
+            //float commonLum = ssbo.commonLumBin / MAX_BINS * f_oldMax;
+
+            result *= keyValue / (ssbo.commonLuminance + 0.001 + ssbo.exposure);
         } 
     }
    

@@ -1,9 +1,11 @@
 #include "stdafx.h"
-
 #include "engine.h"
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
+
+#include "imgui/implot.h"
 
 #define USE_IMGUI 1
 
@@ -44,6 +46,7 @@ void Engine::initImgui()
 
 	//this initializes the core structures of imgui
 	ImGui::CreateContext();
+	ImPlot::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
@@ -115,6 +118,8 @@ void Engine::initImgui()
 
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
+
+		ImPlot::DestroyContext();
 		ImGui::DestroyContext();
 	});
 }
@@ -149,7 +154,7 @@ void Engine::uiUpdateHDR()
 		{
 			const char* items[] = { 
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = 0;
+			static int item_current = 3;
 			if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
 				_renderContext.ssboData.toneMappingMode = item_current;
 			}
@@ -167,7 +172,7 @@ void Engine::uiUpdateHDR()
 		}
 
 
-		ImGui::SliderFloat("Exposure", &_renderContext.ssboData.exposure, 0.f, 1.f);
+		ImGui::SliderFloat("Exposure", &_renderContext.ssboData.exposure, 0.f, 100.f);
 
 		ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
 
@@ -345,6 +350,8 @@ void Engine::imguiCommands()
 
 			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
 
+			ImGui::Text("Common Luminance: %f", _renderContext.ssboData.commonLuminance);
+
 			ImGui::Separator();
 			ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
 			ImGui::Separator();
@@ -354,16 +361,105 @@ void Engine::imguiCommands()
 				_renderContext.ssboData.showNormals = showNormals;
 			}
 
-			static bool show_demo_window = false;
-			ImGui::Checkbox("Show demo window", &show_demo_window);
-			if (show_demo_window) {
-				ImGui::ShowDemoWindow(&show_demo_window);
+
+			{ // Histogram
+				GPUSSBOData& sd = _renderContext.ssboData;
+				
+				if (ImPlot::BeginPlot("Luminance")) {
+					constexpr int arr_size = ARRAY_SIZE(sd.luminance);
+
+					int bins = arr_size;
+					int xs[arr_size];
+
+					for (int i = 0; i < arr_size; ++i) {
+						xs[i] = i;
+					}
+
+					//glm::vec2 dim = { _viewport.imageExtent.width, _viewport.imageExtent.height };
+					
+					
+
+					/*auto it = std::max_element(vals.begin(), vals.end());
+					int max_i = it - vals.begin();
+					int max = *it;*/
+
+					// Skip N%
+					int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
+					int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
+					// Find the bin with maximum pixels
+					int max_i = start_i;
+					int maxBin = 0;
+
+					float sum = 0;
+
+					for (int i = 0; i < arr_size; ++i) {
+						int val = sd.luminance[i].val;
+						if (val > maxBin) {
+							maxBin = val;
+							max_i = i;
+						}
+						/*float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
+						sum += lum;*/
+					}
+
+					std::vector<int> vals{};
+					std::vector<int> boundVals{};
+
+
+					for (size_t i = 0; i < arr_size; ++i) {
+						//if (i != start_i && i != end_i) {
+							vals.push_back(sd.luminance[i].val);
+						/*} else {
+							boundVals.push_back(sd.luminance[i].val);
+						}*/
+					}
+
+					//float avg = sum / (end_i - start_i);
+
+					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
+
+					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+					/*auto style = ImPlot::GetStyle();
+					ImPlot::StyleColorsAuto(&style);*/
+
+					//ImPlot::SetNextLineStyle({ 0., 0., 0.5, 1. });
+
+					ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
+
+					/*ImPlot::SetNextLineStyle({ 1., 0., 0., 1. });
+
+					ImPlot::PlotStems("Luminance", xs, vals.data(), 2, start_i, end_i - start_i);*/
+
+					//ImPlot::PlotStems("Luminance", xs, boundVals.data(), bins);
+
+					ImPlot::EndPlot();
+				}
+				
 			}
+
+
+			static bool imgui_demo = false;
+			ImGui::Checkbox("Show ImGui demo window", &imgui_demo);
+			if (imgui_demo) {
+				ImGui::ShowDemoWindow(&imgui_demo);
+			}
+
+			static bool implot_demo = false;
+			ImGui::Checkbox("Show ImPlot demo window", &implot_demo);
+			if (implot_demo) {
+				ImPlot::ShowDemoWindow(&implot_demo);
+			}
+
 			ImGui::Separator();
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 		}
 		ImGui::End();
+
+
+
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 

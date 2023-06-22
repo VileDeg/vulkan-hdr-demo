@@ -16,8 +16,11 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
 
 # Add ImGUI source files
 set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
+set(IMPLOT_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
+
 set(SRC_FILES
     ${SRC_FILES}
+
     ${IMGUI_DIR}/imgui_impl_glfw.cpp 
     ${IMGUI_DIR}/imgui_impl_vulkan.cpp 
     ${IMGUI_DIR}/imgui.cpp 
@@ -25,6 +28,12 @@ set(SRC_FILES
     ${IMGUI_DIR}/imgui_demo.cpp 
     ${IMGUI_DIR}/imgui_tables.cpp 
     ${IMGUI_DIR}/imgui_widgets.cpp
+
+    ${IMPLOT_DIR}/implot.cpp
+    ${IMPLOT_DIR}/implot.h
+    ${IMPLOT_DIR}/implot_demo.cpp
+    ${IMPLOT_DIR}/implot_internal.h
+    ${IMPLOT_DIR}/implot_items.cpp
 )
 
 add_executable (${EXNAME} ${SRC_FILES})

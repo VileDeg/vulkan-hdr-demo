@@ -190,25 +190,7 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 }
 
 
-void Engine::UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects)
-{
-	// Following is the maximum pixel value of image that is used for exposure simulation
-	auto& sd = _renderContext.ssboData;
 
-	sd.exposureON = _inp.exposureEnabled;
-	sd.toneMappingON = _inp.toneMappingEnabled;
-
-	for (int i = 0; i < objects.size(); i++) {
-
-		sd.objects[i].modelMatrix = objects[i]->Transform();
-		sd.objects[i].color = objects[i]->color;
-		sd.objects[i].useObjectColor = objects[i]->model->useObjectColor;
-		//sd.objects[i].lightAffected = objects[i]->model->lightAffected;
-		/*for (int i = 0; i < objects[i]->model->meshes.size(); i++) {
-			sd.models[i].meshes->hasTextures = (objects[i]->model->meshes[i]->p_tex != nullptr);
-		}*/
-	}
-}
 
 
 void Engine::createSamplers() {

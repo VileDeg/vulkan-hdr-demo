@@ -69,8 +69,6 @@ private: /* Secondary methods */
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
     void drawFrame();
 
-    void UpdateSSBOData(const std::vector<std::shared_ptr<RenderObject>>& objects);
-
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     size_t pad_uniform_buffer_size(size_t originalSize);
 

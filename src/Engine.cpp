@@ -424,9 +424,6 @@ void Engine::initFrame(FrameData& f)
         vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);
 
         // Create SSBO with all objects data
-        //const int MAX_OBJECTS = 10000; 
-        //const int SSBO_SIZE = sizeof(glm::uvec4) + sizeof(GPUObjectData) * MAX_OBJECTS;
-        //const int SSBO_SIZE = sizeof(GPUObjectData) * MAX_OBJECTS;
         f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
         VkDescriptorSetAllocateInfo objectSetAlloc = {

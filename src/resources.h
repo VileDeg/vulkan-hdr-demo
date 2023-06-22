@@ -129,8 +129,6 @@ struct GPUPushConstantData {
     int _pad0{ 0 };
 };
 
-#define MAX_MESHES_PER_MODEL 5000
-
 struct GPUObjectData {
     glm::mat4 modelMatrix;
     glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
@@ -141,20 +139,36 @@ struct GPUObjectData {
     int _pad2;
 };
 
-#define MAX_OBJECTS 1500
+#define MAX_OBJECTS 10
+#define MAX_LUMINANCE_BINS 64
+
+// Must use struct with size multiple of 16 because of std140 buffer layout
+struct Lum {
+    int val;
+    int _pad0;
+    int _pad1;
+    int _pad2;
+};
 
 struct GPUSSBOData {
     unsigned int newMax{ 0 };
     unsigned int oldMax{ 0 };
-    int showNormals = 0;
+    int commonLuminance{ 0 };
+    int _pad0;
+
+    int showNormals{ 0 };
     float exposure{ 1.0f };
+    int _pad1;
+    int _pad2;
 
     int exposureON{ 1 };
     int exposureMode{ 0 };
     int toneMappingON{ 1 };
     int toneMappingMode{ 0 };
 
-    GPUObjectData objects[MAX_OBJECTS];
+    GPUObjectData objects[MAX_OBJECTS]{};
+
+    Lum luminance[MAX_LUMINANCE_BINS]{};
 };
 
 #define MAX_LIGHTS 4
@@ -175,6 +189,8 @@ struct RenderContext {
     GPUPushConstantData pushConstantData{};
 
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
+
+    glm::vec2 luminanceHistogramBounds{ .3, .95 };
 
     void Init();
 

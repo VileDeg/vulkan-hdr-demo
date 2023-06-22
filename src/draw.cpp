@@ -7,29 +7,76 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 {
 	// Load SSBO to GPU
 	{
-		UpdateSSBOData(objects);
+		auto& sd = _renderContext.ssboData;
+
+		sd.exposureON = _inp.exposureEnabled;
+		sd.toneMappingON = _inp.toneMappingEnabled;
+
+		for (int i = 0; i < objects.size(); i++) {
+
+			sd.objects[i].modelMatrix = objects[i]->Transform();
+			sd.objects[i].color = objects[i]->color;
+			sd.objects[i].useObjectColor = objects[i]->model->useObjectColor;
+		}
+
+		// Clear luminance from previous frame
+		memset(sd.luminance, 0, sizeof(sd.luminance));
+
 		getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator,
 			[&](void* data) {
-				char* ssboData = (char*)data;
-				unsigned int* newMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, newMax));
-				unsigned int* oldMax = (unsigned int*)(ssboData + offsetof(GPUSSBOData, oldMax));
-				float* f_oldMax = reinterpret_cast<float*>(oldMax);
+				GPUSSBOData* gpuSD = (GPUSSBOData*)data;
 
-				if (_frameNumber == 0) { // Initially new MAX and old MAX are zero.
-					*newMax = 0;
-					*oldMax = 0;
-				} else { // On every next frame, swap new MAX and old MAX.
-					unsigned int tmp = *oldMax;
-					std::swap(*newMax, *oldMax);
-					// For optimization we assume that MAX of new frame
-					// won't be more then two times lower.
-					*newMax = 0.5 * tmp;
-				}
+				
+
+				unsigned int oldMax = gpuSD->oldMax;
+				std::swap(gpuSD->newMax, gpuSD->oldMax);
+
+				// For optimization purposes we assume that MAX of new frame
+				// won't be more then two times lower.
+				gpuSD->newMax = 0.5f * oldMax;
+
 				auto& sd = _renderContext.ssboData;
-				sd.newMax = *newMax;
-				sd.oldMax = *oldMax;
+				sd.newMax = gpuSD->newMax;
+				sd.oldMax = gpuSD->oldMax;
 
+				constexpr size_t arr_size = ARRAY_SIZE(gpuSD->luminance);
+
+				float f_oldMax = *reinterpret_cast<float*>(&gpuSD->oldMax);
+
+				// Skip N%
+				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
+				int end_i	= arr_size * _renderContext.luminanceHistogramBounds.y;
+				// Find the bin with maximum pixels
+				int max_i = start_i;
+				int maxBin = 0;
+
+				float sum = 0;
+
+				for (int i = start_i; i < end_i; ++i) {
+					int val = gpuSD->luminance[i].val;
+					if (val > maxBin) {
+						maxBin = val;
+						max_i = i;
+					}
+					float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
+					sum += lum;
+				}
+
+				float avg = sum / (end_i - start_i);
+
+				// Compute common luminance
+				//sd.commonLuminance = (float)max_i / MAX_LUMINANCE_BINS * f_oldMax;
+				sd.commonLuminance = avg;
+
+				// Store GPU luminance values before clearing them up
+				Lum tmpLum[arr_size];
+				memcpy(tmpLum, gpuSD->luminance, sizeof(tmpLum));
+				
+				// Load SSBO data to GPU
 				memcpy(data, &sd, sizeof(GPUSSBOData));
+
+				// Copy GPU luminance to CPU side
+				memcpy(sd.luminance, tmpLum, sizeof(tmpLum));
 			}
 		);
 	}
@@ -51,6 +98,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 	glm::mat4 viewMat = _inp.camera.GetViewMat();
 	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, extentX, extentY);
+
 	GPUCameraData camData{
 		.view = viewMat,
 		.proj = projMat,
