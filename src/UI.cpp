@@ -175,8 +175,7 @@ void Engine::uiUpdateHDR()
 		//		_renderContext.ssboData.exposureMode = curr;
 		//	}
 
-		ImGui::SeparatorText("Adjust EV steps");
-
+		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
 				_renderContext.ssboData.exposure -= 1;
 			}
@@ -188,102 +187,104 @@ void Engine::uiUpdateHDR()
 			}
 			ImGui::Separator();
 
-			ImGui::Checkbox("Enable exposure", &_inp.exposureEnabled);
-
+			ImGui::Checkbox("Enable eye adaptation", &_inp.exposureEnabled);
 
 			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
+		} ImGui::SeparatorText("Plots"); {
 
-			ImGui::Separator();
-			ImGui::Text("Average exposure: %f", _renderContext.ssboData.exposureAverage);
-			ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
-			ImGui::Separator();
+			if (ImGui::TreeNode("Exposure Window")) {
+				ImGui::Text("Current adaptation: %f", _renderContext.ssboData.exposureAverage);
+				ImGui::Text("Target adaptation: %f", _renderContext.targetExposure);
+				ImGui::Separator();
 
-		ImGui::SeparatorText("Plots");
+				static RollingBuffer rdata, rdata1;
 
-		if (ImGui::TreeNode("Exposure Window")) {
-			static RollingBuffer rdata, rdata1;
+				ImGui::SliderFloat("Blending factor", &_renderContext.exposureBlendingFactor, 1.f, 2.f);
 
-			ImGui::SliderFloat("Blending factor", &_renderContext.exposureBlendingFactor, 1.f, 2.f);
+				static float t = 0;
+				t += ImGui::GetIO().DeltaTime;
 
-			static float t = 0;
-			t += ImGui::GetIO().DeltaTime;
+				static float history = 30.0f;
+				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
 
-			static float history = 30.0f;
-			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+				rdata.AddPoint(t, _renderContext.ssboData.exposureAverage);
+				rdata.Span = history;
 
-			rdata.AddPoint(t, _renderContext.ssboData.exposureAverage);
-			rdata.Span = history;
+				rdata1.AddPoint(t, _renderContext.targetExposure);
+				rdata1.Span = history;
 
-			rdata1.AddPoint(t, _renderContext.targetExposure);
-			rdata1.Span = history;
+				static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
 
-			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+				if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+					//ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
+					static float maxY = 0;
+					maxY = _renderContext.targetExposure > maxY ? _renderContext.targetExposure : maxY;
+					//float maxY = _renderContext.targetExposure;
 
-			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
-				//ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
-				static float maxY = 0;
-				maxY = _renderContext.targetExposure > maxY ? _renderContext.targetExposure : maxY;
+					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 
-				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+					ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+					ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
 
-				ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
-				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxY + 10, ImGuiCond_Always);
+					std::string label = "Exposure (actual)";
+					ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
 
-				std::string label = "Exposure (actual)";
-				ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
+					label = "Exposure (target)";
+					ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
 
-				label = "Exposure (target)";
-				ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
-
-				ImPlot::EndPlot();
-			}
-
-			ImGui::TreePop();
-		}
-
-		if (ImGui::TreeNode("Histogram")) {
-			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-				GPUSSBOData& sd = _renderContext.ssboData;
-				constexpr int arr_size = ARRAY_SIZE(sd.luminance);
-
-				int bins = arr_size;
-				int xs[arr_size];
-
-				for (int i = 0; i < arr_size; ++i) {
-					xs[i] = i;
+					ImPlot::EndPlot();
 				}
 
-				// Skip values that don't lie withing bounds
-				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
-				int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
-
-				std::vector<int> vals(sd.luminance, sd.luminance + arr_size);
-
-				auto it = std::max_element(vals.begin(), vals.end());
-				int maxBin = *it;
-
-				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-
-				ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
-
-				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-
-
-				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
-
-
-				int xs1[2] = {start_i, end_i};
-				int vals1[2] = { vals[start_i], vals[end_i] };
-				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-
-				ImPlot::PlotStems("Bounds", xs1, vals1, 2);
-
-
-				ImPlot::EndPlot();
+				ImGui::TreePop();
 			}
-			ImGui::TreePop();
+
+			if (ImGui::TreeNode("Histogram")) {
+				ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
+				ImGui::Separator();
+
+				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
+					GPUSSBOData& sd = _renderContext.ssboData;
+					constexpr int arr_size = ARRAY_SIZE(sd.luminance);
+
+					int bins = arr_size;
+					int xs[arr_size];
+
+					for (int i = 0; i < arr_size; ++i) {
+						xs[i] = i;
+					}
+
+					// Skip values that don't lie withing bounds
+					int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
+					int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
+
+					std::vector<int> vals(sd.luminance, sd.luminance + arr_size);
+
+					auto it = std::max_element(vals.begin(), vals.end());
+					int maxBin = *it;
+
+					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+
+					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
+
+					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+
+					ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
+
+
+					int xs1[2] = { start_i, end_i };
+					int vals1[2] = { vals[start_i], vals[end_i] };
+					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+					ImPlot::PlotStems("Bounds", xs1, vals1, 2);
+
+
+					ImPlot::EndPlot();
+				}
+				ImGui::TreePop();
+			}
 		}
 		ImGui::TreePop();
 	}

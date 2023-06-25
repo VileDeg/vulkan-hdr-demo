@@ -43,6 +43,10 @@ const float lumMaxTreshold = 0.5;
 
 const float expTerm = 9.6; // Simplified term. From: https://bruop.github.io/exposure/
 
+const float expMin = 0.0001;
+
+const float expMax = 10000;
+
 void main() 
 {
     if (ssbo.showNormals == 1) {
@@ -72,41 +76,31 @@ void main()
         } else {
             //result *= 1000;
         }
-
-        // Apply exposure
-        //result *= ssbo.exposure;
-
         
         float lum = luminance(result);
 
         // Update current max only if current luminance is bigger than 50% of old max
         
-        if (lum > lumMaxTreshold * uintBitsToFloat(ssbo.oldMax)) {
+        //lumMaxTreshold * 
+        if (lum > uintBitsToFloat(ssbo.newMax)) {
+        //if (lum > uintBitsToFloat(ssbo.oldMax)) {
             // If difference is not too small, upgrade new max
-            if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
+            //if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
                 atomicMax(ssbo.newMax, floatBitsToUint(lum));
-            }
         }
+            //}
+        //}
         
         // Update luminance histogram
-        int bin = int(lum / f_oldMax * MAX_BINS);
+        int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
         atomicAdd(ssbo.luminance[bin], 1); //.val
 
         if (ssbo.exposureON == 1) {
-            /*if (f_oldMax > 1.f) { // TODO: remove condition
-                switch (ssbo.exposureMode) {
-                case 0: result = result / log(f_oldMax); break;
-                case 1: result = result / f_oldMax; break;
-                }
-            }*/
-            //float commonLum = ssbo.commonLumBin / MAX_BINS * f_oldMax;
-
-            //float denom = expTerm * (ssbo.commonLuminance + 0.0001);
-            //if (denom - 1.f > eps) {
-            result *= 1 / ssbo.exposureAverage;
-            result *= pow(2, ssbo.exposure);
-            //}
+            float expa = ssbo.exposureAverage + 0.0001;
+            result /= expMin + (expa / (expa + 1)) * expMax;
         } 
+
+        result *= pow(2, ssbo.exposure);
     }
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
@@ -118,19 +112,6 @@ void main()
         case 4: result = ACESFitted(result); break;
         }
     }
-
-    /*if (ssbo.exposureON == 0) {
-        vec3 evPlus  = result * 2;
-        vec3 evMinus = result / 2;
-
-        float weight = RGBHowCloseToHalf(result);
-
-        if (lum < 0.5) {
-            result = result * weight + evPlus * (1-weight);
-        } else {
-            result = result * weight + evMinus * (1-weight);
-        }
-    }*/
 
     FragColor = vec4(result, 1.f);
 }

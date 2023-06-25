@@ -112,14 +112,22 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 			[&](void* data) {
 				GPUSSBOData* gpuSD = (GPUSSBOData*)data;
 
-				
-
 				unsigned int oldMax = gpuSD->oldMax;
 				std::swap(gpuSD->newMax, gpuSD->oldMax);
 
 				// For optimization purposes we assume that MAX of new frame
 				// won't be more then two times lower.
-				gpuSD->newMax = 0.5f * oldMax;
+				//float nm = 0.5f * oldMax;
+				float nm = 0.f;
+				
+				gpuSD->newMax = *reinterpret_cast<unsigned int*>(&nm);;
+
+				/*pr(gpuSD->oldMax);
+
+				
+				gpuSD->newMax = */
+
+				
 
 				auto& sd = _renderContext.ssboData;
 				sd.newMax = gpuSD->newMax;
@@ -151,9 +159,11 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 			
 				float a = _renderContext.exposureBlendingFactor * _deltaTime;
-				a = std::clamp(a, 0.0001f, 0.99f);
+				//a = std::clamp(a, 0.0001f, 0.99f);
 				// Final exposure
 				sd.exposureAverage = a * exposureAvg + (1 - a) * sd.exposureAverage;
+
+				//pr(sd.exposureAverage);
 
 				// Store GPU luminance values before clearing them up
 				int tmpLum[arr_size];

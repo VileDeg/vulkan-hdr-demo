@@ -240,8 +240,8 @@ void Engine::createScene(const std::string mainModelFullPath)
 	}
 
 
-	loadCubemap("skybox", false);
-	//loadCubemap("furry_clouds", true);
+	//loadCubemap("skybox", false);
+	loadCubemap("furry_clouds", true);
 	
 
 	_renderContext.Init();
@@ -288,7 +288,6 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 {
 	ASSERT(loadModelFromObj("cube", Engine::modelPath + "cube/cube.obj"));
 
-
 	constexpr const char* suff[6] = { "XP", "XN", "YP", "YN", "ZP", "ZN" };
 
 	std::string basePath = Engine::imagePath + cubemapDirName;
@@ -298,9 +297,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 	int baseTexW, baseTexH, baseTexChannels;
 
-	// 16-bit float HDR image format
 	VkFormat imageFormat;
-	//VkFormat imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	VkDeviceSize bufferOffset = 0;
 
 	for (int i = 0; i < 6; ++i) {
@@ -313,7 +310,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			float* fpix = stbi_loadf(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
 			pixel_ptr = fpix;
 
-			imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+			imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 		} else {
 			stbi_uc* pix = stbi_load(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
 			pixel_ptr = pix;
@@ -327,7 +324,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			baseTexH = texH;
 			baseTexChannels = texChannels;
 
-			imageSize = (VkDeviceSize)baseTexW * (VkDeviceSize)baseTexH * 4 * (isHDR ? 2 : 1);
+			imageSize = (VkDeviceSize)baseTexW * (VkDeviceSize)baseTexH * 4 * (isHDR ? 4 : 1);
 
 			VkDeviceSize bufferSize = imageSize * 6;
 			// Allocate temporary buffer for holding texture data to upload
