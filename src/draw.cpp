@@ -138,8 +138,8 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 				float f_oldMax = *reinterpret_cast<float*>(&gpuSD->oldMax);
 
 				// Skip N%
-				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
-				int end_i	= arr_size * _renderContext.luminanceHistogramBounds.y;
+				int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
+				int end_i	= (arr_size-1) * _renderContext.luminanceHistogramBounds.y;
 
 				float sum = 0;
 
@@ -212,8 +212,10 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		drawObject(cmd, objects[i], &lastMaterial, &lastMesh, i);
 	}
 
-	// Draw skybox as the last object
-	drawObject(cmd, _skyboxObject, &lastMaterial, &lastMesh, 0);
+	if (_renderContext.enableSkybox) {
+		// Draw skybox as the last object
+		drawObject(cmd, _skyboxObject, &lastMaterial, &lastMesh, 0);
+	}
 }
 
 void Engine::drawFrame()

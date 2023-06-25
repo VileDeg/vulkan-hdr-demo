@@ -239,6 +239,10 @@ void Engine::uiUpdateHDR()
 			}
 
 			if (ImGui::TreeNode("Histogram")) {
+
+				ImGui::SeparatorText("Histogram bounds");
+				ImGui::SliderFloat("Lower", &_renderContext.luminanceHistogramBounds.x, 0.f, 0.45f);
+				ImGui::SliderFloat("Upper", &_renderContext.luminanceHistogramBounds.y, 0.55f, 1.f);
 				ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
 				ImGui::Separator();
 
@@ -254,8 +258,8 @@ void Engine::uiUpdateHDR()
 					}
 
 					// Skip values that don't lie withing bounds
-					int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
-					int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
+					int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
+					int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;
 
 					std::vector<int> vals(sd.luminance, sd.luminance + arr_size);
 
@@ -292,6 +296,8 @@ void Engine::uiUpdateHDR()
 
 void Engine::uiUpdateRenderContext()
 {
+	ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
+
 	if (ImGui::TreeNode("Scene lighting")) {
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
 

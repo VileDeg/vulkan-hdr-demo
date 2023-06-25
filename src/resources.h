@@ -207,6 +207,8 @@ struct RenderContext {
     float exposureBlendingFactor = 1.2f;
     float targetExposure = 1.f; // Used for plotting
 
+    bool enableSkybox = true;
+
     void Init();
 
     void UpdateLightPosition(int lightIndex, glm::vec3 newPos);

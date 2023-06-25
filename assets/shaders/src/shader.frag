@@ -43,9 +43,8 @@ const float lumMaxTreshold = 0.5;
 
 const float expTerm = 9.6; // Simplified term. From: https://bruop.github.io/exposure/
 
-const float expMin = 0.0001;
-
-const float expMax = 10000;
+const double expMin = 1e-9;
+const double expMax = 1e9;
 
 void main() 
 {
@@ -96,8 +95,8 @@ void main()
         atomicAdd(ssbo.luminance[bin], 1); //.val
 
         if (ssbo.exposureON == 1) {
-            float expa = ssbo.exposureAverage + 0.0001;
-            result /= expMin + (expa / (expa + 1)) * expMax;
+            double expa = ssbo.exposureAverage + 0.0001;
+            result /= expa;//expMin + (expa / (expa + 1)) * expMax;
         } 
 
         result *= pow(2, ssbo.exposure);
