@@ -3,7 +3,91 @@
 
 #include "imgui/imgui.h"
 
+void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index) {
+	const RenderObject& obj = *object;
+	Model* model = obj.model;
 
+	for (int m = 0; m < model->meshes.size(); ++m) {
+		Mesh* mesh = model->meshes[m];
+
+		ASSERT(mesh && mesh->material);
+
+		//offset for our scene buffer
+		uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+
+		// Always add the sceneData and SSBO descriptor
+		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor };
+
+		VkImageView imageView = VK_NULL_HANDLE;
+		if (mesh->p_tex != nullptr && !obj.isSkybox) {
+			imageView = mesh->p_tex->imageView;
+		}
+		VkDescriptorImageInfo imageBufferInfo{
+			.sampler = _linearSampler,
+			.imageView = imageView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		VkWriteDescriptorSet texture1 =
+			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				VK_NULL_HANDLE, &imageBufferInfo, 0);
+		vkCmdPushDescriptorSetKHR(
+			cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
+
+		_renderContext.pushConstantData = {
+			.hasTexture = (mesh->p_tex != nullptr),
+			.lightAffected = model->lightAffected,
+			.isCubemap = obj.isSkybox
+		};
+
+		vkCmdPushConstants(
+			cmd, mesh->material->pipelineLayout,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
+			&_renderContext.pushConstantData);
+
+		// If the material is different, bind the new material
+		if (mesh->material != *lastMaterial) {
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipeline);
+
+			{
+				VkViewport viewport{
+					.x = 0.0f,
+					.y = 0.0f,
+					.width = static_cast<float>(_viewport.imageExtent.width),
+					.height = static_cast<float>(_viewport.imageExtent.height),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f
+				};
+
+				vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+				VkRect2D scissor{
+					.offset = { 0, 0 },
+					.extent = { _viewport.imageExtent.width, _viewport.imageExtent.height }
+				};
+
+				vkCmdSetScissor(cmd, 0, 1, &scissor);
+			}
+
+
+			*lastMaterial = mesh->material;
+			// Bind the descriptor sets
+			vkCmdBindDescriptorSets(
+				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
+		}
+
+		if (mesh != *lastMesh) {
+			VkDeviceSize zeroOffset = 0;
+			vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
+
+			vkCmdBindIndexBuffer(cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+			*lastMesh = mesh;
+		}
+
+		// Ve send loop index as instance index to use it in shader to access object data in SSBO
+		vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, index);
+	}
+}
 
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
@@ -63,57 +147,13 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 				float avg = sum / (float)lums.size();
 				float exposureAvg = 9.6 * (avg + 0.0001);
 
-				//auto& expW = _renderContext.exposureWindow;
-				//auto& kW = _renderContext.kWindow;
-				//auto& ei = _renderContext.expWinI;
+				_renderContext.targetExposure = exposureAvg;
 
-				//static float timePassed = 0;
-				//static float timeT = 0.2f;
-
-				//timePassed += _deltaTime;
-
-				//if (timePassed > timeT) {
-				//	expW[ei].exp = sd.exposureAverage;
-				//	//expW[ei].time = 0;
-				//	//expW[ei].decay = 1.f;
-
-				//	//expW[ei].decay = kW[ei];
-
-				//	/*int prev = ei - 1;
-				//	if (prev < 0) {
-				//		prev = MAX_EXP_WINDOW - 1;
-				//	}
-
-				//	expW[prev].time += timePassed;
-				//	expW[prev].decay = exp(-expW[prev].time);*/
-
-				//	ei = (ei + 1) % MAX_EXP_WINDOW;
-				//	timePassed = 0;
-				//}
-
-				//float total = 0;
-
-				//for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
-				//	//expW[i].time += _deltaTime;
-				//	//expW[i].decay = exp(-expW[i].time * (timeT * 4.60517) / MAX_EXP_WINDOW / 10.f);
-
-				//	// Exponencial decay
-				//	total += expW[i].exp * expW[i].decay;
-				//}
-				//total /= MAX_EXP_WINDOW;
-
-				//static int prevExp = 1;
-				
-				//sd.exposureAverage = expW[MAX_EXP_WINDOW - 1].exp + (total - expW[MAX_EXP_WINDOW-1].exp) / 10.f;
-
-				//float a = 2.f / (MAX_EXP_WINDOW + 1);
-				//float a = 100.f * _deltaTime;
+			
 				float a = _renderContext.exposureBlendingFactor * _deltaTime;
 				a = std::clamp(a, 0.0001f, 0.99f);
 				// Final exposure
 				sd.exposureAverage = a * exposureAvg + (1 - a) * sd.exposureAverage;
-
-				//prevExp = sd.exposureAverage;
 
 				// Store GPU luminance values before clearing them up
 				int tmpLum[arr_size];
@@ -140,11 +180,10 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		);
 	}
 
-	uint32_t extentX = _viewport.imageExtent.width;
-	uint32_t extentY = _viewport.imageExtent.height;
+	
 
 	glm::mat4 viewMat = _inp.camera.GetViewMat();
-	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, extentX, extentY);
+	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
 
 	GPUCameraData camData{
 		.view = viewMat,
@@ -160,87 +199,11 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < objects.size(); i++) {
-		const RenderObject& obj = *objects[i];
-		Model* model = obj.model;
-
-		for (int m = 0; m < model->meshes.size(); ++m) {
-			Mesh* mesh = model->meshes[m];
-
-			ASSERT(mesh && mesh->material);
-
-			//offset for our scene buffer
-			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-
-			// Always add the sceneData and SSBO descriptor
-			std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor };
-
-			VkImageView imageView = VK_NULL_HANDLE;
-			if (mesh->p_tex != nullptr) {
-				imageView = mesh->p_tex->imageView;
-			}
-			VkDescriptorImageInfo imageBufferInfo{
-				.sampler = _linearSampler,
-				.imageView = imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-			VkWriteDescriptorSet texture1 =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					VK_NULL_HANDLE, &imageBufferInfo, 0);
-			vkCmdPushDescriptorSetKHR(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
-
-			_renderContext.pushConstantData.hasTexture = (mesh->p_tex != nullptr);
-			_renderContext.pushConstantData.lightAffected = model->lightAffected;
-
-			vkCmdPushConstants(
-				cmd, mesh->material->pipelineLayout,
-				VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
-				&_renderContext.pushConstantData);
-
-			// If the material is different, bind the new material
-			if (mesh->material != lastMaterial) {
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipeline);
-
-				{
-					VkViewport viewport{
-						.x = 0.0f,
-						.y = 0.0f,
-						.width = static_cast<float>(extentX),
-						.height = static_cast<float>(extentY),
-						.minDepth = 0.0f,
-						.maxDepth = 1.0f
-					};
-
-					vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-					VkRect2D scissor{
-						.offset = { 0, 0 },
-						.extent = { extentX, extentY }
-					};
-
-					vkCmdSetScissor(cmd, 0, 1, &scissor);
-				}
-
-
-				lastMaterial = mesh->material;
-				// Bind the descriptor sets
-				vkCmdBindDescriptorSets(
-					cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
-			}
-
-			if (mesh != lastMesh) {
-				VkDeviceSize zeroOffset = 0;
-				vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
-
-				vkCmdBindIndexBuffer(cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-				lastMesh = mesh;
-			}
-
-			// Ve send loop index as instance index to use it in shader to access object data in SSBO
-			vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, i);
-		}
+		drawObject(cmd, objects[i], &lastMaterial, &lastMesh, i);
 	}
+
+	// Draw skybox as the last object
+	drawObject(cmd, _skyboxObject, &lastMaterial, &lastMesh, 0);
 }
 
 void Engine::drawFrame()

@@ -322,27 +322,31 @@ void Engine::initDescriptors()
     }
 
     { // Object descriptor set (SSBO)
-        VkDescriptorSetLayoutBinding objectBind =
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-
-        VkDescriptorSetLayoutCreateInfo set2info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = 0,
-            .bindingCount = 1,
-            .pBindings = &objectBind
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {
+            // SSBO, both shaders, binding 0
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0),
+            // Skybox, fragment shader, binding 1
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
         };
 
-        VKASSERT(vkCreateDescriptorSetLayout(_device, &set2info, nullptr, &_objectSetLayout));
+        VkDescriptorSetLayoutCreateInfo objectSkyboxSetInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .flags = 0,
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings = bindings.data()
+        };
+
+        VKASSERT(vkCreateDescriptorSetLayout(_device, &objectSkyboxSetInfo, nullptr, &_objectSetLayout));
         _deletionStack.push([&]() {
             vkDestroyDescriptorSetLayout(_device, _objectSetLayout, nullptr);
             });
     }
 
-    { // 1 texture descriptor set
+    { // Diffuse texture descriptor set
         VkDescriptorSetLayoutBinding textureBind =
             vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-        VkDescriptorSetLayoutCreateInfo set3info = {
+        VkDescriptorSetLayoutCreateInfo diffuseSetInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             // This is a push descriptor set !
             .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -350,9 +354,9 @@ void Engine::initDescriptors()
             .pBindings = &textureBind
         };
 
-        vkCreateDescriptorSetLayout(_device, &set3info, nullptr, &_singleTextureSetLayout);
+        vkCreateDescriptorSetLayout(_device, &diffuseSetInfo, nullptr, &_diffuseTextureSetLayout);
         _deletionStack.push([&]() {
-            vkDestroyDescriptorSetLayout(_device, _singleTextureSetLayout, nullptr);
+            vkDestroyDescriptorSetLayout(_device, _diffuseTextureSetLayout, nullptr);
             });
     }
 }
@@ -414,52 +418,67 @@ void Engine::initFrame(FrameData& f)
     }
 
     {
-        f.cameraBuffer = createBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        VkDescriptorSetAllocateInfo camSceneSetAllocInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = _descriptorPool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &_globalSetLayout
-        };
-        vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);
+        std::vector<VkWriteDescriptorSet> setWrites;
+        
+        {
+            f.cameraBuffer = createBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            VkDescriptorSetAllocateInfo camSceneSetAllocInfo{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = _descriptorPool,
+                .descriptorSetCount = 1,
+                .pSetLayouts = &_globalSetLayout
+            };
+            vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);
 
-        // Create SSBO with all objects data
-        f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-        VkDescriptorSetAllocateInfo objectSetAlloc = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = _descriptorPool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &_objectSetLayout
-        };
-
-        vkAllocateDescriptorSets(_device, &objectSetAlloc, &f.objectDescriptor);
-
-        VkDescriptorBufferInfo cameraInfo{
+            VkDescriptorBufferInfo cameraInfo{
             .buffer = f.cameraBuffer.buffer,
             .offset = 0,
             .range = sizeof(GPUCameraData)
-        };
+            };
 
-        VkDescriptorBufferInfo sceneInfo{
-            .buffer = _sceneParameterBuffer.buffer,
-            .offset = 0,
-            .range = sizeof(GPUSceneData)
-        };
+            VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);
 
-        VkDescriptorBufferInfo objectInfo{
-            .buffer = f.objectBuffer.buffer,
-            .offset = 0,
-            .range = sizeof(GPUSSBOData)
-        };
+            setWrites.push_back(cameraWrite);
 
-        VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);
-        VkWriteDescriptorSet sceneWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, f.globalDescriptor, &sceneInfo, 1);
-        VkWriteDescriptorSet objectWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, f.objectDescriptor, &objectInfo, 0);
+            VkDescriptorBufferInfo sceneInfo{
+                .buffer = _sceneParameterBuffer.buffer,
+                .offset = 0,
+                .range = sizeof(GPUSceneData)
+            };
 
-        VkWriteDescriptorSet setWrites[] = { cameraWrite, sceneWrite, objectWrite };
+            VkWriteDescriptorSet sceneWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, f.globalDescriptor, &sceneInfo, 1);
 
-        vkUpdateDescriptorSets(_device, 3, setWrites, 0, nullptr);
+            setWrites.push_back(sceneWrite);
+        }
+
+        {
+            // Create SSBO with all objects data
+            f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+            VkDescriptorSetAllocateInfo objectSetAlloc = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = _descriptorPool,
+                .descriptorSetCount = 1,
+                .pSetLayouts = &_objectSetLayout
+            };
+
+            vkAllocateDescriptorSets(_device, &objectSetAlloc, &f.objectDescriptor);
+
+            VkDescriptorBufferInfo objectInfo = {
+                .buffer = f.objectBuffer.buffer,
+                .offset = 0,
+                .range = sizeof(GPUSSBOData)
+            };
+
+            
+
+            VkWriteDescriptorSet objectWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, f.objectDescriptor, &objectInfo, 0);
+
+            setWrites.push_back(objectWrite);
+            //setWrites.push_back(skyboxWrite);
+        }
+
+        vkUpdateDescriptorSets(_device, setWrites.size(), setWrites.data(), 0, nullptr);
     }
 
     _deletionStack.push([&]() { f.cleanup(_device, _allocator); });

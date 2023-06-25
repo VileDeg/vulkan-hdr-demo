@@ -2,6 +2,11 @@
 
 #include "types.h"
 
+enum TextureDynamicRangeType {
+    TEX_SDR, TEX_HDR
+};
+
+
 struct VertexInputDescription {
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> attributes;
@@ -44,6 +49,8 @@ namespace std {
 }
 
 struct Material {
+    std::string tag = "";
+
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
 
@@ -78,8 +85,10 @@ struct Model {
     std::string tag = "";
 
     std::vector<Mesh*> meshes;
+
     bool lightAffected = true;
     bool useObjectColor = false;
+
     float maxExtent{ 0.f };
 };
 
@@ -87,9 +96,10 @@ struct RenderObject {
     std::string tag = "";
 
     glm::vec4 color{};
-    
 
     Model* model;
+
+    bool isSkybox = false;
 
     glm::vec3 pos{0.f};
     glm::vec3 rot{0.f};
@@ -125,7 +135,7 @@ struct GPUCameraData {
 struct GPUPushConstantData {
     int hasTexture;
     int lightAffected;
-    int useObjectColor;
+    int isCubemap;
     int _pad0{ 0 };
 };
 
@@ -185,15 +195,6 @@ struct GPUSceneData {
     Light lights[MAX_LIGHTS];
 };
 
-
-//#define MAX_EXP_WINDOW 1
-//
-//struct ExposureFrame {
-//    float exp = 1.f;
-//    //float time = 0;
-//    float decay = 1.f / MAX_EXP_WINDOW;
-//};
-
 struct RenderContext {
     GPUSceneData sceneData{};
     GPUSSBOData ssboData{};
@@ -204,11 +205,7 @@ struct RenderContext {
     glm::vec2 luminanceHistogramBounds{ .3, .95 };
 
     float exposureBlendingFactor = 1.2f;
-
-    //ExposureFrame exposureWindow[MAX_EXP_WINDOW]{};
-    //int expWinI = 0;
-    
-    //float kWindow[MAX_EXP_WINDOW] = {.1, .2, .3, .4};
+    float targetExposure = 1.f; // Used for plotting
 
     void Init();
 

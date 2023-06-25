@@ -5,7 +5,8 @@ layout(location = 1) in vec3 fragColor;
 layout(location = 2) in vec2 texCoord;
 layout(location = 3) in flat vec4 objectColor;
 layout(location = 4) in vec3 normal;
-//layout(location = 5) in flat int objectIndex;
+
+layout(location = 5) in vec3 uvw; //For cubemap sampling
 
 layout(location = 0) out vec4 FragColor;
 
@@ -28,11 +29,13 @@ layout(set = 0, binding = 1) uniform SceneData {
 layout(push_constant) uniform PushConstants {
     int hasTextures;
     int lightAffected;
+    int isCubemap;
     int _pad0;
-    int _pad1;
 } pc;
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
+
+layout(set = 1, binding = 1) uniform samplerCube skybox;
 
 //const float keyValue = 0.18; // middle gray
 const float eps = 0.001;
@@ -49,16 +52,26 @@ void main()
 
     vec3 result = vec3(0);
 
-    if (pc.hasTextures == 1) {
-        result = texture(diffuse, texCoord).rgb; 
+    if (pc.isCubemap == 1) {
+        result = texture(skybox, uvw).rgb;
     } else {
-        result = objectColor.rgb;
+        if (pc.hasTextures == 1) {
+            result = texture(diffuse, texCoord).rgb; 
+        } else {
+            result = objectColor.rgb;
+        }
     }
+    
 
     float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
     if (pc.lightAffected == 1) {
-        result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
+
+        if (pc.isCubemap == 0) {
+            result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
+        } else {
+            //result *= 1000;
+        }
 
         // Apply exposure
         //result *= ssbo.exposure;

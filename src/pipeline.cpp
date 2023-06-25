@@ -57,8 +57,10 @@ void Engine::createPipelines()
 {
     PipelineData pd_general{
         .shaders = loadShaders(_device, "shader.vert.spv", "shader.frag.spv"),
-        .setLayouts = { _globalSetLayout, _objectSetLayout, _singleTextureSetLayout }
+        .setLayouts = { _globalSetLayout, _objectSetLayout, _diffuseTextureSetLayout }
     };
+
+ 
 
     /*PipelineData pd_color_light{
         .shaders = loadShaders(_device, "shader.vert.spv", "color_light.frag.spv"),
@@ -76,13 +78,23 @@ void Engine::createPipelines()
         pipeline.Build(_device, _mainRenderpass);
 
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
-
-        pd.shaders.cleanup(_device);
     };
 
     newMaterial("general", pd_general);
-
     _mainPipeline = _materials["general"].pipeline;
+
+
+    Pipeline pipeline_skybox(pd_general);
+    pipeline_skybox.Init();
+    pipeline_skybox.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+
+
+    pipeline_skybox.Build(_device, _mainRenderpass);
+
+    createMaterial(pipeline_skybox.pipeline, pipeline_skybox.layout, "skybox");
+
+    pd_general.shaders.cleanup(_device);
+    
     /*newMaterial("color_light", pd_color_light);
     newMaterial("color_no_light", pd_color_no_light);*/
 }
@@ -140,7 +152,7 @@ void Pipeline::Init()
     };
 
     pushConstantRange = {
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .offset = 0,
         .size = sizeof(GPUPushConstantData)
     };

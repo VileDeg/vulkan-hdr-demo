@@ -100,8 +100,6 @@ struct InputContext {
     bool toneMappingEnabled = true;
     bool exposureEnabled = true;
 
-    bool uiEnabled = true;
-
     std::function<void(void)> onFramebufferResize = nullptr;
 };
 

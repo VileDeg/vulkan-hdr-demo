@@ -7,37 +7,8 @@
 
 #include "imgui/implot.h"
 
-#define USE_IMGUI 1
-
-#if USE_IMGUI
-
 // utility structure for realtime plot
-struct ScrollingBuffer {
-	int MaxSize;
-	int Offset;
-	ImVector<ImVec2> Data;
-	ScrollingBuffer(int max_size = 2000) {
-		MaxSize = max_size;
-		Offset = 0;
-		Data.reserve(MaxSize);
-	}
-	void AddPoint(float x, float y) {
-		if (Data.size() < MaxSize)
-			Data.push_back(ImVec2(x, y));
-		else {
-			Data[Offset] = ImVec2(x, y);
-			Offset = (Offset + 1) % MaxSize;
-		}
-	}
-	void Erase() {
-		if (Data.size() > 0) {
-			Data.shrink(0);
-			Offset = 0;
-		}
-	}
-};
-
-// utility structure for realtime plot
+// From implot.cpp
 struct RollingBuffer {
 	float Span;
 	ImVector<ImVec2> Data;
@@ -103,13 +74,12 @@ void Engine::initImgui()
 
 	io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/static/CascadiaMono-Bold.ttf", 18.0f * fontScale);
 	io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/CascadiaMono.ttf", 18.0f * fontScale);
-	//bold->Scale = font->Scale = fontScale;
-	//io.FontGlobalScale = fontScale;
+	
 
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsClassic();
+	
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
@@ -119,10 +89,6 @@ void Engine::initImgui()
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	//Set style
-	//EmbraceTheDarkness();
-
-	
 
 	//this initializes imgui for SDL
 	ImGui_ImplGlfw_InitForVulkan(_window, true);
@@ -201,22 +167,16 @@ void Engine::uiUpdateHDR()
 			}
 		}
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
-		ImGui::SeparatorText("Exposure"); {
+		//ImGui::SeparatorText("Exposure"); {
 
-			const char* items[] = { "Log", "Linear" };
-			static int curr = 0;
-			if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
-				_renderContext.ssboData.exposureMode = curr;
-			}
+		//	const char* items[] = { "Log", "Linear" };
+		//	static int curr = 0;
+		//	if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
+		//		_renderContext.ssboData.exposureMode = curr;
+		//	}
 
-			/*float exp = _renderContext.ssboData.exposure;
-			float speed = 0.3f;
-			if (exp - speed < 1.f) {
-				speed = 0.01f;
-			}
-			ImGui::DragFloat("Exposure (EV)", &_renderContext.ssboData.exposure, speed, 0.001f, 100.f);*/
+		ImGui::SeparatorText("Adjust EV steps");
 
-			ImGui::SeparatorText("Adjust EV steps");
 			if (ImGui::Button("-")) {
 				_renderContext.ssboData.exposure -= 1;
 			}
@@ -238,61 +198,51 @@ void Engine::uiUpdateHDR()
 			ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
 			ImGui::Separator();
 
+		ImGui::SeparatorText("Plots");
+
+		if (ImGui::TreeNode("Exposure Window")) {
+			static RollingBuffer rdata, rdata1;
+
+			ImGui::SliderFloat("Blending factor", &_renderContext.exposureBlendingFactor, 1.f, 2.f);
+
+			static float t = 0;
+			t += ImGui::GetIO().DeltaTime;
+
+			static float history = 30.0f;
+			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+
+			rdata.AddPoint(t, _renderContext.ssboData.exposureAverage);
+			rdata.Span = history;
+
+			rdata1.AddPoint(t, _renderContext.targetExposure);
+			rdata1.Span = history;
+
+			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+
+			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+				//ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
+				static float maxY = 0;
+				maxY = _renderContext.targetExposure > maxY ? _renderContext.targetExposure : maxY;
+
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxY + 10, ImGuiCond_Always);
+
+				std::string label = "Exposure (actual)";
+				ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
+
+				label = "Exposure (target)";
+				ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
+
+				ImPlot::EndPlot();
+			}
+
+			ImGui::TreePop();
 		}
-		ImGui::SeparatorText("Exposure Window"); {
-			//static ScrollingBuffer sdata1, sdata2;
-			//static RollingBuffer rdata[MAX_EXP_WINDOW];
 
-			//ImVec2 mouse = ImGui::GetMousePos();
-
-			//ImGui::SliderFloat("Blending factor", &_renderContext.blendingFactor, 0.0001f, 100000.f);
-
-			//static float t = 0;
-			//t += ImGui::GetIO().DeltaTime;
-
-			///*auto& expW = _renderContext.exposureWindow;
-			//auto& ei = _renderContext.expWinI;*/
-
-			//static float history = 30.0f;
-			//ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
-
-			///*for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
-			//	rdata[i].AddPoint(t, expW[i].decay);
-			//	rdata[i].Span = history;
-
-			//	ImGui::Text("%f %f", expW[i].exp, expW[i].decay);
-			//}*/
-
-			//static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
-
-			///*if (ImPlot::BeginPlot("##Scrolling", ImVec2(-1, 150))) {
-			//	ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
-			//	ImPlot::SetupAxisLimits(ImAxis_X1, t - history, t, ImGuiCond_Always);
-			//	ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1);
-			//	ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
-			//	ImPlot::PlotShaded("Mouse X", &sdata1.Data[0].x, &sdata1.Data[0].y, sdata1.Data.size(), -INFINITY, 0, sdata1.Offset, 2 * sizeof(float));
-			//	ImPlot::PlotLine("Mouse Y", &sdata2.Data[0].x, &sdata2.Data[0].y, sdata2.Data.size(), 0, sdata2.Offset, 2 * sizeof(float));
-			//	ImPlot::EndPlot();
-			//}*/
-
-			//
-
-			//if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200), ImPlotFlags_CanvasOnly)) {
-			//	ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
-			//	ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
-			//	ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1);
-			//	for (int i = 0; i < MAX_EXP_WINDOW; ++i) {
-			//		std::string label = "Exposure " + std::to_string(i);
-			//		ImPlot::PlotLine(label.c_str(), &rdata[i].Data[0].x, &rdata[i].Data[0].y, rdata[i].Data.size(), 0, 0, 2 * sizeof(float));
-			//	}
-			//	//ImPlot::PlotLine("Mouse Y", &rdata2.Data[0].x, &rdata2.Data[0].y, rdata2.Data.size(), 0, 0, 2 * sizeof(float));
-			//	ImPlot::EndPlot();
-			//}
-
-		}
-		ImGui::SeparatorText("Histogram"); {
-
-			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 0), ImPlotFlags_CanvasOnly)) {
+		if (ImGui::TreeNode("Histogram")) {
+			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
 				GPUSSBOData& sd = _renderContext.ssboData;
 				constexpr int arr_size = ARRAY_SIZE(sd.luminance);
 
@@ -303,7 +253,7 @@ void Engine::uiUpdateHDR()
 					xs[i] = i;
 				}
 
-				// Skip N%
+				// Skip values that don't lie withing bounds
 				int start_i = arr_size * _renderContext.luminanceHistogramBounds.x;
 				int end_i = arr_size * _renderContext.luminanceHistogramBounds.y;
 
@@ -312,6 +262,7 @@ void Engine::uiUpdateHDR()
 				auto it = std::max_element(vals.begin(), vals.end());
 				int maxBin = *it;
 
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
 
 				ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
@@ -319,25 +270,20 @@ void Engine::uiUpdateHDR()
 
 				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
 
-				/*auto style = ImPlot::GetStyle();
-				ImPlot::StyleColorsAuto(&style);*/
-
-				//ImPlot::SetNextLineStyle({ 0., 0., 0.5, 1. });
-				/*ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(5.f, 10.f));
-				ImPlot::PushStyleVar(ImPlotStyleVar_LabelPadding, ImVec2(5.f, 10.f));*/
 
 				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
 
-				/*ImPlot::SetNextLineStyle({ 1., 0., 0., 1. });
 
-				ImPlot::PlotStems("Luminance", xs, vals.data(), 2, start_i, end_i - start_i);*/
+				int xs1[2] = {start_i, end_i};
+				int vals1[2] = { vals[start_i], vals[end_i] };
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
 
-				//ImPlot::PlotStems("Luminance", xs, boundVals.data(), bins);
+				ImPlot::PlotStems("Bounds", xs1, vals1, 2);
 
-				//ImPlot::PopStyleVar();
 
 				ImPlot::EndPlot();
 			}
+			ImGui::TreePop();
 		}
 		ImGui::TreePop();
 	}
@@ -400,9 +346,6 @@ void Engine::uiUpdateRenderContext()
 
 void Engine::imguiUpdate()
 {
-	if (!_inp.uiEnabled) {
-		return;
-	}
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -543,8 +486,6 @@ void Engine::imguiUpdate()
 		ImGui::End();
 
 
-
-
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 
 
@@ -588,17 +529,11 @@ void Engine::imguiUpdate()
 
 void Engine::imguiOnDrawStart()
 {
-	if (!_inp.uiEnabled) {
-		return;
-	}
 	ImGui::Render();
 }
 
 void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
 {
-	if (!_inp.uiEnabled) {
-		return;
-	}
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer); //, _mainPipeline
 
 	ImGuiIO& io = ImGui::GetIO();
@@ -610,102 +545,3 @@ void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
 		//fwMakeContextCurrent(backup_current_context);
 	}
 }
-
-
-static void EmbraceTheDarkness()
-{
-	//This style is freely available from ImGui github issue
-	//https://github.com/ocornut/imgui/issues/707
-	ImVec4* colors = ImGui::GetStyle().Colors;
-	colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-	colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-	colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
-	colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-	colors[ImGuiCol_PopupBg] = ImVec4(0.19f, 0.19f, 0.19f, 0.92f);
-	colors[ImGuiCol_Border] = ImVec4(0.19f, 0.19f, 0.19f, 0.29f);
-	colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.24f);
-	colors[ImGuiCol_FrameBg] = ImVec4(0.05f, 0.05f, 0.05f, 0.54f);
-	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.19f, 0.19f, 0.19f, 0.54f);
-	colors[ImGuiCol_FrameBgActive] = ImVec4(0.20f, 0.22f, 0.23f, 1.00f);
-	colors[ImGuiCol_TitleBg] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_TitleBgActive] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
-	colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_MenuBarBg] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-	colors[ImGuiCol_ScrollbarBg] = ImVec4(0.05f, 0.05f, 0.05f, 0.54f);
-	colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.34f, 0.34f, 0.34f, 0.54f);
-	colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.40f, 0.40f, 0.40f, 0.54f);
-	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.56f, 0.56f, 0.56f, 0.54f);
-	colors[ImGuiCol_CheckMark] = ImVec4(0.33f, 0.67f, 0.86f, 1.00f);
-	colors[ImGuiCol_SliderGrab] = ImVec4(0.34f, 0.34f, 0.34f, 0.54f);
-	colors[ImGuiCol_SliderGrabActive] = ImVec4(0.56f, 0.56f, 0.56f, 0.54f);
-	colors[ImGuiCol_Button] = ImVec4(0.05f, 0.05f, 0.05f, 0.54f);
-	colors[ImGuiCol_ButtonHovered] = ImVec4(0.19f, 0.19f, 0.19f, 0.54f);
-	colors[ImGuiCol_ButtonActive] = ImVec4(0.20f, 0.22f, 0.23f, 1.00f);
-	colors[ImGuiCol_Header] = ImVec4(0.00f, 0.00f, 0.00f, 0.52f);
-	colors[ImGuiCol_HeaderHovered] = ImVec4(0.00f, 0.00f, 0.00f, 0.36f);
-	colors[ImGuiCol_HeaderActive] = ImVec4(0.20f, 0.22f, 0.23f, 0.33f);
-	colors[ImGuiCol_Separator] = ImVec4(0.28f, 0.28f, 0.28f, 0.29f);
-	colors[ImGuiCol_SeparatorHovered] = ImVec4(0.44f, 0.44f, 0.44f, 0.29f);
-	colors[ImGuiCol_SeparatorActive] = ImVec4(0.40f, 0.44f, 0.47f, 1.00f);
-	colors[ImGuiCol_ResizeGrip] = ImVec4(0.28f, 0.28f, 0.28f, 0.29f);
-	colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.44f, 0.44f, 0.44f, 0.29f);
-	colors[ImGuiCol_ResizeGripActive] = ImVec4(0.40f, 0.44f, 0.47f, 1.00f);
-	colors[ImGuiCol_Tab] = ImVec4(0.00f, 0.00f, 0.00f, 0.52f);
-	colors[ImGuiCol_TabHovered] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-	colors[ImGuiCol_TabActive] = ImVec4(0.20f, 0.20f, 0.20f, 0.36f);
-	colors[ImGuiCol_TabUnfocused] = ImVec4(0.00f, 0.00f, 0.00f, 0.52f);
-	colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-	colors[ImGuiCol_DockingPreview] = ImVec4(0.33f, 0.67f, 0.86f, 1.00f);
-	colors[ImGuiCol_DockingEmptyBg] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_PlotLines] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_PlotHistogram] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_TableHeaderBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.52f);
-	colors[ImGuiCol_TableBorderStrong] = ImVec4(0.00f, 0.00f, 0.00f, 0.52f);
-	colors[ImGuiCol_TableBorderLight] = ImVec4(0.28f, 0.28f, 0.28f, 0.29f);
-	colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-	colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
-	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.20f, 0.22f, 0.23f, 1.00f);
-	colors[ImGuiCol_DragDropTarget] = ImVec4(0.33f, 0.67f, 0.86f, 1.00f);
-	colors[ImGuiCol_NavHighlight] = ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
-	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 0.00f, 0.00f, 0.70f);
-	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(1.00f, 0.00f, 0.00f, 0.20f);
-	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(1.00f, 0.00f, 0.00f, 0.35f);
-
-	ImGuiStyle& style = ImGui::GetStyle();
-	style.WindowPadding = ImVec2(8.00f, 8.00f);
-	style.FramePadding = ImVec2(5.00f, 2.00f);
-	style.CellPadding = ImVec2(6.00f, 6.00f);
-	style.ItemSpacing = ImVec2(6.00f, 6.00f);
-	style.ItemInnerSpacing = ImVec2(6.00f, 6.00f);
-	style.TouchExtraPadding = ImVec2(0.00f, 0.00f);
-	style.IndentSpacing = 25;
-	style.ScrollbarSize = 15;
-	style.GrabMinSize = 10;
-	style.WindowBorderSize = 1;
-	style.ChildBorderSize = 1;
-	style.PopupBorderSize = 1;
-	style.FrameBorderSize = 1;
-	style.TabBorderSize = 1;
-	style.WindowRounding = 7;
-	style.ChildRounding = 4;
-	style.FrameRounding = 3;
-	style.PopupRounding = 4;
-	style.ScrollbarRounding = 9;
-	style.GrabRounding = 3;
-	style.LogSliderDeadzone = 4;
-	style.TabRounding = 4;
-}
-
-#else
-
-void Engine::initImgui() {}
-
-void Engine::imguiUpdate() {}
-
-void Engine::imguiOnDrawStart() {}
-
-void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer) {}
-
-#endif

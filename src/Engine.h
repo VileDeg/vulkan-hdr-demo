@@ -3,6 +3,7 @@
 #include "types.h"
 #include "resources.h"
 
+
 class Engine {
 public:
     Engine() : _inp([this]() { drawFrame(); }) {}
@@ -50,7 +51,11 @@ private: /* Secondary methods */
     void initFrame(FrameData& f);
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
-    Texture* loadTextureFromFile(const std::string path);
+
+    Texture* loadTextureFromFile(const char* path);
+    //Texture* loadTextureFromFileHDR(const char* path);
+
+    void loadCubemap(const char* cubemapDirName, bool isHDR);
 
     void uploadMesh(Mesh& mesh);
     void createMeshBuffer(Mesh& mesh, bool isVertexBuffer);
@@ -66,7 +71,9 @@ private: /* Secondary methods */
 
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
+    void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
+
     void drawFrame();
 
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
@@ -147,7 +154,8 @@ private:
 
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorSetLayout _objectSetLayout;
-    VkDescriptorSetLayout _singleTextureSetLayout;
+    VkDescriptorSetLayout _diffuseTextureSetLayout;
+    VkDescriptorSetLayout _skyboxTextureSetLayout;
 
     VkSampler _blockySampler;
     VkSampler _linearSampler;
@@ -156,6 +164,9 @@ private:
 
     AllocatedBuffer _sceneParameterBuffer;
     RenderContext _renderContext;
+
+    //Texture* _skyboxTexture;
+    std::shared_ptr<RenderObject> _skyboxObject;
 
 private:
     PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
@@ -178,7 +189,7 @@ private:
 public:
     inline static std::string _assetPath = "assets/";
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
-    inline static std::string imagePath  = _assetPath + "models/";
+    inline static std::string imagePath  = _assetPath + "images/";
     inline static std::string modelPath  = _assetPath + "models/";
 
 private:

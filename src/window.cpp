@@ -36,7 +36,7 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             break;
         case GLFW_KEY_C: // Toggle cursor
             toggle(inp->cursorEnabled);
-            glfwSetInputMode(window, GLFW_CURSOR, 
+            glfwSetInputMode(window, GLFW_CURSOR,
                 inp->cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
         case GLFW_KEY_T: // Toggle tone mapping
@@ -44,9 +44,6 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             break;
         case GLFW_KEY_E: // Toggle exposure
             toggle(inp->exposureEnabled);
-            break;
-        case GLFW_KEY_I: // Toggle user interface
-            toggle(inp->uiEnabled);
             break;
         }
     }
