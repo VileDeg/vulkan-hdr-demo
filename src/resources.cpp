@@ -286,6 +286,9 @@ void Engine::createScene(const std::string mainModelFullPath)
 
 void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 {
+	// Partially based on Sascha Willems' cubemap demo: 
+	// https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
+
 	ASSERT(loadModelFromObj("cube", Engine::modelPath + "cube/cube.obj"));
 
 	constexpr const char* suff[6] = { "XP", "XN", "YP", "YN", "ZP", "ZN" };
@@ -334,12 +337,16 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			ASSERT(baseTexW == texW && baseTexH == texH && baseTexChannels == texChannels);
 		}
 
+		
+
 		// Copy data to buffer
-		stagingBuffer.runOnMemoryMap(_allocator, [&](void* data) {
-			// Offset into buffer
-			void* dst = (char*)data + bufferOffset;
-			memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
-			});
+		void* dst = (char*)stagingBuffer.gpu_ptr + bufferOffset;
+		memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
+		//stagingBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+		//	// Offset into buffer
+		//	void* dst = (char*)data + bufferOffset;
+		//	memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
+		//	});
 		// We no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
 		stbi_image_free(pixel_ptr);
 
@@ -465,8 +472,8 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.imageView, nullptr);
-		newTexture.image.destroy(_allocator);
-		});
+		vmaDestroyImage(_allocator, newTexture.image.image, newTexture.image.allocation);
+	});
 
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
@@ -750,9 +757,10 @@ Texture* Engine::loadTextureFromFile(const char* path)
 	AllocatedBuffer stagingBuffer = createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	//copy data to buffer
-	stagingBuffer.runOnMemoryMap(_allocator, [&](void* data) {
+	memcpy(stagingBuffer.gpu_ptr, pixel_ptr, static_cast<size_t>(imageSize));
+	/*stagingBuffer.runOnMemoryMap(_allocator, [&](void* data) {
 		memcpy(data, pixel_ptr, static_cast<size_t>(imageSize));
-	});
+	});*/
 
 	//we no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
 	stbi_image_free(pixels);
@@ -837,7 +845,8 @@ Texture* Engine::loadTextureFromFile(const char* path)
 
 	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.imageView, nullptr);
-		newTexture.image.destroy(_allocator);
+		//newTexture.image.destroy(_allocator);
+		vmaDestroyImage(_allocator, newTexture.image.image, newTexture.image.allocation);
 		});
 
 	stagingBuffer.destroy(_allocator);
@@ -856,7 +865,7 @@ void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 		mesh.vertices.size() * sizeof(Vertex) :
 		mesh.indices.size() * sizeof(uint32_t);
 
-	VkBufferCreateInfo stagingBufferInfo = {
+	/*VkBufferCreateInfo stagingBufferInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = bufferSize,
 		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -865,44 +874,51 @@ void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 
 	VmaAllocationCreateInfo allocInfo = {
 		.usage = VMA_MEMORY_USAGE_CPU_ONLY,
-	};
+	};*/
 
 	// Allocate temporary buffer for holding texture data to upload
-	AllocatedBuffer stagingBuffer;
-	VKASSERT(vmaCreateBuffer(_allocator, &stagingBufferInfo, &allocInfo,
-		&stagingBuffer.buffer, &stagingBuffer.allocation, nullptr));
+	AllocatedBuffer stagingBuffer = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 
-	void* data;
-	vmaMapMemory(_allocator, stagingBuffer.allocation, &data);
+	/*VKASSERT(vmaCreateBuffer(_allocator, &stagingBufferInfo, &allocInfo,
+		&stagingBuffer.buffer, &stagingBuffer.allocation, nullptr));*/
+
+
+	/*void* data;
+	vmaMapMemory(_allocator, stagingBuffer.allocation, &data);*/
 	if (isVertexBuffer) {
-		memcpy(data, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
+		memcpy(stagingBuffer.gpu_ptr, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
 	} else {
-		memcpy(data, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
+		memcpy(stagingBuffer.gpu_ptr, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
 	}
-	vmaUnmapMemory(_allocator, stagingBuffer.allocation);
+	//vmaUnmapMemory(_allocator, stagingBuffer.allocation);
 
 	VkBufferUsageFlags usg = (isVertexBuffer ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	//allocate vertex buffer
-	VkBufferCreateInfo vertexBufferInfo = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		//this is the total size, in bytes, of the buffer we are allocating
-		.size = bufferSize,
-		//this buffer is going to be used as a Vertex Buffer
-		.usage = usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-	};
+	//VkBufferCreateInfo vertexBufferInfo = {
+	//	.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+	//	//this is the total size, in bytes, of the buffer we are allocating
+	//	.size = bufferSize,
+	//	//this buffer is going to be used as a Vertex Buffer
+	//	.usage = usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+	//};
 
-	//let the VMA library know that this data should be GPU native
-	VmaAllocationCreateInfo vmaAllocInfo = {
-		.usage = VMA_MEMORY_USAGE_GPU_ONLY,
-	};
+	////let the VMA library know that this data should be GPU native
+	//VmaAllocationCreateInfo vmaAllocInfo = {
+	//	.usage = VMA_MEMORY_USAGE_GPU_ONLY,
+	//};
+
+	
 
 	AllocatedBuffer& allocBuffer = isVertexBuffer ? mesh.vertexBuffer : mesh.indexBuffer;
+
+	allocBuffer = createBuffer(bufferSize, usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
 	//allocate the buffer
-	VKASSERT(vmaCreateBuffer(_allocator, &vertexBufferInfo, &vmaAllocInfo,
+	/*VKASSERT(vmaCreateBuffer(_allocator, &vertexBufferInfo, &vmaAllocInfo,
 		&allocBuffer.buffer,
 		&allocBuffer.allocation,
-		nullptr));
+		nullptr));*/
 
 	immediate_submit([&](VkCommandBuffer cmd) {
 		VkBufferCopy copy;
@@ -928,6 +944,12 @@ void Engine::uploadMesh(Mesh& mesh)
 	createMeshBuffer(mesh, false);
 }
 
+
+void GPUData::Reset(FrameData fd)
+{
+	ssbo   = reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
+	camera = reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
+}
 
 
 void RenderContext::UpdateLightPosition(int lightIndex, glm::vec3 newPos)
@@ -1023,6 +1045,19 @@ void RenderContext::Init()
 		UpdateLightAttenuation(i, 0);
 	}
 }
+
+
+
+//void RenderContext::UpdateHistogramBoundsIndices(int totalViewportPixels)
+//{
+//	int start_px = totalViewportPixels * luminanceHistogramBounds.x;
+//	int end_px	 = totalViewportPixels * luminanceHistogramBounds.y;
+//
+//	lumHistStartI = getLumIndex(, start_px);
+//	lumHistEndI	  = getLumIndex(lumHist, end_px);
+//
+//	ASSERT(lumHistStartI <= lumHistEndI);
+//}
 
 
 

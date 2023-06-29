@@ -36,5 +36,7 @@ layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
 
     //Lum luminance[MAX_BINS];
     int luminance[MAX_BINS];
+
+
 } ssbo;
 

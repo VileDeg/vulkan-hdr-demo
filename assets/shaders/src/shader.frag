@@ -43,10 +43,10 @@ const float lumMaxTreshold = 0.5;
 
 const float expTerm = 9.6; // Simplified term. From: https://bruop.github.io/exposure/
 
-const double expMin = 1e-9;
-const double expMax = 1e9;
+const float expMin = 1e2;
+const float expMax = 1e-4;
 
-void main() 
+void main()  
 {
     if (ssbo.showNormals == 1) {
         FragColor = vec4(normal, 1.f);
@@ -62,9 +62,10 @@ void main()
             result = texture(diffuse, texCoord).rgb; 
         } else {
             result = objectColor.rgb;
+
         }
     }
-    
+   
 
     float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
@@ -80,23 +81,18 @@ void main()
 
         // Update current max only if current luminance is bigger than 50% of old max
         
-        //lumMaxTreshold * 
         if (lum > uintBitsToFloat(ssbo.newMax)) {
-        //if (lum > uintBitsToFloat(ssbo.oldMax)) {
-            // If difference is not too small, upgrade new max
-            //if (lum - uintBitsToFloat(ssbo.newMax) > eps) {
                 atomicMax(ssbo.newMax, floatBitsToUint(lum));
         }
-            //}
-        //}
-        
         // Update luminance histogram
         int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
-        atomicAdd(ssbo.luminance[bin], 1); //.val
+        atomicAdd(ssbo.luminance[bin], 1);
+        
 
         if (ssbo.exposureON == 1) {
-            double expa = ssbo.exposureAverage + 0.0001;
-            result /= expa;//expMin + (expa / (expa + 1)) * expMax;
+            float expa = ssbo.exposureAverage + 0.0001f;
+            //result = result / (expMin + (expa / (expa + 1)) * expMax);
+            result = result / (expa);
         } 
 
         result *= pow(2, ssbo.exposure);

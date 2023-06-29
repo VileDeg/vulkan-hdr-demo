@@ -1,114 +1,114 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\context.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\context.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\init.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\init.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\input.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\input.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\monitor.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\monitor.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\platform.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\platform.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\vulkan.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\vulkan.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\window.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\window.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\egl_context.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\egl_context.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\osmesa_context.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\osmesa_context.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_init.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_init.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_monitor.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_monitor.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_window.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_window.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_joystick.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_joystick.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_module.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_module.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_time.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_time.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_thread.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_thread.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_init.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_init.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_joystick.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_joystick.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_monitor.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_monitor.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_window.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_window.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\wgl_context.c">
+    <ClCompile Include="C:\dev\vulkan-hdr-demo\external\glfw\src\wgl_context.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\include\GLFW\glfw3.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\include\GLFW\glfw3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\include\GLFW\glfw3native.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\include\GLFW\glfw3native.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\internal.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\platform.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\mappings.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\mappings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_platform.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\null_joystick.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\null_joystick.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_time.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_time.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_thread.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_thread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_platform.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\win32_joystick.h">
+    <ClInclude Include="C:\dev\vulkan-hdr-demo\external\glfw\src\win32_joystick.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\CMakeLists.txt" />
+    <CustomBuild Include="C:\dev\vulkan-hdr-demo\external\glfw\src\CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">
-      <UniqueIdentifier>{4804789A-6D5D-3E7B-B114-9F39AC1008EB}</UniqueIdentifier>
+      <UniqueIdentifier>{ACCBB12A-41B6-35AF-B04D-8FB78A979A59}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files">
-      <UniqueIdentifier>{B99B4FD1-3585-3D57-85BA-EB0519A1DD52}</UniqueIdentifier>
+      <UniqueIdentifier>{1B0AC1AD-7A36-36C8-993E-1366A2A5C51C}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

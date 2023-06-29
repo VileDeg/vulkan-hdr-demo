@@ -3,6 +3,24 @@
 
 #include "imgui/imgui.h"
 
+static int getLumIndex(int(&lumHist)[MAX_LUMINANCE_BINS], int matchPx) {
+	int i = 0;
+	int lum_sum = 0;
+	while (i < MAX_LUMINANCE_BINS) {
+		if ((lum_sum + lumHist[i]) > matchPx) {
+			/*if ((lum_sum + lumHist[i] / 2) < matchPx) {
+				++i;
+			}*/
+			break;
+		}
+		lum_sum += lumHist[i];
+		++i;
+	}
+
+	i = std::clamp(i, 0, MAX_LUMINANCE_BINS-1);
+	return i;
+}
+
 void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index) {
 	const RenderObject& obj = *object;
 	Model* model = obj.model;
@@ -33,16 +51,22 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		vkCmdPushDescriptorSetKHR(
 			cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
 
-		_renderContext.pushConstantData = {
+		// Load push constants to GPU
+		GPUPushConstantData pc = {
 			.hasTexture = (mesh->p_tex != nullptr),
 			.lightAffected = model->lightAffected,
 			.isCubemap = obj.isSkybox
 		};
+		/*_renderContext.pushConstantData = {
+			.hasTexture = (mesh->p_tex != nullptr),
+			.lightAffected = model->lightAffected,
+			.isCubemap = obj.isSkybox
+		};*/
 
 		vkCmdPushConstants(
 			cmd, mesh->material->pipelineLayout,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
-			&_renderContext.pushConstantData);
+			&pc);
 
 		// If the material is different, bind the new material
 		if (mesh->material != *lastMaterial) {
@@ -93,101 +117,121 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 {
 	// Load SSBO to GPU
 	{
-		auto& sd = _renderContext.ssboData;
+		_renderContext.ssboConfigs.exposureON	 = _inp.exposureEnabled;
+		_renderContext.ssboConfigs.toneMappingON = _inp.toneMappingEnabled;
 
-		sd.exposureON = _inp.exposureEnabled;
-		sd.toneMappingON = _inp.toneMappingEnabled;
+		memcpy(&_gpu.ssbo->configs, &_renderContext.ssboConfigs, sizeof(SSBOConfigs));
 
 		for (int i = 0; i < objects.size(); i++) {
+			_gpu.ssbo->objects[i].modelMatrix = objects[i]->Transform();
+			_gpu.ssbo->objects[i].color = objects[i]->color;
+			_gpu.ssbo->objects[i].useObjectColor = objects[i]->model->useObjectColor;
+		}
+		//unsigned int oldMax = _gpu.ssbo->oldMax;
+		std::swap(_gpu.ssbo->newMax, _gpu.ssbo->oldMax);
 
-			sd.objects[i].modelMatrix = objects[i]->Transform();
-			sd.objects[i].color = objects[i]->color;
-			sd.objects[i].useObjectColor = objects[i]->model->useObjectColor;
+		// For optimization purposes we assume that MAX of new frame
+		// won't be more then two times lower.
+		//float nm = 0.5f * oldMax;
+		float nm = 0.f;
+
+		_gpu.ssbo->newMax = *reinterpret_cast<unsigned int*>(&nm);;
+
+		constexpr size_t arr_size = ARRAY_SIZE(_gpu.ssbo->luminance);
+
+		float f_oldMax = *reinterpret_cast<float*>(&_gpu.ssbo->oldMax);
+
+		/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
+		int end_i	= (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
+
+		//int total_px = _viewport.imageExtent.width * _viewport.imageExtent.height;
+
+		int total_px_hist = 0;
+		for (auto& px : _gpu.ssbo->luminance) {
+			total_px_hist += px;
+		}
+
+		if (total_px_hist > 0) { // If histogram was populated
+			//ASSERT(total_px == total_px_hist);
+
+			int start_px = total_px_hist * _renderContext.luminanceHistogramBounds.x;
+			int end_px = total_px_hist * _renderContext.luminanceHistogramBounds.y;
+
+			int& start_i = _renderContext.lumHistStartI;
+			int& end_i = _renderContext.lumHistEndI;
+
+			start_i = getLumIndex(_gpu.ssbo->luminance, start_px);
+			end_i = getLumIndex(_gpu.ssbo->luminance, end_px);
+
+			ASSERT(start_i <= end_i);
+
+			float sum = 0;
+			for (int i = start_i; i < end_i; ++i) {
+				float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
+				float loglum = std::log2(1 + lum);
+				sum += loglum;
+				//lums.push_back(lum);
+			}
+
+			// Compute common
+			float avgLum = 0.f;
+			if (end_i - start_i > 0) {
+				avgLum = sum / (end_i - start_i);
+			}
+			//float avg = 1;
+			//float exposureAvg = 9.6 * (avg + 0.0001);
+			float targetAdp = avgLum;
+
+			_renderContext.targetExposure = targetAdp;
+
+
+			float a = _renderContext.exposureBlendingFactor * _deltaTime * std::log2(1 + targetAdp);
+			//a = std::clamp(a, 0.0001f, 0.99f);
+			// Final exposure
+			_gpu.ssbo->exposureAverage = a * targetAdp + (1 - a) * _gpu.ssbo->exposureAverage;
+			//_gpu.ssbo->exposureAverage = 1.f;
 		}
 
 		// Clear luminance from previous frame
-		memset(sd.luminance, 0, sizeof(sd.luminance));
-
-		getCurrentFrame().objectBuffer.runOnMemoryMap(_allocator,
-			[&](void* data) {
-				GPUSSBOData* gpuSD = (GPUSSBOData*)data;
-
-				unsigned int oldMax = gpuSD->oldMax;
-				std::swap(gpuSD->newMax, gpuSD->oldMax);
-
-				// For optimization purposes we assume that MAX of new frame
-				// won't be more then two times lower.
-				//float nm = 0.5f * oldMax;
-				float nm = 0.f;
-				
-				gpuSD->newMax = *reinterpret_cast<unsigned int*>(&nm);;
-
-				/*pr(gpuSD->oldMax);
-
-				
-				gpuSD->newMax = */
-
-				
-
-				auto& sd = _renderContext.ssboData;
-				sd.newMax = gpuSD->newMax;
-				sd.oldMax = gpuSD->oldMax;
-
-				constexpr size_t arr_size = ARRAY_SIZE(gpuSD->luminance);
-
-				float f_oldMax = *reinterpret_cast<float*>(&gpuSD->oldMax);
-
-				// Skip N%
-				int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
-				int end_i	= (arr_size-1) * _renderContext.luminanceHistogramBounds.y;
-
-				float sum = 0;
-
-				std::vector<int> lums(end_i - start_i);
-				
-				for (int i = start_i; i < end_i; ++i) {
-					float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
-					sum += lum;
-					lums.push_back(lum);
-				}
-
-				// Compute common luminance
-				float avg = sum / (float)lums.size();
-				float exposureAvg = 9.6 * (avg + 0.0001);
-
-				_renderContext.targetExposure = exposureAvg;
-
-			
-				float a = _renderContext.exposureBlendingFactor * _deltaTime;
-				//a = std::clamp(a, 0.0001f, 0.99f);
-				// Final exposure
-				sd.exposureAverage = a * exposureAvg + (1 - a) * sd.exposureAverage;
-
-				//pr(sd.exposureAverage);
-
-				// Store GPU luminance values before clearing them up
-				int tmpLum[arr_size];
-				memcpy(tmpLum, gpuSD->luminance, sizeof(tmpLum));
-				
-				// Load SSBO data to GPU
-				memcpy(data, &sd, sizeof(GPUSSBOData));
-
-				// Copy GPU luminance to CPU side
-				memcpy(sd.luminance, tmpLum, sizeof(tmpLum));
-			}
-		);
+		memset(_gpu.ssbo->luminance, 0, sizeof(_gpu.ssbo->luminance));
 	}
 
 	// Load UNIFORM BUFFER of scene parameters to GPU
 	{
+		//pr("Cam pos: " << V3PR(_renderContext.gpu_sd->cameraPos));
+
+		// Do not use _renderContext.gpu_sd instead of _sceneParameterBuffer.gpu_ptr!!
+		//char* padded = (char*)(_sceneParameterBuffer.gpu_ptr) + pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+
+		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
+		sd += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		//GPUSceneData* sd = (GPUSceneData*)(padded);
+
 		_renderContext.sceneData.cameraPos = _inp.camera.GetPos();
-		_sceneParameterBuffer.runOnMemoryMap(_allocator,
-			[&](void* data) {
-				char* sceneData = (char*)data;
-				sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
-				memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));
-			}
-		);
+
+		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneData));
+
+		//_renderContext.gpu_sd->cameraPos = _inp.camera.GetPos();
+
+		
+
+		/*char* sceneData = (char*)sc;
+		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));*/
+
+		//GPUSceneData sd = {}
+
+		/*char* sceneData = (char*)_sceneParameterBuffer.gpu_ptr;
+		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));*/
+		
+		//_sceneParameterBuffer.runOnMemoryMap(_allocator, // TODO: don't unmap memory
+		//	[&](void* data) {
+		//		char* sceneData = (char*)data;
+		//		sceneData += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		//		memcpy(sceneData, &_renderContext.sceneData, sizeof(GPUSceneData));
+		//	}
+		//);
 	}
 
 	
@@ -195,16 +239,23 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	glm::mat4 viewMat = _inp.camera.GetViewMat();
 	glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
 
-	GPUCameraData camData{
+	/*GPUCameraData camData{
+		.view = viewMat,
+		.proj = projMat,
+		.viewproj = projMat * viewMat,
+	};*/
+
+	*_gpu.camera = {
 		.view = viewMat,
 		.proj = projMat,
 		.viewproj = projMat * viewMat,
 	};
-	getCurrentFrame().cameraBuffer.runOnMemoryMap(_allocator,
-		[&](void* data) {
-			memcpy(data, &camData, sizeof(GPUCameraData));
-		}
-	);
+
+	//getCurrentFrame().cameraBuffer.runOnMemoryMap(_allocator, // TODO: don't unmap memory
+	//	[&](void* data) {
+	//		memcpy(data, &camData, sizeof(GPUCameraData));
+	//	}
+	//);
 
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
@@ -220,11 +271,17 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 void Engine::drawFrame()
 {
+	_frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
+	FrameData& frame = _frames[_frameInFlightNum];
+
+	// Set general GPU pointers to current frame's ones. It's handy.
+	// And they can be accessed in other files (for example UI)
+	_gpu.Reset(getCurrentFrame());
+
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	imguiUpdate();
 
-    _frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
-    FrameData& frame = _frames[_frameInFlightNum];
+    
 
     VKASSERT(vkWaitForFences(_device, 1, &frame.inFlightFence, VK_TRUE, UINT64_MAX));
     VKASSERT(vkResetFences(_device, 1, &frame.inFlightFence));

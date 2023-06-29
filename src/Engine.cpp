@@ -481,7 +481,16 @@ void Engine::initFrame(FrameData& f)
         vkUpdateDescriptorSets(_device, setWrites.size(), setWrites.data(), 0, nullptr);
     }
 
-    _deletionStack.push([&]() { f.cleanup(_device, _allocator); });
+    _deletionStack.push([&]() { 
+        f.cameraBuffer.destroy(_allocator);
+        f.objectBuffer.destroy(_allocator);
+
+        vkDestroyFence(_device, f.inFlightFence, nullptr);
+        vkDestroySemaphore(_device, f.imageAvailableSemaphore, nullptr);
+        vkDestroySemaphore(_device, f.renderFinishedSemaphore, nullptr);
+
+        vkDestroyCommandPool(_device, f.commandPool, nullptr);
+    });
 }
 
 void Engine::createFrameData()

@@ -24,13 +24,12 @@ AllocatedBuffer Engine::createBuffer(size_t allocSize, VkBufferUsageFlags usage,
         .usage = usage
     };
 
-    VmaAllocationCreateInfo vmaallocInfo = {
+    VmaAllocationCreateInfo allocInfo = {
         .usage = memoryUsage
     };
 
     AllocatedBuffer newBuffer;
-    VKASSERT(vmaCreateBuffer(_allocator, &bufferInfo, &vmaallocInfo,
-        &newBuffer.buffer, &newBuffer.allocation, nullptr));
+    newBuffer.create(_allocator, bufferInfo, allocInfo);
 
     return newBuffer;
 }
@@ -72,4 +71,26 @@ void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& functio
 
     // reset the command buffers inside the command pool
     vkResetCommandPool(_device, _uploadContext.commandPool, 0);
+}
+
+void AllocatedBuffer::create(VmaAllocator allocator, VkBufferCreateInfo bufferInfo, VmaAllocationCreateInfo allocInfo) {
+    VKASSERT(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+        &buffer, &allocation, nullptr));
+
+    if (allocInfo.usage == VMA_MEMORY_USAGE_CPU_ONLY ||
+        allocInfo.usage == VMA_MEMORY_USAGE_CPU_TO_GPU ||
+        allocInfo.usage == VMA_MEMORY_USAGE_GPU_TO_CPU)
+    {
+        hostVisible = true;
+        VKASSERT(vmaMapMemory(allocator, allocation, &gpu_ptr));
+    } else {
+        hostVisible = false;
+    }
+}
+
+void AllocatedBuffer::destroy(const VmaAllocator& allocator) {
+    if (hostVisible) {
+        vmaUnmapMemory(allocator, allocation);
+    }
+    vmaDestroyBuffer(allocator, buffer, allocation);
 }

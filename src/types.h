@@ -33,30 +33,29 @@ struct PipelineShaders {
 };
 
 struct AllocatedBuffer {
-    /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkBuffer buffer;
     VmaAllocation allocation;
 
-    void runOnMemoryMap(VmaAllocator allocator, std::function<void(void*)> func) {
+    void* gpu_ptr;
+
+    bool hostVisible;
+
+    /*void runOnMemoryMap(VmaAllocator allocator, std::function<void(void*)> func) {
         void* data;
         vmaMapMemory(allocator, allocation, &data);
         func(data);
         vmaUnmapMemory(allocator, allocation);
-    }
+    }*/
 
-    void destroy(const VmaAllocator& allocator) {
-        vmaDestroyBuffer(allocator, buffer, allocation);
-    }
+    void create(VmaAllocator allocator, VkBufferCreateInfo bufferInfo, VmaAllocationCreateInfo allocInfo);
+    void destroy(const VmaAllocator& allocator);
 };
 
 struct AllocatedImage {
     /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkImage image;
     VmaAllocation allocation;
-
-    void destroy(VmaAllocator& allocator) {
-        vmaDestroyImage(allocator, image, allocation);
-    }
+    
 };
 
 struct FrameData {
@@ -73,8 +72,6 @@ struct FrameData {
 
     VkDescriptorSet globalDescriptor;
     VkDescriptorSet objectDescriptor;
-
-    void cleanup(const VkDevice& device, const VmaAllocator& allocator);
 };
 
 

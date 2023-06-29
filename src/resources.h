@@ -139,6 +139,17 @@ struct GPUPushConstantData {
     int _pad0{ 0 };
 };
 
+struct GPUSceneData {
+    glm::vec3 cameraPos{};
+    int _pad0{};
+
+    glm::vec3 ambientColor{};
+    int _pad1{};
+
+#define MAX_LIGHTS 4
+    Light lights[MAX_LIGHTS];
+};
+
 struct GPUObjectData {
     glm::mat4 modelMatrix;
     glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
@@ -159,12 +170,7 @@ struct GPUObjectData {
 //    int _pad2;
 //};
 
-struct GPUSSBOData {
-    unsigned int newMax{ 0 };
-    unsigned int oldMax{ 0 };
-    float exposureAverage{ 0 };
-    int _pad0;
-
+struct SSBOConfigs {
     int showNormals{ 0 };
     float exposure{ 1.0f };
     int _pad1;
@@ -173,36 +179,59 @@ struct GPUSSBOData {
     int exposureON{ 1 };
     int exposureMode{ 0 };
     int toneMappingON{ 1 };
-    int toneMappingMode{ 0 };
+    int toneMappingMode{ 3 };
+};
+
+
+struct GPUSSBOData {
+    unsigned int newMax{ 0 };
+    unsigned int oldMax{ 0 };
+    float exposureAverage{ 0 };
+    int _pad0;
+
+    SSBOConfigs configs{};
 
 #define MAX_OBJECTS 10
     GPUObjectData objects[MAX_OBJECTS]{};
 
 #define MAX_LUMINANCE_BINS 64
     int luminance[MAX_LUMINANCE_BINS]{};
+
+
 };
 
 
 
-struct GPUSceneData {
-    glm::vec3 cameraPos{};
-    int _pad0{};
 
-    glm::vec3 ambientColor{};
-    int _pad1{};
 
-#define MAX_LIGHTS 4
-    Light lights[MAX_LIGHTS];
+// Struct with pointers to mapped GPU buffer memory
+struct GPUData {
+    GPUSSBOData* ssbo = nullptr;
+    GPUCameraData* camera = nullptr;
+
+    void Reset(FrameData fd);
 };
 
 struct RenderContext {
     GPUSceneData sceneData{};
-    GPUSSBOData ssboData{};
-    GPUPushConstantData pushConstantData{};
+    //GPUSSBOData ssboData{};
 
+    //GPUSceneData* gpu_sd = nullptr;
+
+
+    SSBOConfigs ssboConfigs{};
+
+    //GPUPushConstantData pushConstantData{};
+
+    // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     glm::vec2 luminanceHistogramBounds{ .3, .95 };
+
+    int lumHistStartI = 0;
+    int lumHistEndI = MAX_LUMINANCE_BINS-1;
+
+    int totalPixels = 0;
 
     float exposureBlendingFactor = 1.2f;
     float targetExposure = 1.f; // Used for plotting

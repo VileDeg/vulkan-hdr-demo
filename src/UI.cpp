@@ -161,9 +161,9 @@ void Engine::uiUpdateHDR()
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = 3;
+			static int item_current = _renderContext.ssboConfigs.toneMappingMode;
 			if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
-				_renderContext.ssboData.toneMappingMode = item_current;
+				_renderContext.ssboConfigs.toneMappingMode = item_current;
 			}
 		}
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
@@ -172,29 +172,42 @@ void Engine::uiUpdateHDR()
 		//	const char* items[] = { "Log", "Linear" };
 		//	static int curr = 0;
 		//	if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
-		//		_renderContext.ssboData.exposureMode = curr;
+		//		_gpu.ssbo->exposureMode = curr;
 		//	}
 
 		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
-				_renderContext.ssboData.exposure -= 1;
+				_renderContext.ssboConfigs.exposure -= 1;
 			}
 			ImGui::SameLine();
-			ImGui::Text("%f", _renderContext.ssboData.exposure);
+			ImGui::Text("%f", _renderContext.ssboConfigs.exposure);
 			ImGui::SameLine();
 			if (ImGui::Button("+")) {
-				_renderContext.ssboData.exposure += 1;
+				_renderContext.ssboConfigs.exposure += 1;
 			}
 			ImGui::Separator();
 
 			ImGui::Checkbox("Enable eye adaptation", &_inp.exposureEnabled);
 
-			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_renderContext.ssboData.oldMax));
+			ImGui::Separator();
+
+			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_gpu.ssbo->oldMax));
+
+			ImGui::Separator();
+
+			ImGui::Text("Current adaptation: %f", _gpu.ssbo->exposureAverage);
+			ImGui::Text("Target adaptation: %f", _renderContext.targetExposure);
+
+			ImGui::SeparatorText("Histogram bounds");
+			ImGui::SliderFloat("Lower", &_renderContext.luminanceHistogramBounds.x, 0.f, 0.45f);
+			ImGui::SliderFloat("Upper", &_renderContext.luminanceHistogramBounds.y, 0.55f, 1.f);
+			ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
+			ImGui::Separator();
+
 		} ImGui::SeparatorText("Plots"); {
 
 			if (ImGui::TreeNode("Exposure Window")) {
-				ImGui::Text("Current adaptation: %f", _renderContext.ssboData.exposureAverage);
-				ImGui::Text("Target adaptation: %f", _renderContext.targetExposure);
+				
 				ImGui::Separator();
 
 				static RollingBuffer rdata, rdata1;
@@ -207,7 +220,7 @@ void Engine::uiUpdateHDR()
 				static float history = 30.0f;
 				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
 
-				rdata.AddPoint(t, _renderContext.ssboData.exposureAverage);
+				rdata.AddPoint(t, _gpu.ssbo->exposureAverage);
 				rdata.Span = history;
 
 				rdata1.AddPoint(t, _renderContext.targetExposure);
@@ -240,15 +253,10 @@ void Engine::uiUpdateHDR()
 
 			if (ImGui::TreeNode("Histogram")) {
 
-				ImGui::SeparatorText("Histogram bounds");
-				ImGui::SliderFloat("Lower", &_renderContext.luminanceHistogramBounds.x, 0.f, 0.45f);
-				ImGui::SliderFloat("Upper", &_renderContext.luminanceHistogramBounds.y, 0.55f, 1.f);
-				ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
-				ImGui::Separator();
+				
 
 				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-					GPUSSBOData& sd = _renderContext.ssboData;
-					constexpr int arr_size = ARRAY_SIZE(sd.luminance);
+					constexpr int arr_size = ARRAY_SIZE(_gpu.ssbo->luminance);
 
 					int bins = arr_size;
 					int xs[arr_size];
@@ -258,10 +266,10 @@ void Engine::uiUpdateHDR()
 					}
 
 					// Skip values that don't lie withing bounds
-					int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
-					int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;
+					/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
+					int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
 
-					std::vector<int> vals(sd.luminance, sd.luminance + arr_size);
+					std::vector<int> vals(_gpu.ssbo->luminance, _gpu.ssbo->luminance + arr_size);
 
 					auto it = std::max_element(vals.begin(), vals.end());
 					int maxBin = *it;
@@ -277,6 +285,8 @@ void Engine::uiUpdateHDR()
 
 					ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
 
+					int start_i = _renderContext.lumHistStartI;
+					int end_i   = _renderContext.lumHistEndI;
 
 					int xs1[2] = { start_i, end_i };
 					int vals1[2] = { vals[start_i], vals[end_i] };
@@ -464,9 +474,9 @@ void Engine::imguiUpdate()
 			ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
 			ImGui::Separator();
 
-			bool showNormals = _renderContext.ssboData.showNormals;
+			bool showNormals = _renderContext.ssboConfigs.showNormals;
 			if (ImGui::Checkbox("Show normals", &showNormals)) {
-				_renderContext.ssboData.showNormals = showNormals;
+				_renderContext.ssboConfigs.showNormals = showNormals;
 			}
 
 			

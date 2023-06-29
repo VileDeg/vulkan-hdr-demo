@@ -38,8 +38,6 @@ private: /* Methods used from Init directly */
     void createScene(const std::string mainModelFullPath);
 
 private: /* Secondary methods */
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-
     void recreateSwapchain();
     void cleanupSwapchainResources();
 
@@ -62,8 +60,6 @@ private: /* Secondary methods */
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
 
-    
-
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
     Texture* getTexture(const std::string& name);
@@ -81,7 +77,7 @@ private: /* Secondary methods */
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-private: 
+private:  // UI
     void initImgui();
 
     void imgui_RegisterViewportImageViews();
@@ -95,10 +91,12 @@ private:
     void uiUpdateRenderContext();
     void uiUpdateHDR();
 
+    std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
+
 private:
     float _fovY = 90.f; // degrees
 
-    std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
+    
     
 private: 
     GLFWwindow* _window;
@@ -163,7 +161,10 @@ private:
     VkDescriptorPool _descriptorPool;
 
     AllocatedBuffer _sceneParameterBuffer;
+
     RenderContext _renderContext;
+
+    GPUData _gpu;
 
     //Texture* _skyboxTexture;
     std::shared_ptr<RenderObject> _skyboxObject;
