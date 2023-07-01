@@ -60,27 +60,22 @@ void Engine::createPipelines()
         .setLayouts = { _globalSetLayout, _objectSetLayout, _diffuseTextureSetLayout }
     };
 
- 
 
-    /*PipelineData pd_color_light{
-        .shaders = loadShaders(_device, "shader.vert.spv", "color_light.frag.spv"),
-        .setLayouts = { _globalSetLayout, _objectSetLayout }
-    };
-
-    PipelineData pd_color_no_light{
-        .shaders = loadShaders(_device, "shader.vert.spv", "color_no_light.frag.spv"),
-        .setLayouts = { _globalSetLayout, _objectSetLayout }
-    };*/
-
-    auto newMaterial = [&](std::string matName, PipelineData pd) {
+    /*auto newMaterial = [&](std::string matName, PipelineData pd) {
         Pipeline pipeline(pd);
         pipeline.Init();
         pipeline.Build(_device, _mainRenderpass);
 
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
-    };
+    };*/
 
-    newMaterial("general", pd_general);
+    Pipeline pipeline(pd_general);
+    pipeline.Init();
+    pipeline.Build(_device, _mainRenderpass);
+
+    createMaterial(pipeline.pipeline, pipeline.layout, "general");
+
+    //newMaterial("general", pd_general);
     _mainPipeline = _materials["general"].pipeline;
 
 
@@ -94,9 +89,12 @@ void Engine::createPipelines()
     createMaterial(pipeline_skybox.pipeline, pipeline_skybox.layout, "skybox");
 
     pd_general.shaders.cleanup(_device);
+
+
+    { // Compute
+
+    }
     
-    /*newMaterial("color_light", pd_color_light);
-    newMaterial("color_no_light", pd_color_no_light);*/
 }
 
 Pipeline::Pipeline(PipelineData pd)

@@ -144,7 +144,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
 		int end_i	= (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
 
-		//int total_px = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		int total_px = _viewport.imageExtent.width * _viewport.imageExtent.height;
 
 		int total_px_hist = 0;
 		for (auto& px : _gpu.ssbo->luminance) {
@@ -154,7 +154,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		if (total_px_hist > 0) { // If histogram was populated
 			//ASSERT(total_px == total_px_hist);
 
-			int start_px = total_px_hist * _renderContext.luminanceHistogramBounds.x;
+			/*int start_px = total_px_hist * _renderContext.luminanceHistogramBounds.x;
 			int end_px = total_px_hist * _renderContext.luminanceHistogramBounds.y;
 
 			int& start_i = _renderContext.lumHistStartI;
@@ -163,33 +163,47 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 			start_i = getLumIndex(_gpu.ssbo->luminance, start_px);
 			end_i = getLumIndex(_gpu.ssbo->luminance, end_px);
 
-			ASSERT(start_i <= end_i);
+			ASSERT(start_i <= end_i);*/
 
-			float sum = 0;
+			int start_i = 0;
+			int end_i = MAX_LUMINANCE_BINS - 1;
+
+			unsigned int sumPx = 0;
 			for (int i = start_i; i < end_i; ++i) {
-				float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
-				float loglum = std::log2(1 + lum);
-				sum += loglum;
+				/*float lum = (float)i / MAX_LUMINANCE_BINS * f_oldMax;
+				float loglum = std::log2(1 + lum);*/
+				//sum += loglum;
 				//lums.push_back(lum);
+				
+				// Number of pixels in bin weighted by index
+				unsigned int weightedPx = _gpu.ssbo->luminance[i] * i;
+				sumPx += weightedPx;
 			}
+
+			float weightedLogAverage = (sumPx / std::max((float)total_px - _gpu.ssbo->luminance[0], 1.f)) - 1.f;
+
+			float logLumRange = 1.f / _renderContext.sceneData.oneOverLogLumRange;
+			float weightedAverageLuminance = exp2(((weightedLogAverage / (float)(MAX_LUMINANCE_BINS - 1)) * 
+				logLumRange) + _renderContext.sceneData.minLogLum);
 
 			// Compute common
-			float avgLum = 0.f;
-			if (end_i - start_i > 0) {
-				avgLum = sum / (end_i - start_i);
-			}
-			//float avg = 1;
-			//float exposureAvg = 9.6 * (avg + 0.0001);
-			float targetAdp = avgLum;
+			//float avgLum = 0.f;
+			//if (end_i - start_i > 0) {
+			//	avgLum = sum / (end_i - start_i);
+			//}
+			////float avg = 1;
+			////float exposureAvg = 9.6 * (avg + 0.0001);
+			//float targetAdp = avgLum;
 
-			_renderContext.targetExposure = targetAdp;
+			_renderContext.targetExposure = weightedAverageLuminance;
 
 
-			float a = _renderContext.exposureBlendingFactor * _deltaTime * std::log2(1 + targetAdp);
+			float a = _renderContext.exposureBlendingFactor * _deltaTime;
 			//a = std::clamp(a, 0.0001f, 0.99f);
 			// Final exposure
-			_gpu.ssbo->exposureAverage = a * targetAdp + (1 - a) * _gpu.ssbo->exposureAverage;
-			//_gpu.ssbo->exposureAverage = 1.f;
+			float prevAdp = _gpu.ssbo->exposureAverage;
+			float adaptedLum = prevAdp + (weightedAverageLuminance - prevAdp) * a;
+			_gpu.ssbo->exposureAverage = adaptedLum;
 		}
 
 		// Clear luminance from previous frame
@@ -208,6 +222,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		//GPUSceneData* sd = (GPUSceneData*)(padded);
 
 		_renderContext.sceneData.cameraPos = _inp.camera.GetPos();
+
 
 		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneData));
 

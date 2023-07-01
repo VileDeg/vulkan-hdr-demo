@@ -18,10 +18,10 @@ layout(location = 0) out vec4 FragColor;
 
 layout(set = 0, binding = 1) uniform SceneData {
     vec3 cameraPos;
-    int _pad0;
+    float minLogLum;
 
     vec3 ambientColor;
-    int _pad1;
+    float oneOverLogLumRange;
 
     LightData[MAX_LIGHTS] lights;
 } sd;
@@ -34,10 +34,8 @@ layout(push_constant) uniform PushConstants {
 } pc;
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
-
 layout(set = 1, binding = 1) uniform samplerCube skybox;
 
-//const float keyValue = 0.18; // middle gray
 const float eps = 0.001;
 const float lumMaxTreshold = 0.5;
 
@@ -45,6 +43,28 @@ const float expTerm = 9.6; // Simplified term. From: https://bruop.github.io/exp
 
 const float expMin = 1e2;
 const float expMax = 1e-4;
+
+#define EPSILON 0.005
+// Taken from RTR vol 4 pg. 278
+#define RGB_TO_LUM vec3(0.2125, 0.7154, 0.0721)
+
+// For a given color and luminance range, return the histogram bin index
+uint colorToBin(vec3 hdrColor, float minLogLum, float inverseLogLumRange) {
+  // Convert our RGB value to Luminance, see note for RGB_TO_LUM macro above
+  float lum = dot(hdrColor, RGB_TO_LUM);
+
+  // Avoid taking the log of zero
+  if (lum < EPSILON) {
+    return 0;
+  }
+
+  // Calculate the log_2 luminance and express it as a value in [0.0, 1.0]
+  // where 0.0 represents the minimum luminance, and 1.0 represents the max.
+  float logLum = clamp((log2(lum) - minLogLum) * inverseLogLumRange, 0.0, 1.0);
+
+  // Map [0, 1] to [1, 255]. The zeroth bin is handled by the epsilon check above.
+  return uint(logLum * 254.0 + 1.0);
+}
 
 void main()  
 {
@@ -67,32 +87,31 @@ void main()
     }
    
 
-    float f_oldMax = uintBitsToFloat(ssbo.oldMax);
+    //float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
     if (pc.lightAffected == 1) {
 
         if (pc.isCubemap == 0) {
             result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
-        } else {
-            //result *= 1000;
         }
         
-        float lum = luminance(result);
+        /*float lum = luminance(result);
 
-        // Update current max only if current luminance is bigger than 50% of old max
-        
+        // Update current max
         if (lum > uintBitsToFloat(ssbo.newMax)) {
                 atomicMax(ssbo.newMax, floatBitsToUint(lum));
-        }
+        }*/
+
         // Update luminance histogram
-        int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
+        //int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
+        uint bin = colorToBin(result, sd.minLogLum, sd.oneOverLogLumRange);
         atomicAdd(ssbo.luminance[bin], 1);
         
 
         if (ssbo.exposureON == 1) {
-            float expa = ssbo.exposureAverage + 0.0001f;
+            float expa = ssbo.exposureAverage; //  + 0.0001f
             //result = result / (expMin + (expa / (expa + 1)) * expMax);
-            result = result / (expa);
+            result = result / (9.6f * expa);
         } 
 
         result *= pow(2, ssbo.exposure);
@@ -100,13 +119,17 @@ void main()
    
     if (ssbo.toneMappingON == 1) { // If enable tone mapping
         switch (ssbo.toneMappingMode) {
-        case 0: result = ReinhardExtended(result, f_oldMax); break;
+        case 0: result = ReinhardExtended(result, 10.f); break;
         case 1: result = Reinhard(result); break;
         case 2: result = Uncharted2Filmic(result); break;
         case 3: result = ACESFilm(result); break;
         case 4: result = ACESFitted(result); break;
         }
     }
+
+    // Gamma correction
+    const float gamma = 2.2f;
+    result = pow(result, vec3(1.f / gamma));
 
     FragColor = vec4(result, 1.f);
 }

@@ -8,13 +8,6 @@ struct ObjectData{
     int _pad2;
 };
 
-/*struct Lum {
-    int val;
-    int _pad0;
-    int _pad1;
-    int _pad2;
-};*/
-
 
 layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
     uint newMax;
@@ -34,9 +27,6 @@ layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
 
 	ObjectData objects[MAX_OBJECTS];
 
-    //Lum luminance[MAX_BINS];
-    int luminance[MAX_BINS];
-
-
+    uint luminance[MAX_LUMINANCE_BINS];
 } ssbo;
 

@@ -1024,6 +1024,8 @@ void RenderContext::Init()
 
 	float amb = 0.2f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
+	sceneData.minLogLum = -10.f;
+	sceneData.oneOverLogLumRange = 1.f / 12.f;
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {
