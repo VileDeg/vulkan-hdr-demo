@@ -276,7 +276,8 @@ void Engine::initDescriptors()
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 }, // For scene data
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 }, // For object data SSBO
         //add combined-image-sampler descriptor types to the pool
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 } // For textures
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 }, // For textures
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 } // For compute read/write
     };
 
     VkDescriptorPoolCreateInfo descriptorPoolInfo{

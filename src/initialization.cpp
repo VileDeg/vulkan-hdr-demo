@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "engine.h"
 
+#define VKDEMO_USE_COMPUTE
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -180,6 +181,8 @@ static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<c
     return allSupported;
 }
 
+
+
 static
 std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
 findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*>& deviceExtensions)
@@ -216,10 +219,17 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
             // test for presentation support
             VkBool32 presentationSupported = false;
             vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
+
+
+            bool allQSupported = queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
+#ifdef VKDEMO_USE_COMPUTE
+            allQSupported = allQSupported && (queueFamilyList[i].queueFlags & VK_QUEUE_COMPUTE_BIT);
+#endif
+
             if (presentationSupported) {
 
                 // test for graphics operations support
-                if (queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                if (allQSupported) {
                     // if presentation and graphics operations are supported on the same queue,
                     // we will use single queue
 
@@ -230,7 +240,7 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
                     if (presentQueueFamily == UINT32_MAX)
                         presentQueueFamily = i;
             } else {
-                if (queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                if (allQSupported)
                     // if only graphics operations are supported, we store the first such queue
                     if (graphicsQueueFamily == UINT32_MAX)
                         graphicsQueueFamily = i;

@@ -313,7 +313,7 @@ void Engine::drawFrame()
         }
     }
 
-	// Following calls ImGui::Render()
+	// Calls ImGui::Render()
 	imguiOnDrawStart();
 
 	{ // Command buffer

@@ -38,6 +38,9 @@ private: /* Methods used from Init directly */
     void createScene(const std::string mainModelFullPath);
 
 private: /* Secondary methods */
+
+
+
     void recreateSwapchain();
     void cleanupSwapchainResources();
 
@@ -107,7 +110,9 @@ private:
 
     VkPhysicalDevice _physicalDevice;
     VkPhysicalDeviceProperties _gpuProperties;
+
     VkDevice _device;
+
     uint32_t _graphicsQueueFamily;
     uint32_t _presentQueueFamily;
     VkQueue _graphicsQueue;

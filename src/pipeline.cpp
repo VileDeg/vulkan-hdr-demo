@@ -90,11 +90,41 @@ void Engine::createPipelines()
 
     pd_general.shaders.cleanup(_device);
 
-
+#if 0
     { // Compute
+        ShaderData comp;
+        comp.code = readShaderBinary(Engine::shaderPath + "luminance.comp.spv");
 
+        if (createShaderModule(_device, comp.code, &comp.module)) {
+            std::cout << "Compute shader successfully loaded." << std::endl;
+        } else {
+            PRWRN("Failed to load compute shader");
+        }
+
+        VkPipelineShaderStageCreateInfo computeShaderStageInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+            .module = comp.module,
+            .pName = "main"
+        };
+
+        { // Descriptors
+            std::vector<VkDescriptorSetLayoutBinding> bindings = {
+                // SSBO
+                vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+                vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+            };
+
+
+
+            VkDescriptorSetLayoutCreateInfo dsLayoutInfo;
+        }
     }
-    
+
+        /*VkComputePipelineCreateInfo computePipelineInfo{
+            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,*/
+
+#endif    
 }
 
 Pipeline::Pipeline(PipelineData pd)
