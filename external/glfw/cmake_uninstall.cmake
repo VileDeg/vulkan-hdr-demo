@@ -1,9 +1,9 @@
 
-if (NOT EXISTS "C:/dev/vulkan-hdr-demo/external/glfw/install_manifest.txt")
-    message(FATAL_ERROR "Cannot find install manifest: \"C:/dev/vulkan-hdr-demo/external/glfw/install_manifest.txt\"")
+if (NOT EXISTS "C:/dev/Vulkan/vulkan-hdr-demo/external/glfw/install_manifest.txt")
+    message(FATAL_ERROR "Cannot find install manifest: \"C:/dev/Vulkan/vulkan-hdr-demo/external/glfw/install_manifest.txt\"")
 endif()
 
-file(READ "C:/dev/vulkan-hdr-demo/external/glfw/install_manifest.txt" files)
+file(READ "C:/dev/Vulkan/vulkan-hdr-demo/external/glfw/install_manifest.txt" files)
 string(REGEX REPLACE "\n" ";" files "${files}")
 
 foreach (file ${files})

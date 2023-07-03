@@ -26,7 +26,5 @@ layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
     int toneMappingMode;
 
 	ObjectData objects[MAX_OBJECTS];
-
-    uint luminance[MAX_LUMINANCE_BINS];
 } ssbo;
 

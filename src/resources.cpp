@@ -479,14 +479,17 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	pr("Cubemap loaded successfully: " << basePath);
 
 	// write skybox to descriptor set
-	VkDescriptorImageInfo skyboxInfo = {
-				.sampler = _linearSampler,
-				.imageView = newTexture.imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	newTexture.image.descInfo = {
+		.sampler = _linearSampler,
+		.imageView = newTexture.imageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
+	_skyboxAllocImage = newTexture.image;
+
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		VkWriteDescriptorSet skyboxWrite = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectDescriptor, &skyboxInfo, 1);
+		VkWriteDescriptorSet skyboxWrite = 
+			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectDescriptor, &newTexture.image.descInfo, 1);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
 
@@ -1024,8 +1027,8 @@ void RenderContext::Init()
 
 	float amb = 0.2f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
-	sceneData.minLogLum = -10.f;
-	sceneData.oneOverLogLumRange = 1.f / 12.f;
+	/*sceneData.minLogLum = -10.f;
+	sceneData.oneOverLogLumRange = 1.f / 12.f;*/
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {

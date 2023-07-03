@@ -2,7 +2,7 @@
 
 #include "types.h"
 #include "resources.h"
-
+#include "vk_descriptors.h"
 
 class Engine {
 public:
@@ -39,7 +39,7 @@ private: /* Methods used from Init directly */
 
 private: /* Secondary methods */
 
-
+    
 
     void recreateSwapchain();
     void cleanupSwapchainResources();
@@ -155,10 +155,15 @@ private:
     std::unordered_map<std::string, Mesh> _meshes;
     std::unordered_map<std::string, Texture> _textures;
 
+    vkutil::DescriptorAllocator* _descriptorAllocator;
+    vkutil::DescriptorLayoutCache* _descriptorLayoutCache;
+
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _diffuseTextureSetLayout;
-    VkDescriptorSetLayout _skyboxTextureSetLayout;
+    //VkDescriptorSetLayout _skyboxTextureSetLayout;
+
+    //VkDescriptorSetLayout _compLuminanceSetLayout;
 
     VkSampler _blockySampler;
     VkSampler _linearSampler;
@@ -166,6 +171,7 @@ private:
     VkDescriptorPool _descriptorPool;
 
     AllocatedBuffer _sceneParameterBuffer;
+    AllocatedImage _skyboxAllocImage;
 
     RenderContext _renderContext;
 

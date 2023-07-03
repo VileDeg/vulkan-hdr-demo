@@ -108,17 +108,7 @@ void Engine::createPipelines()
             .pName = "main"
         };
 
-        { // Descriptors
-            std::vector<VkDescriptorSetLayoutBinding> bindings = {
-                // SSBO
-                vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-                vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-            };
-
-
-
-            VkDescriptorSetLayoutCreateInfo dsLayoutInfo;
-        }
+        
     }
 
         /*VkComputePipelineCreateInfo computePipelineInfo{

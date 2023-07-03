@@ -141,10 +141,10 @@ struct GPUPushConstantData {
 
 struct GPUSceneData {
     glm::vec3 cameraPos{};
-    float minLogLum{};
+    int _pad0;
 
     glm::vec3 ambientColor{};
-    float oneOverLogLumRange{};
+    int _pad1;
 
 #define MAX_LIGHTS 4
     Light lights[MAX_LIGHTS];
@@ -160,16 +160,6 @@ struct GPUObjectData {
     int _pad2;
 };
 
-
-
-// Must use struct with size multiple of 16 because of std140 buffer layout
-//struct Lum {
-//    int val;
-//    int _pad0;
-//    int _pad1;
-//    int _pad2;
-//};
-
 struct SSBOConfigs {
     int showNormals{ 0 };
     float exposure{ 1.0f };
@@ -182,7 +172,6 @@ struct SSBOConfigs {
     int toneMappingMode{ 3 };
 };
 
-
 struct GPUSSBOData {
     unsigned int newMax{ 0 };
     unsigned int oldMax{ 0 };
@@ -194,11 +183,16 @@ struct GPUSSBOData {
 #define MAX_OBJECTS 10
     GPUObjectData objects[MAX_OBJECTS]{};
 
+};
+
+struct GPUCompSSBO {
+    float minLogLum{};
+    float oneOverLogLumRange{};
+    int _pad0;
+    int _pad1;
 #define MAX_LUMINANCE_BINS 256
     unsigned int luminance[MAX_LUMINANCE_BINS]{};
 };
-
-
 
 
 

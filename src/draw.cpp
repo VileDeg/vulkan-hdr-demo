@@ -36,20 +36,22 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		// Always add the sceneData and SSBO descriptor
 		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalDescriptor, getCurrentFrame().objectDescriptor };
 
-		VkImageView imageView = VK_NULL_HANDLE;
-		if (mesh->p_tex != nullptr && !obj.isSkybox) {
-			imageView = mesh->p_tex->imageView;
+		{ // Push diffuse texture descriptor set
+			VkImageView imageView = VK_NULL_HANDLE;
+			if (mesh->p_tex != nullptr && !obj.isSkybox) {
+				imageView = mesh->p_tex->imageView;
+			}
+			VkDescriptorImageInfo imageBufferInfo{
+				.sampler = _linearSampler,
+				.imageView = imageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
+			VkWriteDescriptorSet texture1 =
+				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					VK_NULL_HANDLE, &imageBufferInfo, 0);
+			vkCmdPushDescriptorSetKHR(
+				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
 		}
-		VkDescriptorImageInfo imageBufferInfo{
-			.sampler = _linearSampler,
-			.imageView = imageView,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-		VkWriteDescriptorSet texture1 =
-			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				VK_NULL_HANDLE, &imageBufferInfo, 0);
-		vkCmdPushDescriptorSetKHR(
-			cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
 
 		// Load push constants to GPU
 		GPUPushConstantData pc = {
@@ -115,6 +117,9 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
+	
+
+
 	// Load SSBO to GPU
 	{
 		_renderContext.ssboConfigs.exposureON	 = _inp.exposureEnabled;
@@ -136,7 +141,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		float nm = 0.f;
 
 		_gpu.ssbo->newMax = *reinterpret_cast<unsigned int*>(&nm);;
-
+#if 0
 		constexpr size_t arr_size = ARRAY_SIZE(_gpu.ssbo->luminance);
 
 		float f_oldMax = *reinterpret_cast<float*>(&_gpu.ssbo->oldMax);
@@ -208,6 +213,9 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 		// Clear luminance from previous frame
 		memset(_gpu.ssbo->luminance, 0, sizeof(_gpu.ssbo->luminance));
+#endif
+
+		_gpu.ssbo->exposureAverage = 1.f;
 	}
 
 	// Load UNIFORM BUFFER of scene parameters to GPU
@@ -287,7 +295,9 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 void Engine::drawFrame()
 {
 	_frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
-	FrameData& frame = _frames[_frameInFlightNum];
+	FrameData& f = _frames[_frameInFlightNum];
+
+	
 
 	// Set general GPU pointers to current frame's ones. It's handy.
 	// And they can be accessed in other files (for example UI)
@@ -298,12 +308,12 @@ void Engine::drawFrame()
 
     
 
-    VKASSERT(vkWaitForFences(_device, 1, &frame.inFlightFence, VK_TRUE, UINT64_MAX));
-    VKASSERT(vkResetFences(_device, 1, &frame.inFlightFence));
+    VKASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
+    VKASSERT(vkResetFences(_device, 1, &f.inFlightFence));
 
     //Get index of next image after 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(_device, _swapchain.handle, UINT64_MAX, frame.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(_device, _swapchain.handle, UINT64_MAX, f.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     {
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             recreateSwapchain();
@@ -319,7 +329,7 @@ void Engine::drawFrame()
 	{ // Command buffer
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
-		VKASSERT(vkBeginCommandBuffer(frame.cmdBuffer, &beginInfo));
+		VKASSERT(vkBeginCommandBuffer(f.cmdBuffer, &beginInfo));
 		{
 			VkClearValue colorClear{ .color = { 0.1f, 0.0f, 0.1f, 1.0f } };
 			VkClearValue depthClear{ .depthStencil = { 1.0f, 0 } };
@@ -338,30 +348,30 @@ void Engine::drawFrame()
 			};
 
 			// Viewport pass
-			vkCmdBeginRenderPass(frame.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(f.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
-				drawObjects(frame.cmdBuffer, _renderables);
+				drawObjects(f.cmdBuffer, _renderables);
 			}
-			vkCmdEndRenderPass(frame.cmdBuffer);
+			vkCmdEndRenderPass(f.cmdBuffer);
 
 			renderPassBeginInfo.renderPass = _mainRenderpass;
 			renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];
 			renderPassBeginInfo.renderArea.extent = _swapchain.imageExtent;
 
 			// Swapchain pass
-			vkCmdBeginRenderPass(frame.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(f.cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 			{
 				// Record dear imgui primitives into command buffer
-				imguiOnRenderPassEnd(frame.cmdBuffer);
+				imguiOnRenderPassEnd(f.cmdBuffer);
 			}
-			vkCmdEndRenderPass(frame.cmdBuffer);
+			vkCmdEndRenderPass(f.cmdBuffer);
 		}
-		VKASSERT(vkEndCommandBuffer(frame.cmdBuffer));
+		VKASSERT(vkEndCommandBuffer(f.cmdBuffer));
 	}
 
-    VkSemaphore waitSemaphores[] = { frame.imageAvailableSemaphore };
+    VkSemaphore waitSemaphores[] = { f.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    VkSemaphore signalSemaphores[] = { frame.renderFinishedSemaphore };
+    VkSemaphore signalSemaphores[] = { f.renderFinishedSemaphore };
 
 	VkSubmitInfo submitInfo{
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -369,12 +379,12 @@ void Engine::drawFrame()
 		.pWaitSemaphores = waitSemaphores,
 		.pWaitDstStageMask = waitStages,
 		.commandBufferCount = 1,
-		.pCommandBuffers = &frame.cmdBuffer,
+		.pCommandBuffers = &f.cmdBuffer,
 		.signalSemaphoreCount = 1,
 		.pSignalSemaphores = signalSemaphores
 	};
 
-    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, frame.inFlightFence));
+    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, f.inFlightFence));
 
     VkSwapchainKHR swapchains[] = { _swapchain.handle };
     VkPresentInfoKHR presentInfo{

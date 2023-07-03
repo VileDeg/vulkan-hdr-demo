@@ -1,5 +1,7 @@
 #version 460
 
+#include "defs.glsl"
+
 #define GROUP_SIZE 256
 #define THREADS_X 16
 #define THREADS_Y 16
@@ -10,13 +12,29 @@
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 
-layout (binding = 0, rgba16f) uniform readonly image2D inHDRImage;
-layout (binding = 1, uint) uniform buffer outLuminanceTexture;
+struct ObjectData{
+	mat4 model;
+	vec4 color;
+
+	int useObjectColor;
+    int _pad0;
+    int _pad1;
+    int _pad2;
+};
+
+layout (std430, set = 0, binding = 0) buffer Luminance {
+    float minLogLum;
+    float inverseLogLumRange;
+    int _pad0;
+    int _pad1;
+
+    uint histogram[MAX_LUMINANCE_BINS];
+} ssbo;
+
+layout (rgba16f, set = 0, binding = 1) uniform readonly image2D inHDRImage;
 
 // Shared histogram buffer used for storing intermediate sums for each work group
 shared uint histogramShared[GROUP_SIZE];
-
-#include "structs.glsl"
 
 // For a given color and luminance range, return the histogram bin index
 uint colorToBin(vec3 hdrColor, float minLogLum, float inverseLogLumRange) {
@@ -37,17 +55,16 @@ uint colorToBin(vec3 hdrColor, float minLogLum, float inverseLogLumRange) {
 }
 
 // 16 * 16 * 1 threads per group
-NUM_THREADS(THREADS_X, THREADS_Y, 1)
 void main() {
   // Initialize the bin for this thread to 0
   histogramShared[gl_LocalInvocationIndex] = 0;
   barrier();
 
-  uvec2 dim = imageSize(s_texColor).xy;
+  uvec2 dim = imageSize(inHDRImage).xy;
   // Ignore threads that map to areas beyond the bounds of our HDR image
   if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-    vec3 hdrColor = imageLoad(s_texColor, ivec2(gl_GlobalInvocationID.xy)).xyz;
-    uint binIndex = colorToBin(hdrColor, u_params.x, u_params.y);
+    vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
+    uint binIndex = colorToBin(hdrColor, ssbo.minLogLum, ssbo.inverseLogLumRange);
     // We use an atomic add to ensure we don't write to the same bin in our
     // histogram from two different threads at the same time.
     atomicAdd(histogramShared[binIndex], 1);
@@ -59,5 +76,5 @@ void main() {
 
   // Technically there's no chance that two threads write to the same bin here,
   // but different work groups might! So we still need the atomic add.
-  atomicAdd(histogram[gl_LocalInvocationIndex], histogramShared[gl_LocalInvocationIndex]);
+  atomicAdd(ssbo.histogram[gl_LocalInvocationIndex], histogramShared[gl_LocalInvocationIndex]);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Camera.h"
+//#include "vk_descriptors.h"
 
 struct DeletionStack {
     std::stack<std::function<void()>> deletors;
@@ -35,6 +36,7 @@ struct PipelineShaders {
 struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
+    VkDescriptorBufferInfo descInfo;
 
     void* gpu_ptr;
 
@@ -55,11 +57,15 @@ struct AllocatedImage {
     /* Based on https://github.com/vblanco20-1/vulkan-guide */
     VkImage image;
     VmaAllocation allocation;
-    
+    VkDescriptorImageInfo descInfo;
 };
 
 struct FrameData {
-    VkSemaphore imageAvailableSemaphore, renderFinishedSemaphore;
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
+
+    VkSemaphore graphicsToComputeSemaphore;
+
     VkFence inFlightFence;
 
     VkCommandPool commandPool;
@@ -70,8 +76,18 @@ struct FrameData {
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer objectBuffer;
 
+    AllocatedBuffer compLumBuffer;
+
     VkDescriptorSet globalDescriptor;
     VkDescriptorSet objectDescriptor;
+
+    VkDescriptorSet compLumDescriptor;
+
+    //vkutil::DescriptorAllocator descriptorAllocator;
+};
+
+struct DescriptorSet {
+
 };
 
 

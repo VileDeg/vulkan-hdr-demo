@@ -18,10 +18,10 @@ layout(location = 0) out vec4 FragColor;
 
 layout(set = 0, binding = 1) uniform SceneData {
     vec3 cameraPos;
-    float minLogLum;
+    int _pad0;
 
     vec3 ambientColor;
-    float oneOverLogLumRange;
+    int _pad1;
 
     LightData[MAX_LIGHTS] lights;
 } sd;
@@ -104,8 +104,8 @@ void main()
 
         // Update luminance histogram
         //int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
-        uint bin = colorToBin(result, sd.minLogLum, sd.oneOverLogLumRange);
-        atomicAdd(ssbo.luminance[bin], 1);
+        //uint bin = colorToBin(result, sd.minLogLum, sd.oneOverLogLumRange);
+        //atomicAdd(ssbo.luminance[bin], 1);
         
 
         if (ssbo.exposureON == 1) {

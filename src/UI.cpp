@@ -254,7 +254,7 @@ void Engine::uiUpdateHDR()
 			if (ImGui::TreeNode("Histogram")) {
 
 				
-
+#if 0
 				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
 					constexpr int arr_size = ARRAY_SIZE(_gpu.ssbo->luminance);
 
@@ -297,6 +297,7 @@ void Engine::uiUpdateHDR()
 
 					ImPlot::EndPlot();
 				}
+#endif
 				ImGui::TreePop();
 			}
 		}

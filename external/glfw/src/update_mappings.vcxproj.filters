@@ -1,24 +1,24 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CustomBuild Include="C:\dev\vulkan-hdr-demo\CMakeFiles\eb9fd0e5be3b495303366b718a698792\update_mappings.rule">
+    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\CMakeFiles\b0b31347819f8b703c4ddc935ccc3381\update_mappings.rule">
       <Filter>CMake Rules</Filter>
     </CustomBuild>
-    <CustomBuild Include="C:\dev\vulkan-hdr-demo\external\glfw\src\CMakeLists.txt" />
+    <CustomBuild Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="C:\dev\vulkan-hdr-demo\external\glfw\src\mappings.h.in">
+    <None Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\mappings.h.in">
       <Filter>Header Files</Filter>
     </None>
-    <None Include="C:\dev\vulkan-hdr-demo\external\glfw\CMake\GenerateMappings.cmake" />
-    <None Include="C:\dev\vulkan-hdr-demo\external\glfw\src\CMakeFiles\update_mappings" />
+    <None Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\CMake\GenerateMappings.cmake" />
+    <None Include="C:\dev\Vulkan\vulkan-hdr-demo\external\glfw\src\CMakeFiles\update_mappings" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CMake Rules">
-      <UniqueIdentifier>{428A3751-11B7-36DD-8BF7-FB336492ECD8}</UniqueIdentifier>
+      <UniqueIdentifier>{7DF57636-0737-3584-8A7D-3E1BC54CBDD9}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files">
-      <UniqueIdentifier>{ACCBB12A-41B6-35AF-B04D-8FB78A979A59}</UniqueIdentifier>
+      <UniqueIdentifier>{4804789A-6D5D-3E7B-B114-9F39AC1008EB}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
