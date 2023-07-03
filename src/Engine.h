@@ -1,5 +1,7 @@
 #pragma once
 
+#define MAX_FRAMES_IN_FLIGHT 3
+
 #include "types.h"
 #include "resources.h"
 #include "vk_descriptors.h"
@@ -39,7 +41,7 @@ private: /* Methods used from Init directly */
 
 private: /* Secondary methods */
 
-    
+    void loadDeviceExtensionFunctions();
 
     void recreateSwapchain();
     void cleanupSwapchainResources();
@@ -72,6 +74,8 @@ private: /* Secondary methods */
 
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
+
+    void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
     void drawFrame();
 
@@ -119,18 +123,25 @@ private:
     VkQueue _presentQueue;
     
 
-    Swapchain _swapchain;
-    Viewport _viewport;
+    RenderResources _swapchain{};
+    VkSwapchainKHR _swapchainHandle{ VK_NULL_HANDLE };
+
+    // 32-bit float HDR format for viewport
+    RenderResources _viewport{ VK_FORMAT_R32G32B32A32_SFLOAT };
+    std::vector<AllocatedImage> _viewportImages; // Allocated with VMA
     
  
     UploadContext _uploadContext;
 
-    VkRenderPass _mainRenderpass;
-    VkRenderPass _viewportRenderpass;
 
     VkPipeline _mainPipeline;
 
-    static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
+    
+    
+
+    Compute _compute;
+
+    
     FrameData _frames[MAX_FRAMES_IN_FLIGHT];
 
     VmaAllocator _allocator;
@@ -163,7 +174,7 @@ private:
     VkDescriptorSetLayout _diffuseTextureSetLayout;
     //VkDescriptorSetLayout _skyboxTextureSetLayout;
 
-    //VkDescriptorSetLayout _compLuminanceSetLayout;
+    
 
     VkSampler _blockySampler;
     VkSampler _linearSampler;
@@ -181,6 +192,8 @@ private:
     std::shared_ptr<RenderObject> _skyboxObject;
 
 private:
+    PFN_vkCmdPipelineBarrier2 vkCmdPipelineBarrier2;
+
     PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
@@ -195,7 +208,7 @@ private:
     std::vector<const char*> _deviceExtensions{ 
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
         "VK_KHR_maintenance4", "VK_KHR_push_descriptor",
-        "VK_EXT_robustness2"
+        "VK_EXT_robustness2", "VK_KHR_synchronization2"
     };
 
 public:

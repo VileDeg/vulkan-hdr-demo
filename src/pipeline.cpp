@@ -53,6 +53,43 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
     return shaders;
 }
 
+static void s_createComputePipeline(VkDevice device, const std::string& shaderBinName, ComputeParts& cp)
+{
+    ShaderData comp;
+    comp.code = readShaderBinary(Engine::shaderPath + shaderBinName);
+
+    if (createShaderModule(device, comp.code, &comp.module)) {
+        std::cout << "Compute shader successfully loaded." << std::endl;
+    } else {
+        PRWRN("Failed to load compute shader");
+    }
+
+    VkPipelineShaderStageCreateInfo stageInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = comp.module,
+        .pName = "main"
+    };
+
+    VkPipelineLayoutCreateInfo layoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &cp.setLayout,
+    };
+
+    VKASSERT(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &cp.pipelineLayout));
+
+    VkComputePipelineCreateInfo computePipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = stageInfo,
+        .layout = cp.pipelineLayout,
+    };
+
+    VKASSERT(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &cp.pipeline));
+
+    vkDestroyShaderModule(device, comp.module, nullptr);
+}
+
 void Engine::createPipelines()
 {
     PipelineData pd_general{
@@ -64,14 +101,14 @@ void Engine::createPipelines()
     /*auto newMaterial = [&](std::string matName, PipelineData pd) {
         Pipeline pipeline(pd);
         pipeline.Init();
-        pipeline.Build(_device, _mainRenderpass);
+        pipeline.Build(_device, _swapchain.renderpass);
 
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
     };*/
 
     Pipeline pipeline(pd_general);
     pipeline.Init();
-    pipeline.Build(_device, _mainRenderpass);
+    pipeline.Build(_device, _viewport.renderpass);
 
     createMaterial(pipeline.pipeline, pipeline.layout, "general");
 
@@ -84,37 +121,24 @@ void Engine::createPipelines()
     pipeline_skybox.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
 
 
-    pipeline_skybox.Build(_device, _mainRenderpass);
+    pipeline_skybox.Build(_device, _viewport.renderpass);
 
     createMaterial(pipeline_skybox.pipeline, pipeline_skybox.layout, "skybox");
 
     pd_general.shaders.cleanup(_device);
 
-#if 0
-    { // Compute
-        ShaderData comp;
-        comp.code = readShaderBinary(Engine::shaderPath + "luminance.comp.spv");
+    { // Compute luminance histogram
+        s_createComputePipeline(_device, "histogram.comp.spv"        , _compute.histogram);
+        s_createComputePipeline(_device, "average_luminance.comp.spv", _compute.averageLuminance);
 
-        if (createShaderModule(_device, comp.code, &comp.module)) {
-            std::cout << "Compute shader successfully loaded." << std::endl;
-        } else {
-            PRWRN("Failed to load compute shader");
-        }
+        _deletionStack.push([=]() mutable {
+            vkDestroyPipelineLayout(_device, _compute.histogram.pipelineLayout, nullptr);
+            vkDestroyPipeline(_device, _compute.histogram.pipeline, nullptr);
 
-        VkPipelineShaderStageCreateInfo computeShaderStageInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-            .module = comp.module,
-            .pName = "main"
-        };
-
-        
+            vkDestroyPipelineLayout(_device, _compute.averageLuminance.pipelineLayout, nullptr);
+            vkDestroyPipeline(_device, _compute.averageLuminance.pipeline, nullptr);
+        });
     }
-
-        /*VkComputePipelineCreateInfo computePipelineInfo{
-            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,*/
-
-#endif    
 }
 
 Pipeline::Pipeline(PipelineData pd)

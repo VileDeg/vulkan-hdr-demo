@@ -53,9 +53,9 @@
 #define GLFWASSERTMSG(_x, _msg) HASSERTMSG(_x, GLFW_TRUE, _msg)
 
 //Macro for dynamic load of extension functions
-#define DYNAMIC_LOAD(_varname, _instance, _func)\
-        _varname = (PFN_##_func)vkGetInstanceProcAddr(_instance, #_func);\
-        if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_func); }
+#define DYNAMIC_LOAD(_varname, _instance)\
+        _varname = (PFN_##_varname)vkGetInstanceProcAddr(_instance, #_varname);\
+        if (_varname == nullptr) { throw std::runtime_error("Failed to load function " #_varname); }
 
 //Print macros for glm types
 #define V4PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << ", " << _v.w << " "

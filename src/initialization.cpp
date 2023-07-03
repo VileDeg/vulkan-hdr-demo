@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "engine.h"
 
-#define VKDEMO_USE_COMPUTE 0
+#define VKDEMO_USE_COMPUTE 1
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -27,8 +27,8 @@ void Engine::createDebugMessenger()
             .pfnUserCallback = debug_callback
         };
 
-        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance, vkCreateDebugUtilsMessengerEXT);
-        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance, vkDestroyDebugUtilsMessengerEXT);
+        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
+        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
 
         VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
 
@@ -316,8 +316,19 @@ static bool checkRequiredFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhys
 {
     // Check if the device supports the shaderDrawParameters feature
     vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
-    auto shaderDrawParametersFeatures = reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(deviceFeatures.pNext);
-    return shaderDrawParametersFeatures->shaderDrawParameters;
+    auto sync2features = *reinterpret_cast<VkPhysicalDeviceSynchronization2Features*>(deviceFeatures.pNext);
+    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(sync2features.pNext);
+
+    bool supported = sync2features.synchronization2 &&
+        shaderDrawParametersFeatures.shaderDrawParameters;
+    return supported;
+}
+
+void Engine::loadDeviceExtensionFunctions()
+{
+    // Load push descriptor command for future use
+    DYNAMIC_LOAD(vkCmdPushDescriptorSetKHR, _instance);
+    DYNAMIC_LOAD(vkCmdPipelineBarrier2, _instance);
 }
 
 void Engine::createLogicalDevice()
@@ -339,7 +350,8 @@ void Engine::createLogicalDevice()
 
     // Needed for gl_BaseIndex
     VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,
+        .shaderDrawParameters = VK_TRUE
     };
 
     // Enable nullDescriptor to pass descriptors with no image view
@@ -349,9 +361,15 @@ void Engine::createLogicalDevice()
         .nullDescriptor = VK_TRUE
     };
 
+    VkPhysicalDeviceSynchronization2Features sync2features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+        .pNext = &robust2features,
+        .synchronization2 = VK_TRUE
+    };
+
     VkPhysicalDeviceFeatures2 deviceFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &robust2features
+        .pNext = &sync2features
     };
 
     if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {
@@ -376,6 +394,5 @@ void Engine::createLogicalDevice()
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);
 
-    // Load push descriptor command for future use
-    DYNAMIC_LOAD(vkCmdPushDescriptorSetKHR, _instance, vkCmdPushDescriptorSetKHR);
+    loadDeviceExtensionFunctions();
 }

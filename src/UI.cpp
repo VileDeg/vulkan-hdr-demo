@@ -105,7 +105,7 @@ void Engine::initImgui()
 		.MSAASamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	ImGui_ImplVulkan_Init(&init_info, _mainRenderpass);
+	ImGui_ImplVulkan_Init(&init_info, _swapchain.renderpass);
 
 	//execute a gpu command to upload imgui font textures
 	immediate_submit([&](VkCommandBuffer cmd) {
@@ -139,7 +139,7 @@ void Engine::imgui_RegisterViewportImageViews()
 
 	for (size_t i = 0; i < _viewport.imageViews.size(); ++i) {
 		_imguiViewportImageViewDescriptorSets[i] =
-			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_GENERAL);
 	}
 }
 
@@ -167,13 +167,6 @@ void Engine::uiUpdateHDR()
 			}
 		}
 		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
-		//ImGui::SeparatorText("Exposure"); {
-
-		//	const char* items[] = { "Log", "Linear" };
-		//	static int curr = 0;
-		//	if (ImGui::Combo("Mode", &curr, items, IM_ARRAYSIZE(items))) {
-		//		_gpu.ssbo->exposureMode = curr;
-		//	}
 
 		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
@@ -191,11 +184,12 @@ void Engine::uiUpdateHDR()
 
 			ImGui::Separator();
 
-			ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_gpu.ssbo->oldMax));
+			//ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_gpu.ssbo->oldMax));
 
 			ImGui::Separator();
 
-			ImGui::Text("Current adaptation: %f", _gpu.ssbo->exposureAverage);
+			//ImGui::Text("Current adaptation: %f", _gpu.ssbo->exposureAverage);
+			ImGui::Text("Current adaptation: %f", _gpu.compLum->averageLuminance);
 			ImGui::Text("Target adaptation: %f", _renderContext.targetExposure);
 
 			ImGui::SeparatorText("Histogram bounds");
@@ -220,7 +214,7 @@ void Engine::uiUpdateHDR()
 				static float history = 30.0f;
 				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
 
-				rdata.AddPoint(t, _gpu.ssbo->exposureAverage);
+				rdata.AddPoint(t, _gpu.compLum->averageLuminance);
 				rdata.Span = history;
 
 				rdata1.AddPoint(t, _renderContext.targetExposure);
@@ -254,9 +248,9 @@ void Engine::uiUpdateHDR()
 			if (ImGui::TreeNode("Histogram")) {
 
 				
-#if 0
+#if 1
 				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-					constexpr int arr_size = ARRAY_SIZE(_gpu.ssbo->luminance);
+					constexpr int arr_size = ARRAY_SIZE(_gpu.compLum->luminance);
 
 					int bins = arr_size;
 					int xs[arr_size];
@@ -269,7 +263,7 @@ void Engine::uiUpdateHDR()
 					/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
 					int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
 
-					std::vector<int> vals(_gpu.ssbo->luminance, _gpu.ssbo->luminance + arr_size);
+					std::vector<int> vals(_gpu.compLum->luminance, _gpu.compLum->luminance + arr_size);
 
 					auto it = std::max_element(vals.begin(), vals.end());
 					int maxBin = *it;

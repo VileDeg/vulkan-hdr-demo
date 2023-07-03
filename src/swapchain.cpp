@@ -1,107 +1,104 @@
 #include "stdafx.h"
 #include "engine.h"
 
-namespace {
-    struct SwapchainPropertiesSupport {
-        VkSurfaceCapabilitiesKHR capabilities;
-        std::vector<VkSurfaceFormatKHR> formats;
-        std::vector<VkPresentModeKHR> presentModes;
-    };
+struct SwapchainPropertiesSupport {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
 
-    VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
-    {
-        if (capabilities.currentExtent.width != UINT32_MAX) {
-            return capabilities.currentExtent;
-        } else {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
+static VkExtent2D pickExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
+{
+    if (capabilities.currentExtent.width != UINT32_MAX) {
+        return capabilities.currentExtent;
+    } else {
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
 
-            VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+        VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 
-            actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
-            actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+        actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
+        actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
 
-            return actualExtent;
-        }
-    }
-
-    SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
-    {
-        SwapchainPropertiesSupport support;
-
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &support.capabilities);
-
-        uint32_t formatCount;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-        ASSERTMSG(formatCount != 0, "No surface formats supported");
-        support.formats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, support.formats.data());
-
-        uint32_t presentModeCount;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-        ASSERTMSG(presentModeCount != 0, "No present modes supported");
-        support.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, support.presentModes.data());
-
-        return support;
-    }
-
-    VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
-    {
-        // Copied from file: "imgui/imgui_impl_vulkan.h", function: "ImGui_ImplVulkanH_SelectSurfaceFormat"
-
-        ASSERT(request_formats != nullptr);
-        ASSERT(request_formats_count > 0);
-
-        // Per Spec Format and View Format are expected to be the same unless VK_IMAGE_CREATE_MUTABLE_BIT was set at image creation
-        // Assuming that the default behavior is without setting this bit, there is no need for separate Swapchain image and image view format
-        // Additionally several new color spaces were introduced with Vulkan Spec v1.0.40,
-        // hence we must make sure that a format with the mostly available color space, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, is found and used.
-        uint32_t avail_count;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, nullptr);
-        std::vector<VkSurfaceFormatKHR> avail_format;
-        avail_format.resize((int)avail_count);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, avail_format.data());
-
-        // First check if only one format, VK_FORMAT_UNDEFINED, is available, which would imply that any format is available
-        if (avail_count == 1)
-        {
-            if (avail_format[0].format == VK_FORMAT_UNDEFINED)
-            {
-                VkSurfaceFormatKHR ret;
-                ret.format = request_formats[0];
-                ret.colorSpace = request_color_space;
-                return ret;
-            } else
-            {
-                // No point in searching another format
-                return avail_format[0];
-            }
-        } else
-        {
-            // Request several formats, the first found will be used
-            for (int request_i = 0; request_i < request_formats_count; request_i++)
-                for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
-                    if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
-                        return avail_format[avail_i];
-
-            // If none of the requested image formats could be found, use the first available
-            return avail_format[0];
-        }
-    }
-
-    VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
-    {
-        for (VkPresentModeKHR pm : availablePresentModes) {
-            if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
-                return pm;
-            }
-        }
-
-        return VK_PRESENT_MODE_FIFO_KHR;
+        return actualExtent;
     }
 }
 
+static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+    SwapchainPropertiesSupport support;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &support.capabilities);
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+    ASSERTMSG(formatCount != 0, "No surface formats supported");
+    support.formats.resize(formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, support.formats.data());
+
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+    ASSERTMSG(presentModeCount != 0, "No present modes supported");
+    support.presentModes.resize(presentModeCount);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, support.presentModes.data());
+
+    return support;
+}
+
+static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
+{
+    // Copied from file: "imgui/imgui_impl_vulkan.h", function: "ImGui_ImplVulkanH_SelectSurfaceFormat"
+
+    ASSERT(request_formats != nullptr);
+    ASSERT(request_formats_count > 0);
+
+    // Per Spec Format and View Format are expected to be the same unless VK_IMAGE_CREATE_MUTABLE_BIT was set at image creation
+    // Assuming that the default behavior is without setting this bit, there is no need for separate Swapchain image and image view format
+    // Additionally several new color spaces were introduced with Vulkan Spec v1.0.40,
+    // hence we must make sure that a format with the mostly available color space, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, is found and used.
+    uint32_t avail_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, nullptr);
+    std::vector<VkSurfaceFormatKHR> avail_format;
+    avail_format.resize((int)avail_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, avail_format.data());
+
+    // First check if only one format, VK_FORMAT_UNDEFINED, is available, which would imply that any format is available
+    if (avail_count == 1)
+    {
+        if (avail_format[0].format == VK_FORMAT_UNDEFINED)
+        {
+            VkSurfaceFormatKHR ret;
+            ret.format = request_formats[0];
+            ret.colorSpace = request_color_space;
+            return ret;
+        } else
+        {
+            // No point in searching another format
+            return avail_format[0];
+        }
+    } else
+    {
+        // Request several formats, the first found will be used
+        for (int request_i = 0; request_i < request_formats_count; request_i++)
+            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
+                if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
+                    return avail_format[avail_i];
+
+        // If none of the requested image formats could be found, use the first available
+        return avail_format[0];
+    }
+}
+
+static VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+{
+    for (VkPresentModeKHR pm : availablePresentModes) {
+        if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return pm;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
 
 
 void Engine::createSwapchain()
@@ -135,7 +132,7 @@ void Engine::createSwapchain()
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode = presentMode,
         .clipped = VK_TRUE,
-        .oldSwapchain = _swapchain.handle
+        .oldSwapchain = _swapchainHandle
     };
 
     uint32_t queueFamilyIndices[] = { _graphicsQueueFamily, _presentQueueFamily };
@@ -152,18 +149,16 @@ void Engine::createSwapchain()
  
     //Because we are using the old swapchain to create the new one, 
     //we only delete it after the new one is created
-    if (_swapchain.handle != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(_device, _swapchain.handle, nullptr);
+    if (_swapchainHandle != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(_device, _swapchainHandle, nullptr);
     }
-    _swapchain.handle = newSwapchain;
+    _swapchainHandle = newSwapchain;
 
-    vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, nullptr);
+    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, nullptr);
     _swapchain.images.resize(imageCount);
-    vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, _swapchain.images.data());
+    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, _swapchain.images.data());
 
     _swapchain.imageFormat = surfaceFormat.format;
-
-    _swapchain.depthFormat = VK_FORMAT_D32_SFLOAT;
 }
 
 void Engine::createSwapchainImages() {
@@ -192,7 +187,7 @@ void Engine::createSwapchainImages() {
     _swapchain.imageViews.resize(_swapchain.images.size());
     _swapchain.framebuffers.resize(_swapchain.images.size());
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_mainRenderpass, _swapchain.imageExtent);
+    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_swapchain.renderpass, _swapchain.imageExtent);
 
     for (size_t i = 0; i < _swapchain.images.size(); ++i) {
         //Image view

@@ -70,9 +70,6 @@ void main()
 
     if (pc.lightAffected == 1) {
 
-        if (pc.isCubemap == 0) {
-            result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
-        }
         
         /*float lum = luminance(result);
 

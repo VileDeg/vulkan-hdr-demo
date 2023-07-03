@@ -10,10 +10,10 @@ struct ObjectData{
 
 
 layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
-    uint newMax;
+    /*uint newMax;
     uint oldMax;
     float exposureAverage;
-    int _pad0;
+    int _pad0;*/
     
     int showNormals;
     float exposure;

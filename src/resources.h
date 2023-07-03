@@ -173,10 +173,10 @@ struct SSBOConfigs {
 };
 
 struct GPUSSBOData {
-    unsigned int newMax{ 0 };
+    /*unsigned int newMax{ 0 };
     unsigned int oldMax{ 0 };
     float exposureAverage{ 0 };
-    int _pad0;
+    int _pad0;*/
 
     SSBOConfigs configs{};
 
@@ -186,20 +186,25 @@ struct GPUSSBOData {
 };
 
 struct GPUCompSSBO {
-    float minLogLum{};
-    float oneOverLogLumRange{};
+    float minLogLum;
+    float logLumRange;
+    float oneOverLogLumRange;
+    int totalPixelNum;
+
+    float averageLuminance;
+    float timeCoeff;
     int _pad0;
     int _pad1;
+
 #define MAX_LUMINANCE_BINS 256
     unsigned int luminance[MAX_LUMINANCE_BINS]{};
 };
-
-
 
 // Struct with pointers to mapped GPU buffer memory
 struct GPUData {
     GPUSSBOData* ssbo = nullptr;
     GPUCameraData* camera = nullptr;
+    GPUCompSSBO* compLum = nullptr;
 
     void Reset(FrameData fd);
 };

@@ -65,7 +65,7 @@ void Engine::Cleanup()
     _descriptorAllocator->cleanup();
     _descriptorLayoutCache->cleanup();
 
-    vkDestroySwapchainKHR(_device, _swapchain.handle, nullptr);
+    vkDestroySwapchainKHR(_device, _swapchainHandle, nullptr);
 
     _deletionStack.flush();
 }
@@ -154,11 +154,12 @@ static VkRenderPass s_createRenderpass(VkDevice device, VkFormat colorAttFormat,
 }
 
 void Engine::createRenderpass() {
-    _mainRenderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat);
-    _viewportRenderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _swapchain.depthFormat);
+    _swapchain.renderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat);
+    //VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    _viewport.renderpass = s_createRenderpass(_device, _viewport.imageFormat, VK_IMAGE_LAYOUT_GENERAL, _viewport.depthFormat);
 
-    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _mainRenderpass, nullptr); });
-    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _viewportRenderpass, nullptr); });
+    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _swapchain.renderpass, nullptr); });
+    _deletionStack.push([&]() { vkDestroyRenderPass(_device, _viewport.renderpass, nullptr); });
 }
 
 
@@ -173,8 +174,6 @@ void Engine::createViewportImages(uint32_t extentX, uint32_t extentY) {
 
     //Create depth image
     {
-        _viewport.depthFormat = VK_FORMAT_D32_SFLOAT;
-
         VkImageCreateInfo dimgInfo = vkinit::image_create_info(_viewport.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, extent3D);
 
         VmaAllocationCreateInfo dimgAllocinfo = {
@@ -190,27 +189,27 @@ void Engine::createViewportImages(uint32_t extentX, uint32_t extentY) {
     }
 
 
-    VkFormat imageFormat = _swapchain.imageFormat;
+    // 32-bit float HDR format
     size_t imgCount = _swapchain.images.size();
-    _viewport.images.resize(imgCount);
+    _viewportImages.resize(imgCount);
 
     _viewport.imageViews.resize(imgCount);
     _viewport.framebuffers.resize(imgCount);
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewportRenderpass, { extentX, extentY });
+    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewport.renderpass, { extentX, extentY });
 
     for (uint32_t i = 0; i < imgCount; i++)
     {
         VkImageCreateInfo dimg_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
-            .format = imageFormat,
+            .format = _viewport.imageFormat,
             .extent = extent3D, // Extent to whole window
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         };
 
@@ -219,9 +218,9 @@ void Engine::createViewportImages(uint32_t extentX, uint32_t extentY) {
         dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         //allocate and create the image
-        VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
+        VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewportImages[i].image, &_viewportImages[i].allocation, nullptr));
 
-        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(imageFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
+        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.imageFormat, _viewportImages[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
 
@@ -265,14 +264,12 @@ void Engine::cleanupViewportResources()
 
     _viewport.imageViews.clear();
 
-    for (auto& image : _viewport.images) {
+    for (auto& image : _viewportImages) {
         vmaDestroyImage(_allocator, image.image, image.allocation);
     }
 
-    _viewport.images.clear();
+    _viewportImages.clear();
 }
-
-
 
 
 void Engine::initDescriptors()
@@ -283,71 +280,23 @@ void Engine::initDescriptors()
     _descriptorLayoutCache = new vkutil::DescriptorLayoutCache{};
     _descriptorLayoutCache->init(_device);
 
-    //std::vector<VkDescriptorPoolSize> poolSizes = {
-    //    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }, // For camera data
-    //    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10 }, // For scene data
-    //    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 }, // For object data SSBO
-    //    //add combined-image-sampler descriptor types to the pool
-    //    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 }, // For textures
-    //    { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 } // For compute read/write
-    //};
+    // Dynamic unigform buffer
+    {
+        const size_t sceneParamBufferSize = MAX_FRAMES_IN_FLIGHT * pad_uniform_buffer_size(sizeof(GPUSceneData));
 
-    //VkDescriptorPoolCreateInfo descriptorPoolInfo{
-    //    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    //    .maxSets = 10,
-    //    .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-    //    .pPoolSizes = poolSizes.data()
-    //};
+        _sceneParameterBuffer =
+            createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    //VKASSERT(vkCreateDescriptorPool(_device, &descriptorPoolInfo, nullptr, &_descriptorPool));
-    //_deletionStack.push([&]() {
-    //    vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
-    //    });
-
-
-
-    const size_t sceneParamBufferSize = MAX_FRAMES_IN_FLIGHT * pad_uniform_buffer_size(sizeof(GPUSceneData));
-
-    _sceneParameterBuffer =
-        createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    _sceneParameterBuffer.descInfo = {
-               .buffer = _sceneParameterBuffer.buffer,
-               .offset = 0,
-               .range = sizeof(GPUSceneData)
-    };
-    _deletionStack.push([&]() {
-        _sceneParameterBuffer.destroy(_allocator);
-        });
-#if 0
-    { // Camera + scene descriptor set
-        
-
-        VkDescriptorSetLayoutBinding cameraBinding =
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
-
-        VkDescriptorSetLayoutBinding sceneBinding =
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-
-        VkDescriptorSetLayoutBinding bindings[] = { cameraBinding, sceneBinding };
-
-        VkDescriptorSetLayoutCreateInfo cameraBufferLayoutInfo{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 2,
-            .pBindings = bindings
+        _sceneParameterBuffer.descInfo = {
+                   .buffer = _sceneParameterBuffer.buffer,
+                   .offset = 0,
+                   .range = sizeof(GPUSceneData)
         };
-
-        //VKASSERT(vkCreateDescriptorSetLayout(_device, &cameraBufferLayoutInfo, nullptr, &_globalSetLayout));
-        //_deletionStack.push([&]() {
-        //    vkDestroyDescriptorSetLayout(_device, _globalSetLayout, nullptr);
-        //    });
-
-        _descriptorLayoutCache->create_descriptor_layout(&cameraBufferLayoutInfo);
-
-        /*vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-            .bind_buffer(0, )*/
+        _deletionStack.push([&]() {
+            _sceneParameterBuffer.destroy(_allocator);
+            });
     }
-#endif
+
     { // Object descriptor set (SSBO)
         std::vector<VkDescriptorSetLayoutBinding> bindings = {
             // SSBO, both shaders, binding 0
@@ -384,33 +333,11 @@ void Engine::initDescriptors()
             .pBindings = &textureBind
         };
 
-        /*VKASSERT(vkCreateDescriptorSetLayout(_device, &diffuseSetInfo, nullptr, &_diffuseTextureSetLayout));
-        _deletionStack.push([&]() {
-            vkDestroyDescriptorSetLayout(_device, _diffuseTextureSetLayout, nullptr);
-            });*/
-
+     
         _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
     }
 
-    //{ // Compute luminance
-    //    std::vector<VkDescriptorSetLayoutBinding> bindings = {
-    //        // SSBO
-    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-    //        // Input HDR image
-    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_SHADER_STAGE_COMPUTE_BIT, 1),
-    //    };
-
-    //    VkDescriptorSetLayoutCreateInfo dsLayoutInfo = {
-    //        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-    //        .bindingCount = static_cast<uint32_t>(bindings.size()),
-    //        .pBindings = bindings.data()
-    //    };
-
-    //    VKASSERT(vkCreateDescriptorSetLayout(_device, &dsLayoutInfo, nullptr, &_compLuminanceSetLayout));
-    //    _deletionStack.push([&]() {
-    //        vkDestroyDescriptorSetLayout(_device, _compLuminanceSetLayout, nullptr);
-    //        });
-    //}
+  
 
 
 }
@@ -459,7 +386,7 @@ void Engine::initFrame(FrameData& f)
             .commandBufferCount = 1
         };
 
-        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmdBuffer));
+        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
 
 
         // Synchronization primitives
@@ -476,100 +403,62 @@ void Engine::initFrame(FrameData& f)
     }
 
     {
-        //std::vector<VkWriteDescriptorSet> setWrites;
         
         { // Create uniform buffer with camera data
             f.cameraBuffer = createBuffer(sizeof(GPUCameraData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             f.cameraBuffer.descInfo = {
                 .buffer = f.cameraBuffer.buffer,
                 .offset = 0,
-                .range = sizeof(GPUCameraData)
+                .range = VK_WHOLE_SIZE
             };
-
-
-            /*VkDescriptorSetAllocateInfo camSceneSetAllocInfo{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = _descriptorPool,
-                .descriptorSetCount = 1,
-                .pSetLayouts = &_globalSetLayout
-            };
-            vkAllocateDescriptorSets(_device, &camSceneSetAllocInfo, &f.globalDescriptor);*/
-
-            //VkDescriptorBufferInfo cameraInfo
-
-            //VkWriteDescriptorSet cameraWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, f.globalDescriptor, &cameraInfo, 0);
-
-            //setWrites.push_back(cameraWrite);
-
-           
-
-            //VkWriteDescriptorSet sceneWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, f.globalDescriptor, &sceneInfo, 1);
-
-            //setWrites.push_back(sceneWrite);
+        
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 .bind_buffer(1, &_sceneParameterBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-                .build(f.globalDescriptor, _globalSetLayout);
+                .build(f.globalSet, _globalSetLayout);
         }
 
         { // Create SSBO with all objects data
             f.objectBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            /*VkDescriptorSetAllocateInfo objectSetAlloc = {
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .descriptorPool = _descriptorPool,
-                .descriptorSetCount = 1,
-                .pSetLayouts = &_objectSetLayout
-            };
-
-            vkAllocateDescriptorSets(_device, &objectSetAlloc, &f.objectDescriptor);*/
-
             f.objectBuffer.descInfo = {
                 .buffer = f.objectBuffer.buffer,
                 .offset = 0,
-                .range = sizeof(GPUSSBOData)
+                .range = VK_WHOLE_SIZE
             };
-
-            /*VkWriteDescriptorSet objectWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, f.objectDescriptor, &f.objectBuffer.descInfo, 0);
-
-            setWrites.push_back(objectWrite);*/
 
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // SSBO
                 .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap will be passed later
-                .build(f.objectDescriptor, _objectSetLayout);
+                .build(f.objectSet, _objectSetLayout);
         }
 
-        //{ // Create SSBO with compute luminance data
-        //    f.compLumBuffer = createBuffer(sizeof(GPUSSBOData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        {
+            f.compLumBuffer = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-        //    VkDescriptorSetAllocateInfo objectSetAlloc = {
-        //        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        //        .descriptorPool = _descriptorPool,
-        //        .descriptorSetCount = 1,
-        //        .pSetLayouts = &_compLuminanceSetLayout
-        //    };
+            f.compLumBuffer.descInfo = {
+                .buffer = f.compLumBuffer.buffer,
+                .offset = 0,
+                .range = VK_WHOLE_SIZE
+            };
 
-        //    vkAllocateDescriptorSets(_device, &objectSetAlloc, &f.compLumDescriptor);
+            // Create layout and write descriptor set for compute histogram step
+            vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                .bind_buffer(0, &f.compLumBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .build(f.compHistogramSet, _compute.histogram.setLayout);
 
-        //    VkDescriptorBufferInfo objectInfo = {
-        //        .buffer = f.compLumBuffer.buffer,
-        //        .offset = 0,
-        //        .range = sizeof(GPUSSBOData)
-        //    };
-
-        //    VkWriteDescriptorSet compLumWrite = vkinit::write_descriptor_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, f.compLumDescriptor, &objectInfo, 0);
-
-        //    setWrites.push_back(compLumWrite);
-        //}
-
-        //vkUpdateDescriptorSets(_device, setWrites.size(), setWrites.data(), 0, nullptr);
+            // Create layout and write descriptor set for compute average luminance step
+            vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                .bind_buffer(0, &f.compLumBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .build(f.compAvgLumSet, _compute.averageLuminance.setLayout);
+        }
     }
 
     _deletionStack.push([&]() { 
         f.cameraBuffer.destroy(_allocator);
         f.objectBuffer.destroy(_allocator);
-        //f.compLumBuffer.destroy(_allocator);
+        f.compLumBuffer.destroy(_allocator);
 
         vkDestroyFence(_device, f.inFlightFence, nullptr);
 

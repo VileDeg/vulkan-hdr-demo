@@ -1,0 +1,69 @@
+// Based on https://bruop.github.io/exposure/
+#version 460
+// To unroll the for loop
+//#pragma optionNV (unroll all)
+
+#include "defs.glsl"
+
+#define GROUP_SIZE 256
+#define THREADS_X 256
+#define THREADS_Y 1
+
+#define localIndex gl_LocalInvocationIndex
+
+layout (std430, set = 0, binding = 0) buffer Luminance {
+    float minLogLum;
+    float logLumRange;
+    float oneOverLogLumRange;
+    int totalPixelNum;
+
+    float averageLuminance;
+    float timeCoeff;
+    int _pad0;
+    int _pad1;
+
+    uint histogram[MAX_LUMINANCE_BINS];
+} ssbo;
+
+// Shared
+shared uint histogramShared[GROUP_SIZE];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+  // Get the count from the histogram buffer
+  uint countForThisBin = ssbo.histogram[localIndex];
+  histogramShared[localIndex] = countForThisBin * localIndex;
+
+ 
+
+  barrier();
+
+  // Reset the count stored in the buffer in anticipation of the next pass
+  //atomicAdd(ssbo.histogram[localIndex], -ssbo.histogram[localIndex]);
+
+  // This loop will perform a weighted count of the luminance range
+  for (uint cutoff = (GROUP_SIZE >> 1); cutoff > 0; cutoff >>= 1) {
+    if (uint(localIndex) < cutoff) {
+      atomicAdd(histogramShared[localIndex], histogramShared[localIndex + cutoff]);
+    }
+
+    barrier();
+  }
+
+  // We only need to calculate this once, so only a single thread is needed.
+  if (localIndex == 0) {
+    // Here we take our weighted sum and divide it by the number of pixels
+    // that had luminance greater than zero (since the index == 0, we can
+    // use countForThisBin to find the number of black pixels)
+    float weightedLogAverage = (histogramShared[0] / max(float(ssbo.totalPixelNum) - float(countForThisBin), 1.0)) - 1.0;
+
+    // Map from our histogram space to actual luminance
+    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * ssbo.logLumRange) + ssbo.minLogLum);
+
+    // The new stored value will be interpolated using the last frames value
+    // to prevent sudden shifts in the exposure.
+    float lumLastFrame = ssbo.averageLuminance;
+    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ssbo.timeCoeff;
+    ssbo.averageLuminance = adaptedLum;
+  }
+}

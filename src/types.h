@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Camera.h"
-//#include "vk_descriptors.h"
 
 struct DeletionStack {
     std::stack<std::function<void()>> deletors;
@@ -42,13 +41,6 @@ struct AllocatedBuffer {
 
     bool hostVisible;
 
-    /*void runOnMemoryMap(VmaAllocator allocator, std::function<void(void*)> func) {
-        void* data;
-        vmaMapMemory(allocator, allocation, &data);
-        func(data);
-        vmaUnmapMemory(allocator, allocation);
-    }*/
-
     void create(VmaAllocator allocator, VkBufferCreateInfo bufferInfo, VmaAllocationCreateInfo allocInfo);
     void destroy(const VmaAllocator& allocator);
 };
@@ -70,7 +62,7 @@ struct FrameData {
 
     VkCommandPool commandPool;
 
-    VkCommandBuffer cmdBuffer;
+    VkCommandBuffer cmd;
     //VkCommandBuffer viewportCmdBuffer;
 
     AllocatedBuffer cameraBuffer;
@@ -78,18 +70,26 @@ struct FrameData {
 
     AllocatedBuffer compLumBuffer;
 
-    VkDescriptorSet globalDescriptor;
-    VkDescriptorSet objectDescriptor;
+    VkDescriptorSet globalSet;
+    VkDescriptorSet objectSet;
 
-    VkDescriptorSet compLumDescriptor;
+    VkDescriptorSet compHistogramSet;
+    VkDescriptorSet compAvgLumSet;
 
     //vkutil::DescriptorAllocator descriptorAllocator;
 };
 
-struct DescriptorSet {
+struct ComputeParts {
+    VkDescriptorSetLayout setLayout;
 
+    VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
 };
 
+struct Compute {
+    ComputeParts histogram;
+    ComputeParts averageLuminance;
+};
 
 /**
 * Struct that holds data related to immediate command execution.
@@ -116,23 +116,7 @@ struct InputContext {
     std::function<void(void)> onFramebufferResize = nullptr;
 };
 
-struct Viewport {
-    std::vector<AllocatedImage> images; // Allocated with VMA
-
-    std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> framebuffers;
-
-    VkImageView depthImageView;
-    AllocatedImage depthImage;
-    VkFormat depthFormat;
-
-    // Corresponds to dimensions of ImGui::Image viewport
-    VkExtent2D imageExtent;
-};
-
-struct Swapchain {
-    VkSwapchainKHR handle{ VK_NULL_HANDLE };
-
+struct RenderResources {
     std::vector<VkImage> images; // Retrieved from created swapchain
 
     std::vector<VkImageView> imageViews;
@@ -142,7 +126,12 @@ struct Swapchain {
 
     VkImageView depthImageView;
     AllocatedImage depthImage;
-    VkFormat depthFormat;
+    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
     VkExtent2D imageExtent; // Corresponds to window dimensions
+
+    VkRenderPass renderpass;
+
+    RenderResources() = default;
+    RenderResources(VkFormat format) : imageFormat{ format } {}
 };

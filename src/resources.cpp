@@ -489,7 +489,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		VkWriteDescriptorSet skyboxWrite = 
-			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectDescriptor, &newTexture.image.descInfo, 1);
+			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectSet, &newTexture.image.descInfo, 1);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
 
@@ -950,8 +950,9 @@ void Engine::uploadMesh(Mesh& mesh)
 
 void GPUData::Reset(FrameData fd)
 {
-	ssbo   = reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
-	camera = reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
+	ssbo     = reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
+	camera   = reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
+	compLum = reinterpret_cast<GPUCompSSBO*>(fd.compLumBuffer.gpu_ptr);
 }
 
 
