@@ -106,9 +106,6 @@ void main()
         }
     }*/
 
-    // Gamma correction
-    const float gamma = 2.2f;
-    result = pow(result, vec3(1.f / gamma));
-
+   
     FragColor = vec4(result, 1.f);
 }

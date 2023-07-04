@@ -75,6 +75,7 @@ struct FrameData {
 
     VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
+    VkDescriptorSet compTonemapSet;
 
     //vkutil::DescriptorAllocator descriptorAllocator;
 };
@@ -89,6 +90,7 @@ struct ComputeParts {
 struct Compute {
     ComputeParts histogram;
     ComputeParts averageLuminance;
+    ComputeParts toneMapping;
 };
 
 /**

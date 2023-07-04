@@ -159,10 +159,6 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		_gpu.compLum->oneOverLogLumRange = 1.f / _gpu.compLum->logLumRange;
 		_gpu.compLum->timeCoeff = 1.f;
 		_gpu.compLum->totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
-
-		for (size_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-			_gpu.compLum->luminance[i] = 0;
-		}
 	}
 
 	Mesh* lastMesh = nullptr;
@@ -267,7 +263,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 	
 			ASSERT(MAX_LUMINANCE_BINS == 256);
-			vkCmdDispatch(f.cmd, 16, 16, 1);
+			constexpr uint32_t thread_size = 16;
+			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 
 	
@@ -293,8 +290,75 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				0, nullptr
 			);
 
-			vkCmdDispatch(f.cmd, MAX_LUMINANCE_BINS, 1, 1);
+			// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
+			vkCmdDispatch(f.cmd, 1, 1, 1);
 		}
+
+		// Compute tone mapping
+		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipeline);
+		{
+			VkDescriptorImageInfo imageBufferInfo{
+				.sampler = _linearSampler,
+				.imageView = _viewport.imageViews[imageIndex],
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+			};
+			VkWriteDescriptorSet inOutHDRImage =
+				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					f.compTonemapSet, &imageBufferInfo, 1);
+
+			vkUpdateDescriptorSets(_device, 1, &inOutHDRImage, 0, nullptr);
+
+			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipelineLayout, 0, 1, &f.compTonemapSet, 0, nullptr);
+
+			VkMemoryBarrier memoryBarrier = {
+				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+			};
+
+			vkCmdPipelineBarrier(
+				f.cmd,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
+				0,
+				1, &memoryBarrier,
+				0, nullptr,
+				0, nullptr
+			);
+
+			constexpr uint32_t thread_size = 32;
+			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
+		}
+	}
+
+	{ // Sync compute to graphics
+		VkImageMemoryBarrier imageMemoryBarrier = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+			/* .image and .subresourceRange should identify image subresource accessed */
+			.image = _viewportImages[imageIndex].image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			}
+		};
+
+		vkCmdPipelineBarrier(
+			f.cmd,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // srcStageMask
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // dstStageMask
+			0,
+			0, nullptr,
+			0, nullptr,
+			1,                                             // imageMemoryBarrierCount
+			&imageMemoryBarrier
+		);
 	}
 
 

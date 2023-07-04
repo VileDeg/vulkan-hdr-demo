@@ -1,7 +1,5 @@
 // Based on https://bruop.github.io/exposure/
 #version 460
-// To unroll the for loop
-//#pragma optionNV (unroll all)
 
 #include "defs.glsl"
 
@@ -34,12 +32,10 @@ void main() {
   uint countForThisBin = ssbo.histogram[localIndex];
   histogramShared[localIndex] = countForThisBin * localIndex;
 
- 
-
   barrier();
 
   // Reset the count stored in the buffer in anticipation of the next pass
-  //atomicAdd(ssbo.histogram[localIndex], -ssbo.histogram[localIndex]);
+  ssbo.histogram[localIndex] = 0;
 
   // This loop will perform a weighted count of the luminance range
   for (uint cutoff = (GROUP_SIZE >> 1); cutoff > 0; cutoff >>= 1) {
