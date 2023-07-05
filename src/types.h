@@ -103,20 +103,17 @@ struct UploadContext {
     VkCommandBuffer commandBuffer;
 };
 
-struct InputContext {
-    InputContext(std::function<void(void)> onFbResize)
-        : onFramebufferResize(onFbResize) {}
-
-    Camera camera = {};
-
-    bool cursorEnabled = false;
-    bool framebufferResized = false;
-
-    bool toneMappingEnabled = true;
-    bool exposureEnabled = true;
-
-    std::function<void(void)> onFramebufferResize = nullptr;
-};
+//struct InputContext {
+//    InputContext(std::function<void(void)> onFbResize)
+//        : onFramebufferResize(onFbResize) {}
+//
+//    Camera camera = {};
+//
+//    bool cursorEnabled = false;
+//    bool framebufferResized = false;
+//
+//    std::function<void(void)> onFramebufferResize = nullptr;
+//};
 
 struct RenderResources {
     std::vector<VkImage> images; // Retrieved from created swapchain

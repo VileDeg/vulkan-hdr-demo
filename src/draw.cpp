@@ -119,10 +119,8 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 {
 	// Load SSBO to GPU
 	{
-		_renderContext.ssboConfigs.exposureON	 = _inp.exposureEnabled;
-		_renderContext.ssboConfigs.toneMappingON = _inp.toneMappingEnabled;
-
-		memcpy(&_gpu.ssbo->configs, &_renderContext.ssboConfigs, sizeof(SSBOConfigs));
+		_gpu.ssbo->enableExposure = _state.enableExposure;
+		_gpu.ssbo->exposure = _state.exposure;
 
 		for (int i = 0; i < objects.size(); i++) {
 			_gpu.ssbo->objects[i].modelMatrix = objects[i]->Transform();
@@ -136,15 +134,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
 		sd += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
 
-		_renderContext.sceneData.cameraPos = _inp.camera.GetPos();
-
+		_renderContext.sceneData.cameraPos = _camera.GetPos();
 
 		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneData));
 	}
 	
 	{ // Load UNIFORM BUFFER of camera to GPU
-		glm::mat4 viewMat = _inp.camera.GetViewMat();
-		glm::mat4 projMat = _inp.camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
+		glm::mat4 viewMat = _camera.GetViewMat();
+		glm::mat4 projMat = _camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
 
 		*_gpu.camera = {
 			.view = viewMat,
@@ -153,12 +150,71 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		};
 	}
 
-	{ // Load compute luminance SSBO to GPU
-		_gpu.compLum->minLogLum = -2.f;
-		_gpu.compLum->logLumRange = 12.f;
+	{ // Load compute SSBO to GPU
+		/*if (_gpu.compLum->averageLuminance == 0.f) {
+			_gpu.compLum->averageLuminance = 1.f;
+		}
+		if (_gpu.compLum->targetAverageLuminance == 0.f) {
+			_gpu.compLum->targetAverageLuminance = 1.f;
+		}*/
+
+		_gpu.compLum->minLogLum = _state.minLogLuminance;
+		_gpu.compLum->logLumRange = _state.maxLogLuminance - _state.minLogLuminance;
 		_gpu.compLum->oneOverLogLumRange = 1.f / _gpu.compLum->logLumRange;
-		_gpu.compLum->timeCoeff = 1.f;
-		_gpu.compLum->totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		_gpu.compLum->timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
+
+		_state.totalViewportPixels = _viewport.imageExtent.width * _viewport.imageExtent.height;
+
+		_gpu.compLum->enableToneMapping = _state.enableToneMapping;
+		_gpu.compLum->gammaMode = _state.gammaMode;
+		_gpu.compLum->enableAdaptation = _state.enableEyeAdaptation;
+
+		_gpu.compLum->toneMappingMode = _state.toneMappingMode;
+
+		using uint = unsigned int;
+		uint sum = 0;
+		//uint tmp_sum = 0;
+		uint li = 0;
+		uint ui = MAX_LUMINANCE_BINS - 1;
+		float lb = _state.lumPixelLowerBound * _state.totalViewportPixels;
+		float ub = _state.lumPixelUpperBound * _state.totalViewportPixels;
+
+		uint sum_skipped = 0;
+
+		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+			//tmp_sum += _gpu.compLum->luminance[i];
+			
+			sum += _gpu.compLum->luminance[i];
+			if (sum > lb) {
+				li = i;
+				break;
+			}
+		}
+
+		sum_skipped += sum;
+
+		for (uint i = li+1; i < MAX_LUMINANCE_BINS; ++i) {
+			//tmp_sum += _gpu.compLum->luminance[i];
+			sum += _gpu.compLum->luminance[i];
+			if (sum > ub) {
+				ui = i;
+				break;
+			}
+		}
+
+		sum_skipped += _state.totalViewportPixels - sum;
+
+		_gpu.compLum->lumLowerIndex = li;
+		_gpu.compLum->lumUpperIndex = ui;
+
+		//_gpu.compLum->totalPixelNum = _state.totalViewportPixels - sum_skipped;
+		_gpu.compLum->totalPixelNum = _state.totalViewportPixels;
+		//_gpu.compLum->totalPixelNum = total_px;
+
+		_gpu.compLum->weights = _state.weights;
+
+		// Reset luminance from previous frame
+		memset(_gpu.compLum->luminance, 0, sizeof(_gpu.compLum->luminance));
 	}
 
 	Mesh* lastMesh = nullptr;
@@ -267,9 +323,23 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 
-	
 
-		// Compute average luminance
+#if 0 // Compute average luminance on CPU
+		unsigned int sum = 0;
+		for (size_t i = _gpu.compLum->lumLowerIndex; i < _gpu.compLum->lumUpperIndex+1; ++i) {
+			sum += _gpu.compLum->luminance[i] * i;
+		}
+		float weightedLogAverage = (sum / std::max(float(_gpu.compLum->totalPixelNum), 1.f)) - 1.f;
+		// Map from our histogram space to actual luminance
+		float weightedAvgLum = std::exp2(((weightedLogAverage / 254.0) * _gpu.compLum->logLumRange) + _gpu.compLum->minLogLum);
+		// Set target luminance for display and comparison
+		_gpu.compLum->targetAverageLuminance = weightedAvgLum;
+		// The new stored value will be interpolated using the last frames value
+		// to prevent sudden shifts in the exposure.
+		float lumLastFrame = _gpu.compLum->averageLuminance;
+		float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * _gpu.compLum->timeCoeff;
+		_gpu.compLum->averageLuminance = adaptedLum;
+#else // Compute average luminance on GPU
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
 		{
 			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipelineLayout, 0, 1, &f.compAvgLumSet, 0, nullptr);
@@ -293,7 +363,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
 			vkCmdDispatch(f.cmd, 1, 1, 1);
 		}
-
+#endif
 		// Compute tone mapping
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipeline);
 		{
@@ -444,7 +514,7 @@ void Engine::drawFrame()
 
     result = vkQueuePresentKHR(_presentQueue, &presentInfo);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _inp.framebufferResized) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _framebufferResized) {
         //_framebufferResized = false;
         recreateSwapchain();
     }

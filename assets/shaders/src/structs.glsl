@@ -8,22 +8,11 @@ struct ObjectData{
     int _pad2;
 };
 
-
 layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
-    /*uint newMax;
-    uint oldMax;
-    float exposureAverage;
-    int _pad0;*/
-    
     int showNormals;
     float exposure;
-    int _pad1;
-    int _pad2;
-
-    int exposureON;
-    int exposureMode;
-    int toneMappingON;
-    int toneMappingMode;
+    int enableExposure;
+    int _pad0;
 
 	ObjectData objects[MAX_OBJECTS];
 } ssbo;

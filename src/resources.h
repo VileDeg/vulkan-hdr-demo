@@ -160,17 +160,14 @@ struct GPUObjectData {
     int _pad2;
 };
 
-struct SSBOConfigs {
-    int showNormals{ 0 };
-    float exposure{ 1.0f };
-    int _pad1;
-    int _pad2;
-
-    int exposureON{ 1 };
-    int exposureMode{ 0 };
-    int toneMappingON{ 1 };
-    int toneMappingMode{ 3 };
-};
+//struct SSBOConfigs {
+//    int showNormals{ 0 };
+//    float exposure{ 1.0f };
+//    int exposureON{ 1 };
+//    int _pad0;
+//    
+//    //int exposureMode{ 0 };
+//};
 
 struct GPUSSBOData {
     /*unsigned int newMax{ 0 };
@@ -178,23 +175,42 @@ struct GPUSSBOData {
     float exposureAverage{ 0 };
     int _pad0;*/
 
-    SSBOConfigs configs{};
+    //SSBOConfigs configs{};
+    int showNormals{ 0 };
+    float exposure{ 1.0f };
+    int enableExposure{ 1 };
+    int _pad0;
 
 #define MAX_OBJECTS 10
     GPUObjectData objects[MAX_OBJECTS]{};
-
 };
+
+//struct GPUCompSSBO_ReadOnly {
+//
+//};
 
 struct GPUCompSSBO {
     float minLogLum;
     float logLumRange;
     float oneOverLogLumRange;
-    int totalPixelNum;
+    unsigned int totalPixelNum;
 
-    float averageLuminance;
-    float timeCoeff;
+    float averageLuminance = 1.f;
+    float targetAverageLuminance = 1.f;
+    float timeCoeff = 1.f;
     int _pad0;
+    
+    unsigned int lumLowerIndex;
+    unsigned int lumUpperIndex;
     int _pad1;
+    int _pad2;
+
+    glm::vec4 weights;
+
+    int enableToneMapping{ 1 };
+    int toneMappingMode{ 3 };
+    int enableAdaptation{ 1 };
+    int gammaMode{ 0 };
 
 #define MAX_LUMINANCE_BINS 256
     unsigned int luminance[MAX_LUMINANCE_BINS]{};
@@ -216,22 +232,22 @@ struct RenderContext {
     //GPUSceneData* gpu_sd = nullptr;
 
 
-    SSBOConfigs ssboConfigs{};
+    //SSBOConfigs ssboConfigs{};
 
     //GPUPushConstantData pushConstantData{};
 
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
-    glm::vec2 luminanceHistogramBounds{ .3, .95 };
+    //glm::vec2 luminanceHistogramBounds{ .3, .95 };
 
-    int lumHistStartI = 0;
-    int lumHistEndI = MAX_LUMINANCE_BINS-1;
+    /*int lumHistStartI = 0;
+    int lumHistEndI = MAX_LUMINANCE_BINS-1;*/
 
-    int totalPixels = 0;
+    //int totalPixels = 0;
 
-    float exposureBlendingFactor = 1.2f;
-    float targetExposure = 1.f; // Used for plotting
+    //float exposureBlendingFactor = 1.2f;
+    //float targetAdaptation = 1.f; // Used for plotting
 
     bool enableSkybox = true;
 

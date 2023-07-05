@@ -6,10 +6,30 @@
 #include "resources.h"
 #include "vk_descriptors.h"
 
+struct GlobalState {
+    bool enableToneMapping = true;
+    bool enableExposure = true;
+    bool enableEyeAdaptation = true;
+    bool showNormals = false;
+
+    float minLogLuminance = -2.f;
+    float maxLogLuminance = 10.f;
+    float eyeAdaptationTimeCoefficient = 1.1f;
+    float exposure = 1.f; // EV steps
+
+    float lumPixelLowerBound = 0.2f;
+    float lumPixelUpperBound = 0.95f;
+    unsigned int totalViewportPixels;
+    /*float lumPixelLowerIndex = 0;
+    float lumPixelUpperIndex = MAX_LUMINANCE_BINS - 1;*/
+    glm::vec4 weights = {1.f, 128.f, 1.f, 1.f};
+
+    int toneMappingMode = 3;
+    int gammaMode = 1; // Apply gamma correction
+};
+
 class Engine {
 public:
-    Engine() : _inp([this]() { drawFrame(); }) {}
-
     void Init();
     void Run();
     void Cleanup();
@@ -40,6 +60,10 @@ private: /* Methods used from Init directly */
     void createScene(const std::string mainModelFullPath);
 
 private: /* Secondary methods */
+
+    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void cursorCallback(GLFWwindow* window, double xpos, double ypos);
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
     void loadDeviceExtensionFunctions();
 
@@ -106,6 +130,8 @@ private:
     
     
 private: 
+    GlobalState _state;
+
     GLFWwindow* _window;
 
     VkInstance _instance;
@@ -157,8 +183,11 @@ private:
     DeletionStack _deletionStack{}; // Disposing resources created during initialization
     DeletionStack _sceneDisposeStack{};
 
-    InputContext _inp;
-    
+    Camera _camera = {};
+
+    bool _cursorEnabled = false; 
+    bool _framebufferResized = false;
+
     std::vector<std::shared_ptr<RenderObject>> _renderables;
 
     std::unordered_map<std::string, Model> _models;

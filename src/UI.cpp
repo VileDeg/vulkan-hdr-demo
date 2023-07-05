@@ -24,8 +24,6 @@ struct RollingBuffer {
 	}
 };
 
-static void EmbraceTheDarkness();
-
 void Engine::initImgui()
 {
 	// 1: create descriptor pool for IMGUI
@@ -161,141 +159,159 @@ void Engine::uiUpdateHDR()
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = _renderContext.ssboConfigs.toneMappingMode;
-			if (ImGui::Combo("Operator", &item_current, items, IM_ARRAYSIZE(items))) {
-				_renderContext.ssboConfigs.toneMappingMode = item_current;
+			static int item_current = _state.toneMappingMode;
+			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
+				_state.toneMappingMode = item_current;
 			}
 		}
-		ImGui::Checkbox("Enable tone mapping", &_inp.toneMappingEnabled);
+		ImGui::Checkbox("Enable tone mapping", &_state.enableToneMapping);
 
 		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
-				_renderContext.ssboConfigs.exposure -= 1;
+				_state.exposure -= 1;
 			}
 			ImGui::SameLine();
-			ImGui::Text("%f", _renderContext.ssboConfigs.exposure);
+			ImGui::Text("%f", _state.exposure);
 			ImGui::SameLine();
 			if (ImGui::Button("+")) {
-				_renderContext.ssboConfigs.exposure += 1;
-			}
-			ImGui::Separator();
-
-			ImGui::Checkbox("Enable eye adaptation", &_inp.exposureEnabled);
-
-			ImGui::Separator();
-
-			//ImGui::Text("Current MAX: %f", *reinterpret_cast<float*>(&_gpu.ssbo->oldMax));
-
-			ImGui::Separator();
-
-			//ImGui::Text("Current adaptation: %f", _gpu.ssbo->exposureAverage);
-			ImGui::Text("Current adaptation: %f", _gpu.compLum->averageLuminance);
-			ImGui::Text("Target adaptation: %f", _renderContext.targetExposure);
-
-			ImGui::SeparatorText("Histogram bounds");
-			ImGui::SliderFloat("Lower", &_renderContext.luminanceHistogramBounds.x, 0.f, 0.45f);
-			ImGui::SliderFloat("Upper", &_renderContext.luminanceHistogramBounds.y, 0.55f, 1.f);
-			ImGui::Text("Histogram bounds: %f %f", _renderContext.luminanceHistogramBounds.x, _renderContext.luminanceHistogramBounds.y);
-			ImGui::Separator();
-
-		} ImGui::SeparatorText("Plots"); {
-
-			if (ImGui::TreeNode("Exposure Window")) {
-				
-				ImGui::Separator();
-
-				static RollingBuffer rdata, rdata1;
-
-				ImGui::SliderFloat("Blending factor", &_renderContext.exposureBlendingFactor, 1.f, 2.f);
-
-				static float t = 0;
-				t += ImGui::GetIO().DeltaTime;
-
-				static float history = 30.0f;
-				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
-
-				rdata.AddPoint(t, _gpu.compLum->averageLuminance);
-				rdata.Span = history;
-
-				rdata1.AddPoint(t, _renderContext.targetExposure);
-				rdata1.Span = history;
-
-				static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
-
-				if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
-					//ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
-					static float maxY = 0;
-					maxY = _renderContext.targetExposure > maxY ? _renderContext.targetExposure : maxY;
-					//float maxY = _renderContext.targetExposure;
-
-					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-
-					ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
-
-					std::string label = "Exposure (actual)";
-					ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
-
-					label = "Exposure (target)";
-					ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
-
-					ImPlot::EndPlot();
-				}
-
-				ImGui::TreePop();
-			}
-
-			if (ImGui::TreeNode("Histogram")) {
-
-				
-#if 1
-				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-					constexpr int arr_size = ARRAY_SIZE(_gpu.compLum->luminance);
-
-					int bins = arr_size;
-					int xs[arr_size];
-
-					for (int i = 0; i < arr_size; ++i) {
-						xs[i] = i;
-					}
-
-					// Skip values that don't lie withing bounds
-					/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
-					int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
-
-					std::vector<int> vals(_gpu.compLum->luminance, _gpu.compLum->luminance + arr_size);
-
-					auto it = std::max_element(vals.begin(), vals.end());
-					int maxBin = *it;
-
-					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-
-					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
-
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-
-
-					ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
-
-					int start_i = _renderContext.lumHistStartI;
-					int end_i   = _renderContext.lumHistEndI;
-
-					int xs1[2] = { start_i, end_i };
-					int vals1[2] = { vals[start_i], vals[end_i] };
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-
-					ImPlot::PlotStems("Bounds", xs1, vals1, 2);
-
-
-					ImPlot::EndPlot();
-				}
-#endif
-				ImGui::TreePop();
+				_state.exposure += 1;
 			}
 		}
-		ImGui::TreePop();
+
+		ImGui::Checkbox("Enable eye adaptation", &_state.enableEyeAdaptation);
+
+		{
+			const char* items[] = {
+				"No gamma correction", "Gamma correction", "Inverse gamma correction" };
+			static int item_current = _state.gammaMode;
+			if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
+				_state.gammaMode = item_current;
+			}
+		}
+
+		ImGui::SeparatorText("Average luminance computation"); {
+			ImGui::SliderFloat("Min log luminance", &_state.minLogLuminance, -10.f, 0.f);
+			ImGui::SliderFloat("Max log luminance", &_state.maxLogLuminance, 1.f, 20.f);
+
+			ImGui::SliderFloat("Weight X", &_state.weights.x, 0.f, 2.f);
+			ImGui::SliderFloat("Weight Y", &_state.weights.y, 0.f, 255.f);
+			ImGui::SliderFloat("Weight Z", &_state.weights.z, 0.f, 100.f);
+			ImGui::SliderFloat("Weight W", &_state.weights.w, 0.f, 5.f);
+		}
+
+		ImGui::Separator(); {
+
+			ImGui::Text("Current average luminance: %f", _gpu.compLum->averageLuminance);
+			ImGui::Text("Target average luminance: %f", _gpu.compLum->targetAverageLuminance);
+
+		} ImGui::SeparatorText("Histogram bounds"); {
+
+			ImGui::SliderFloat("Lower", &_state.lumPixelLowerBound, 0.f, 0.45f);
+			ImGui::SliderFloat("Upper", &_state.lumPixelUpperBound, 0.55f, 1.f);
+			
+			ImGui::Text("Histogram bounds: %f %f", _state.lumPixelLowerBound, _state.lumPixelUpperBound);
+			ImGui::Separator();
+			ImGui::Text("Total pixels: %u", _state.totalViewportPixels);
+			ImGui::Text("Histogram bounds indices: %u %u", _gpu.compLum->lumLowerIndex, _gpu.compLum->lumUpperIndex);
+
+		} ImGui::Separator();
+
+	ImGui::SeparatorText("Plots"); {
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::TreeNode("Exposure Window")) {
+				
+			ImGui::Separator();
+
+			static RollingBuffer rdata, rdata1;
+
+			ImGui::SliderFloat("Adaptation time coefficient", &_state.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+
+			static float t = 0;
+			t += ImGui::GetIO().DeltaTime;
+
+			static float history = 30.0f;
+			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+
+			rdata.AddPoint(t, _gpu.compLum->averageLuminance);
+			rdata.Span = history;
+
+			rdata1.AddPoint(t, _gpu.compLum->targetAverageLuminance);
+			rdata1.Span = history;
+
+			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+
+			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+				static float maxY = 0;
+				maxY = _gpu.compLum->targetAverageLuminance > maxY ? _gpu.compLum->targetAverageLuminance : maxY;
+
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
+
+				std::string label = "Adaptation (actual)";
+				ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
+
+				label = "Adaptation (target)";
+				ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
+
+				ImPlot::EndPlot();
+			}
+
+			ImGui::TreePop();
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::TreeNode("Histogram")) {
+
+				
+			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
+				constexpr int arr_size = ARRAY_SIZE(_gpu.compLum->luminance);
+
+				int bins = arr_size;
+				int xs[arr_size];
+
+				for (int i = 0; i < arr_size; ++i) {
+					xs[i] = i;
+				}
+
+				// Skip values that don't lie withing bounds
+				/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
+				int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
+
+				std::vector<int> vals(_gpu.compLum->luminance, _gpu.compLum->luminance + arr_size);
+
+				auto it = std::max_element(vals.begin(), vals.end());
+				int maxBin = *it;
+
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
+
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+
+				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
+
+				int start_i = _gpu.compLum->lumLowerIndex;
+				int end_i   = _gpu.compLum->lumUpperIndex;
+
+				int xs1[2] = { start_i, end_i };
+				int vals1[2] = { vals[start_i], vals[end_i] };
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+
+				ImPlot::PlotStems("Bounds", xs1, vals1, 2);
+
+
+				ImPlot::EndPlot();
+			}
+			ImGui::TreePop();
+		}
+	}
+	ImGui::TreePop();
 	}
 }
 
@@ -469,9 +485,9 @@ void Engine::imguiUpdate()
 			ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
 			ImGui::Separator();
 
-			bool showNormals = _renderContext.ssboConfigs.showNormals;
+			bool showNormals = _gpu.ssbo->showNormals;
 			if (ImGui::Checkbox("Show normals", &showNormals)) {
-				_renderContext.ssboConfigs.showNormals = showNormals;
+				_gpu.ssbo->showNormals = showNormals;
 			}
 
 			

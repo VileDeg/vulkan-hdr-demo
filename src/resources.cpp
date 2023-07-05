@@ -1023,10 +1023,10 @@ void RenderContext::Init()
 	};
 
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
-	std::vector<float> intensity = { 2000.f, 100.f, 30.f, 500.f };
+	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
 
-	float amb = 0.2f;
+	float amb = 0.01f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
 	/*sceneData.minLogLum = -10.f;
 	sceneData.oneOverLogLumRange = 1.f / 12.f;*/

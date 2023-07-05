@@ -64,9 +64,6 @@ void main()
 
         }
     }
-   
-
-    //float f_oldMax = uintBitsToFloat(ssbo.oldMax);
 
     if (pc.lightAffected == 1) {
 
@@ -74,38 +71,10 @@ void main()
             result *= calculateLighting(sd.lights, sd.ambientColor, fragPos, normal, sd.cameraPos);
         }
         
-        /*float lum = luminance(result);
-
-        // Update current max
-        if (lum > uintBitsToFloat(ssbo.newMax)) {
-                atomicMax(ssbo.newMax, floatBitsToUint(lum));
-        }*/
-
-        // Update luminance histogram
-        //int bin = int(lum / (f_oldMax + 0.0001) * MAX_BINS);
-        //uint bin = colorToBin(result, sd.minLogLum, sd.oneOverLogLumRange);
-        //atomicAdd(ssbo.luminance[bin], 1);
-        
-
-        /*if (ssbo.exposureON == 1) {
-            float expa = ssbo.exposureAverage; //  + 0.0001f
-            //result = result / (expMin + (expa / (expa + 1)) * expMax);
-            result = result / (9.6f * expa);
-        } */
-
-        result *= pow(2, ssbo.exposure);
-    }
-   
-    /*if (ssbo.toneMappingON == 1) { // If enable tone mapping
-        switch (ssbo.toneMappingMode) {
-        case 0: result = ReinhardExtended(result, 10.f); break;
-        case 1: result = Reinhard(result); break;
-        case 2: result = Uncharted2Filmic(result); break;
-        case 3: result = ACESFilm(result); break;
-        case 4: result = ACESFitted(result); break;
+        if (ssbo.enableExposure == 1) {
+            result *= pow(2, ssbo.exposure);
         }
-    }*/
-
+    }
    
     FragColor = vec4(result, 1.f);
 }

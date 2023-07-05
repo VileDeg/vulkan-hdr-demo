@@ -18,16 +18,18 @@ float luminance(vec3 rgb) {
     return dot(rgb, vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
-vec3 changeLuminance(vec3 c_in, float l_out) {
+/*vec3 changeLuminance(vec3 c_in, float l_out) {
     float l_in = luminance(c_in);
     return c_in * (l_out / l_in);
-}
+}*/
 
 vec3 ReinhardExtended(vec3 v, float max_white_lum)  {
-	float l_old = luminance(v);
-    float numerator = l_old * (1.0f + (l_old / (max_white_lum * max_white_lum)));
-    float l_new = numerator / (1.0f + l_old);
-    return changeLuminance(v, l_new);
+	//float l_old = luminance(v);
+    //float numerator = l_old * (1.0f + (l_old / (max_white_lum * max_white_lum)));
+    //float l_new = numerator / (1.0f + l_old);
+    //return changeLuminance(v, l_new);
+    vec3 numerator = v * (1.0 + v / (max_white_lum * max_white_lum));
+    return numerator / (1.0 + v);
 }
 
 vec3 Uncharted2TonemapPartial(vec3 x) {
