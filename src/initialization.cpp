@@ -316,10 +316,10 @@ static bool checkRequiredFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhys
 {
     // Check if the device supports the shaderDrawParameters feature
     vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
-    auto sync2features = *reinterpret_cast<VkPhysicalDeviceSynchronization2Features*>(deviceFeatures.pNext);
-    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(sync2features.pNext);
+    //auto sync2features = *reinterpret_cast<VkPhysicalDeviceSynchronization2Features*>(deviceFeatures.pNext);
+    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(deviceFeatures.pNext);
 
-    bool supported = sync2features.synchronization2 &&
+    bool supported = //sync2features.synchronization2 &&
         shaderDrawParametersFeatures.shaderDrawParameters;
     return supported;
 }
@@ -361,15 +361,15 @@ void Engine::createLogicalDevice()
         .nullDescriptor = VK_TRUE
     };
 
-    VkPhysicalDeviceSynchronization2Features sync2features = {
+    /*VkPhysicalDeviceSynchronization2Features sync2features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
         .pNext = &robust2features,
         .synchronization2 = VK_TRUE
-    };
+    };*/
 
     VkPhysicalDeviceFeatures2 deviceFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &sync2features
+        .pNext = &robust2features
     };
 
     if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {

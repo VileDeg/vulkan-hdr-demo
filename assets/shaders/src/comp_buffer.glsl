@@ -1,27 +1,28 @@
 layout (std430, set = 0, binding = 0) buffer Luminance {
+    float averageLuminance;
+    float targetAverageLuminance;
+    int _pad0;
+    int _pad1;
+
+    uint histogram[MAX_LUMINANCE_BINS];
+} ssbo;
+
+layout (std430, set = 0, binding = 1) readonly buffer RO {
     float minLogLum;
     float logLumRange;
     float oneOverLogLumRange;
     uint totalPixelNum;
 
-    float averageLuminance;
-    float targetAverageLuminance;
     float timeCoeff;
-    int _pad0;
-
     uint lumLowerIndex;
     uint lumUpperIndex;
-    int _pad1;
-    int _pad2;
+    int _pad0;
 
     vec4 weights;
 
-    int enableToneMapping;
+    bool enableToneMapping;
     int toneMappingMode;
-    int enableAdaptation;
+    bool enableAdaptation;
     int gammaMode;
-
-    uint histogram[MAX_LUMINANCE_BINS];
-} ssbo;
-
+} ssbo_ro;
 

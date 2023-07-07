@@ -1,8 +1,5 @@
 #include "stdafx.h"
-
 #include "engine.h"
-
-
 
 void Engine::Init()
 {
@@ -312,11 +309,6 @@ void Engine::initDescriptors()
             .pBindings = bindings.data()
         };
 
-        /*VKASSERT(vkCreateDescriptorSetLayout(_device, &objectSkyboxSetInfo, nullptr, &_objectSetLayout));
-        _deletionStack.push([&]() {
-            vkDestroyDescriptorSetLayout(_device, _objectSetLayout, nullptr);
-            });*/
-
         _objectSetLayout = _descriptorLayoutCache->create_descriptor_layout(&objectSkyboxSetInfo);
     }
 
@@ -336,10 +328,6 @@ void Engine::initDescriptors()
      
         _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
     }
-
-  
-
-
 }
 
 void Engine::initUploadContext()
@@ -430,29 +418,39 @@ void Engine::initFrame(FrameData& f)
         }
 
         {
-            f.compLumBuffer = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compSSBO    = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compSSBO_ro = createBuffer(sizeof(GPUCompSSBO_ReadOnly), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            f.compLumBuffer.descInfo = {
-                .buffer = f.compLumBuffer.buffer,
+            f.compSSBO.descInfo = {
+                .buffer = f.compSSBO.buffer,
+                .offset = 0,
+                .range = VK_WHOLE_SIZE
+            };
+
+            f.compSSBO_ro.descInfo = {
+                .buffer = f.compSSBO_ro.buffer,
                 .offset = 0,
                 .range = VK_WHOLE_SIZE
             };
 
             // Create layout and write descriptor set for COMPUTE histogram step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compLumBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(f.compHistogramSet, _compute.histogram.setLayout);
 
             // Create layout and write descriptor set for COMPUTE average luminance step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compLumBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .build(f.compAvgLumSet, _compute.averageLuminance.setLayout);
 
             // Create layout and write descriptor set for COMPUTE tone mapping step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compLumBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(f.compTonemapSet, _compute.toneMapping.setLayout);
         }
     }
@@ -461,7 +459,8 @@ void Engine::initFrame(FrameData& f)
         f.cameraBuffer.destroy(_allocator);
         f.objectBuffer.destroy(_allocator);
 
-        f.compLumBuffer.destroy(_allocator);
+        f.compSSBO.destroy(_allocator);
+        f.compSSBO_ro.destroy(_allocator);
 
         vkDestroyFence(_device, f.inFlightFence, nullptr);
 

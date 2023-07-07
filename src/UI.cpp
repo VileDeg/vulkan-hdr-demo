@@ -159,12 +159,12 @@ void Engine::uiUpdateHDR()
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = _state.toneMappingMode;
+			static int item_current = _state.cmp.toneMappingMode;
 			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
-				_state.toneMappingMode = item_current;
+				_state.cmp.toneMappingMode = item_current;
 			}
 		}
-		ImGui::Checkbox("Enable tone mapping", &_state.enableToneMapping);
+		ImGui::Checkbox("Enable tone mapping", &_state.cmp.enableToneMapping);
 
 		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
@@ -178,31 +178,32 @@ void Engine::uiUpdateHDR()
 			}
 		}
 
-		ImGui::Checkbox("Enable eye adaptation", &_state.enableEyeAdaptation);
+		ImGui::Checkbox("Enable eye adaptation", &_state.cmp.enableAdaptation);
 
 		{
 			const char* items[] = {
 				"No gamma correction", "Gamma correction", "Inverse gamma correction" };
-			static int item_current = _state.gammaMode;
+			static int item_current = _state.cmp.gammaMode;
 			if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
-				_state.gammaMode = item_current;
+				_state.cmp.gammaMode = item_current;
 			}
 		}
 
 		ImGui::SeparatorText("Average luminance computation"); {
-			ImGui::SliderFloat("Min log luminance", &_state.minLogLuminance, -10.f, 0.f);
+			ImGui::SliderFloat("Min log luminance", &_state.cmp.minLogLum, -10.f, 0.f);
+
 			ImGui::SliderFloat("Max log luminance", &_state.maxLogLuminance, 1.f, 20.f);
 
-			ImGui::SliderFloat("Weight X", &_state.weights.x, 0.f, 2.f);
-			ImGui::SliderFloat("Weight Y", &_state.weights.y, 0.f, 255.f);
-			ImGui::SliderFloat("Weight Z", &_state.weights.z, 0.f, 100.f);
-			ImGui::SliderFloat("Weight W", &_state.weights.w, 0.f, 5.f);
+			ImGui::SliderFloat("Weight X", &_state.cmp.weights.x, 0.f, 2.f);
+			ImGui::SliderFloat("Weight Y", &_state.cmp.weights.y, 0.f, 255.f);
+			ImGui::SliderFloat("Weight Z", &_state.cmp.weights.z, 0.f, 100.f);
+			ImGui::SliderFloat("Weight W", &_state.cmp.weights.w, 0.f, 5.f);
 		}
 
 		ImGui::Separator(); {
 
-			ImGui::Text("Current average luminance: %f", _gpu.compLum->averageLuminance);
-			ImGui::Text("Target average luminance: %f", _gpu.compLum->targetAverageLuminance);
+			ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
+			ImGui::Text("Target average luminance: %f", _gpu.compSSBO->targetAverageLuminance);
 
 		} ImGui::SeparatorText("Histogram bounds"); {
 
@@ -211,8 +212,8 @@ void Engine::uiUpdateHDR()
 			
 			ImGui::Text("Histogram bounds: %f %f", _state.lumPixelLowerBound, _state.lumPixelUpperBound);
 			ImGui::Separator();
-			ImGui::Text("Total pixels: %u", _state.totalViewportPixels);
-			ImGui::Text("Histogram bounds indices: %u %u", _gpu.compLum->lumLowerIndex, _gpu.compLum->lumUpperIndex);
+			ImGui::Text("Total pixels: %u", _state.cmp.totalPixelNum);
+			ImGui::Text("Histogram bounds indices: %u %u", _state.cmp.lumLowerIndex, _state.cmp.lumUpperIndex);
 
 		} ImGui::Separator();
 
@@ -233,17 +234,17 @@ void Engine::uiUpdateHDR()
 			static float history = 30.0f;
 			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
 
-			rdata.AddPoint(t, _gpu.compLum->averageLuminance);
+			rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
 			rdata.Span = history;
 
-			rdata1.AddPoint(t, _gpu.compLum->targetAverageLuminance);
+			rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
 			rdata1.Span = history;
 
 			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
 
 			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
 				static float maxY = 0;
-				maxY = _gpu.compLum->targetAverageLuminance > maxY ? _gpu.compLum->targetAverageLuminance : maxY;
+				maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
 
 				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 
@@ -267,7 +268,7 @@ void Engine::uiUpdateHDR()
 
 				
 			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-				constexpr int arr_size = ARRAY_SIZE(_gpu.compLum->luminance);
+				constexpr int arr_size = ARRAY_SIZE(_gpu.compSSBO->luminance);
 
 				int bins = arr_size;
 				int xs[arr_size];
@@ -280,7 +281,7 @@ void Engine::uiUpdateHDR()
 				/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
 				int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
 
-				std::vector<int> vals(_gpu.compLum->luminance, _gpu.compLum->luminance + arr_size);
+				std::vector<int> vals(_gpu.compSSBO->luminance, _gpu.compSSBO->luminance + arr_size);
 
 				auto it = std::max_element(vals.begin(), vals.end());
 				int maxBin = *it;
@@ -296,8 +297,8 @@ void Engine::uiUpdateHDR()
 
 				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
 
-				int start_i = _gpu.compLum->lumLowerIndex;
-				int end_i   = _gpu.compLum->lumUpperIndex;
+				int start_i = _state.cmp.lumLowerIndex;
+				int end_i   = _state.cmp.lumUpperIndex;
 
 				int xs1[2] = { start_i, end_i };
 				int vals1[2] = { vals[start_i], vals[end_i] };

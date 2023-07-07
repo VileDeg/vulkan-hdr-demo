@@ -6,7 +6,6 @@ enum TextureDynamicRangeType {
     TEX_SDR, TEX_HDR
 };
 
-
 struct VertexInputDescription {
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> attributes;
@@ -160,57 +159,53 @@ struct GPUObjectData {
     int _pad2;
 };
 
-//struct SSBOConfigs {
-//    int showNormals{ 0 };
-//    float exposure{ 1.0f };
-//    int exposureON{ 1 };
-//    int _pad0;
-//    
-//    //int exposureMode{ 0 };
-//};
+struct GPUBool {
+    bool val = {};
+    uint8_t _pad[3] = {};
+
+    GPUBool() = default;
+    GPUBool(bool v) : val{ v }, _pad{} {}
+
+    operator bool() const { return val; }
+    operator bool&() { return val; }
+
+    bool* operator&() { return &val; }
+};
 
 struct GPUSSBOData {
-    /*unsigned int newMax{ 0 };
-    unsigned int oldMax{ 0 };
-    float exposureAverage{ 0 };
-    int _pad0;*/
-
-    //SSBOConfigs configs{};
-    int showNormals{ 0 };
+    GPUBool showNormals = false;
     float exposure{ 1.0f };
-    int enableExposure{ 1 };
+    GPUBool enableExposure = true;
     int _pad0;
 
 #define MAX_OBJECTS 10
     GPUObjectData objects[MAX_OBJECTS]{};
 };
 
-//struct GPUCompSSBO_ReadOnly {
-//
-//};
-
-struct GPUCompSSBO {
-    float minLogLum;
-    float logLumRange;
+struct GPUCompSSBO_ReadOnly {
+    float minLogLum = -2.f;
+    float logLumRange = 12.f;
     float oneOverLogLumRange;
     unsigned int totalPixelNum;
 
-    float averageLuminance = 1.f;
-    float targetAverageLuminance = 1.f;
     float timeCoeff = 1.f;
-    int _pad0;
-    
     unsigned int lumLowerIndex;
     unsigned int lumUpperIndex;
-    int _pad1;
-    int _pad2;
+    int _pad0;
 
-    glm::vec4 weights;
+    glm::vec4 weights = { 1.f, 128.f, 1.f, 1.f };
 
-    int enableToneMapping{ 1 };
+    GPUBool enableToneMapping = true;
     int toneMappingMode{ 3 };
-    int enableAdaptation{ 1 };
-    int gammaMode{ 0 };
+    GPUBool enableAdaptation = true;
+    int gammaMode{ 1 };
+};
+
+struct GPUCompSSBO {
+    float averageLuminance = 1.f;
+    float targetAverageLuminance = 1.f;
+    int _pad0;
+    int _pad1;
 
 #define MAX_LUMINANCE_BINS 256
     unsigned int luminance[MAX_LUMINANCE_BINS]{};
@@ -220,34 +215,17 @@ struct GPUCompSSBO {
 struct GPUData {
     GPUSSBOData* ssbo = nullptr;
     GPUCameraData* camera = nullptr;
-    GPUCompSSBO* compLum = nullptr;
+    GPUCompSSBO* compSSBO = nullptr;
+    GPUCompSSBO_ReadOnly* compSSBO_ro = nullptr;
 
     void Reset(FrameData fd);
 };
 
 struct RenderContext {
     GPUSceneData sceneData{};
-    //GPUSSBOData ssboData{};
-
-    //GPUSceneData* gpu_sd = nullptr;
-
-
-    //SSBOConfigs ssboConfigs{};
-
-    //GPUPushConstantData pushConstantData{};
 
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
-
-    //glm::vec2 luminanceHistogramBounds{ .3, .95 };
-
-    /*int lumHistStartI = 0;
-    int lumHistEndI = MAX_LUMINANCE_BINS-1;*/
-
-    //int totalPixels = 0;
-
-    //float exposureBlendingFactor = 1.2f;
-    //float targetAdaptation = 1.f; // Used for plotting
 
     bool enableSkybox = true;
 

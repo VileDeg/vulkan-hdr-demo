@@ -151,40 +151,44 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	}
 
 	{ // Load compute SSBO to GPU
-		/*if (_gpu.compLum->averageLuminance == 0.f) {
-			_gpu.compLum->averageLuminance = 1.f;
+		/*if (_gpu.compSSBO->averageLuminance == 0.f) {
+			_gpu.compSSBO->averageLuminance = 1.f;
 		}
-		if (_gpu.compLum->targetAverageLuminance == 0.f) {
-			_gpu.compLum->targetAverageLuminance = 1.f;
+		if (_gpu.compSSBO->targetAverageLuminance == 0.f) {
+			_gpu.compSSBO->targetAverageLuminance = 1.f;
 		}*/
 
-		_gpu.compLum->minLogLum = _state.minLogLuminance;
-		_gpu.compLum->logLumRange = _state.maxLogLuminance - _state.minLogLuminance;
-		_gpu.compLum->oneOverLogLumRange = 1.f / _gpu.compLum->logLumRange;
-		_gpu.compLum->timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
+		
 
-		_state.totalViewportPixels = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		
 
-		_gpu.compLum->enableToneMapping = _state.enableToneMapping;
-		_gpu.compLum->gammaMode = _state.gammaMode;
-		_gpu.compLum->enableAdaptation = _state.enableEyeAdaptation;
+		/*_gpu.compSSBO->minLogLum = _state.minLogLuminance;
+		_gpu.compSSBO->logLumRange = _state.maxLogLuminance - _state.minLogLuminance;
+		_gpu.compSSBO->oneOverLogLumRange = 1.f / _gpu.compSSBO->logLumRange;
+		_gpu.compSSBO->timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
 
-		_gpu.compLum->toneMappingMode = _state.toneMappingMode;
+		
+
+		_gpu.compSSBO->enableToneMapping = _state.enableToneMapping;
+		_gpu.compSSBO->gammaMode = _state.gammaMode;
+		_gpu.compSSBO->enableAdaptation = _state.enableEyeAdaptation;
+
+		_gpu.compSSBO->toneMappingMode = _state.toneMappingMode;*/
 
 		using uint = unsigned int;
 		uint sum = 0;
 		//uint tmp_sum = 0;
 		uint li = 0;
 		uint ui = MAX_LUMINANCE_BINS - 1;
-		float lb = _state.lumPixelLowerBound * _state.totalViewportPixels;
-		float ub = _state.lumPixelUpperBound * _state.totalViewportPixels;
+		float lb = _state.lumPixelLowerBound * _state.cmp.totalPixelNum;
+		float ub = _state.lumPixelUpperBound * _state.cmp.totalPixelNum;
 
 		uint sum_skipped = 0;
 
 		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compLum->luminance[i];
+			//tmp_sum += _gpu.compSSBO->luminance[i];
 			
-			sum += _gpu.compLum->luminance[i];
+			sum += _gpu.compSSBO->luminance[i];
 			if (sum > lb) {
 				li = i;
 				break;
@@ -194,27 +198,36 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		sum_skipped += sum;
 
 		for (uint i = li+1; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compLum->luminance[i];
-			sum += _gpu.compLum->luminance[i];
+			//tmp_sum += _gpu.compSSBO->luminance[i];
+			sum += _gpu.compSSBO->luminance[i];
 			if (sum > ub) {
 				ui = i;
 				break;
 			}
 		}
 
-		sum_skipped += _state.totalViewportPixels - sum;
+		sum_skipped += _state.cmp.totalPixelNum - sum;
 
-		_gpu.compLum->lumLowerIndex = li;
-		_gpu.compLum->lumUpperIndex = ui;
+		_state.cmp.logLumRange = _state.maxLogLuminance - _state.cmp.minLogLum;
+		_state.cmp.oneOverLogLumRange = 1.f / _state.cmp.logLumRange;
+		_state.cmp.totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		_state.cmp.timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
+		_state.cmp.lumLowerIndex = li;
+		_state.cmp.lumUpperIndex = ui;
 
-		//_gpu.compLum->totalPixelNum = _state.totalViewportPixels - sum_skipped;
-		_gpu.compLum->totalPixelNum = _state.totalViewportPixels;
-		//_gpu.compLum->totalPixelNum = total_px;
+		//_gpu.compSSBO->lumLowerIndex = li;
+		//_gpu.compSSBO->lumUpperIndex = ui;
 
-		_gpu.compLum->weights = _state.weights;
+		////_gpu.compSSBO->totalPixelNum = _state.totalViewportPixels - sum_skipped;
+		//_gpu.compSSBO->totalPixelNum = _state.totalViewportPixels;
+		////_gpu.compSSBO->totalPixelNum = total_px;
+
+		//_gpu.compSSBO->weights = _state.weights;
+
+		memcpy(_gpu.compSSBO_ro, &_state.cmp, sizeof(GPUCompSSBO_ReadOnly));
 
 		// Reset luminance from previous frame
-		memset(_gpu.compLum->luminance, 0, sizeof(_gpu.compLum->luminance));
+		memset(_gpu.compSSBO->luminance, 0, sizeof(_gpu.compSSBO->luminance));
 	}
 
 	Mesh* lastMesh = nullptr;
@@ -295,7 +308,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			};
 			VkWriteDescriptorSet readonlyHDRImage =
 				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compHistogramSet, &imageBufferInfo, 1);
+					f.compHistogramSet, &imageBufferInfo, 2);
 
 
 			vkUpdateDescriptorSets(_device, 1, &readonlyHDRImage, 0, nullptr);
@@ -326,19 +339,19 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 #if 0 // Compute average luminance on CPU
 		unsigned int sum = 0;
-		for (size_t i = _gpu.compLum->lumLowerIndex; i < _gpu.compLum->lumUpperIndex+1; ++i) {
-			sum += _gpu.compLum->luminance[i] * i;
+		for (size_t i = _gpu.compSSBO->lumLowerIndex; i < _gpu.compSSBO->lumUpperIndex+1; ++i) {
+			sum += _gpu.compSSBO->luminance[i] * i;
 		}
-		float weightedLogAverage = (sum / std::max(float(_gpu.compLum->totalPixelNum), 1.f)) - 1.f;
+		float weightedLogAverage = (sum / std::max(float(_gpu.compSSBO->totalPixelNum), 1.f)) - 1.f;
 		// Map from our histogram space to actual luminance
-		float weightedAvgLum = std::exp2(((weightedLogAverage / 254.0) * _gpu.compLum->logLumRange) + _gpu.compLum->minLogLum);
+		float weightedAvgLum = std::exp2(((weightedLogAverage / 254.0) * _gpu.compSSBO->logLumRange) + _gpu.compSSBO->minLogLum);
 		// Set target luminance for display and comparison
-		_gpu.compLum->targetAverageLuminance = weightedAvgLum;
+		_gpu.compSSBO->targetAverageLuminance = weightedAvgLum;
 		// The new stored value will be interpolated using the last frames value
 		// to prevent sudden shifts in the exposure.
-		float lumLastFrame = _gpu.compLum->averageLuminance;
-		float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * _gpu.compLum->timeCoeff;
-		_gpu.compLum->averageLuminance = adaptedLum;
+		float lumLastFrame = _gpu.compSSBO->averageLuminance;
+		float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * _gpu.compSSBO->timeCoeff;
+		_gpu.compSSBO->averageLuminance = adaptedLum;
 #else // Compute average luminance on GPU
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
 		{
@@ -374,7 +387,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			};
 			VkWriteDescriptorSet inOutHDRImage =
 				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compTonemapSet, &imageBufferInfo, 1);
+					f.compTonemapSet, &imageBufferInfo, 2);
 
 			vkUpdateDescriptorSets(_device, 1, &inOutHDRImage, 0, nullptr);
 

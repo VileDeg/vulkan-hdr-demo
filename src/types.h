@@ -63,12 +63,12 @@ struct FrameData {
     VkCommandPool commandPool;
 
     VkCommandBuffer cmd;
-    //VkCommandBuffer viewportCmdBuffer;
 
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer objectBuffer;
 
-    AllocatedBuffer compLumBuffer;
+    AllocatedBuffer compSSBO;
+    AllocatedBuffer compSSBO_ro;
 
     VkDescriptorSet globalSet;
     VkDescriptorSet objectSet;
@@ -76,8 +76,6 @@ struct FrameData {
     VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
     VkDescriptorSet compTonemapSet;
-
-    //vkutil::DescriptorAllocator descriptorAllocator;
 };
 
 struct ComputeParts {
@@ -87,7 +85,7 @@ struct ComputeParts {
     VkPipeline pipeline;
 };
 
-struct Compute {
+struct ComputePass {
     ComputeParts histogram;
     ComputeParts averageLuminance;
     ComputeParts toneMapping;
@@ -103,19 +101,7 @@ struct UploadContext {
     VkCommandBuffer commandBuffer;
 };
 
-//struct InputContext {
-//    InputContext(std::function<void(void)> onFbResize)
-//        : onFramebufferResize(onFbResize) {}
-//
-//    Camera camera = {};
-//
-//    bool cursorEnabled = false;
-//    bool framebufferResized = false;
-//
-//    std::function<void(void)> onFramebufferResize = nullptr;
-//};
-
-struct RenderResources {
+struct GraphicsPass {
     std::vector<VkImage> images; // Retrieved from created swapchain
 
     std::vector<VkImageView> imageViews;
@@ -131,6 +117,6 @@ struct RenderResources {
 
     VkRenderPass renderpass;
 
-    RenderResources() = default;
-    RenderResources(VkFormat format) : imageFormat{ format } {}
+    GraphicsPass() = default;
+    GraphicsPass(VkFormat format) : imageFormat{ format } {}
 };

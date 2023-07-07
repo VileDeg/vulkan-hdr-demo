@@ -15,7 +15,8 @@
 #include "comp_buffer.glsl"
 
 //layout(set = 0, binding = 1) uniform sampler2D inHDRImage;
-layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inHDRImage;
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inHDRImage;
+
 
 // Shared histogram buffer used for storing intermediate sums for each work group
 shared uint histogramShared[GROUP_SIZE];
@@ -56,7 +57,7 @@ void main() {
   // Ignore threads that map to areas beyond the bounds of our HDR image
   if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
     vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
-    uint binIndex = colorToBin(hdrColor, ssbo.minLogLum, ssbo.oneOverLogLumRange);
+    uint binIndex = colorToBin(hdrColor, ssbo_ro.minLogLum, ssbo_ro.oneOverLogLumRange);
     // We use an atomic add to ensure we don't write to the same bin in our
     // histogram from two different threads at the same time.
     atomicAdd(histogramShared[binIndex], 1);

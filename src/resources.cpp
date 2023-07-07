@@ -950,9 +950,10 @@ void Engine::uploadMesh(Mesh& mesh)
 
 void GPUData::Reset(FrameData fd)
 {
-	ssbo     = reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
-	camera   = reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
-	compLum = reinterpret_cast<GPUCompSSBO*>(fd.compLumBuffer.gpu_ptr);
+	ssbo		= reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
+	camera		= reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
+	compSSBO	= reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
+	compSSBO_ro = reinterpret_cast<GPUCompSSBO_ReadOnly*>(fd.compSSBO_ro.gpu_ptr);
 }
 
 

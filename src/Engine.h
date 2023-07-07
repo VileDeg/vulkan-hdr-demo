@@ -7,25 +7,17 @@
 #include "vk_descriptors.h"
 
 struct GlobalState {
-    bool enableToneMapping = true;
     bool enableExposure = true;
-    bool enableEyeAdaptation = true;
     bool showNormals = false;
 
-    float minLogLuminance = -2.f;
-    float maxLogLuminance = 10.f;
-    float eyeAdaptationTimeCoefficient = 1.1f;
     float exposure = 1.f; // EV steps
-
     float lumPixelLowerBound = 0.2f;
     float lumPixelUpperBound = 0.95f;
-    unsigned int totalViewportPixels;
-    /*float lumPixelLowerIndex = 0;
-    float lumPixelUpperIndex = MAX_LUMINANCE_BINS - 1;*/
-    glm::vec4 weights = {1.f, 128.f, 1.f, 1.f};
 
-    int toneMappingMode = 3;
-    int gammaMode = 1; // Apply gamma correction
+    float maxLogLuminance = 10.f;
+    float eyeAdaptationTimeCoefficient = 1.1f;
+    
+    GPUCompSSBO_ReadOnly cmp{};
 };
 
 class Engine {
@@ -126,8 +118,6 @@ private:  // UI
 
 private:
     float _fovY = 90.f; // degrees
-
-    
     
 private: 
     GlobalState _state;
@@ -149,23 +139,19 @@ private:
     VkQueue _presentQueue;
     
 
-    RenderResources _swapchain{};
+    GraphicsPass _swapchain{};
     VkSwapchainKHR _swapchainHandle{ VK_NULL_HANDLE };
 
     // 32-bit float HDR format for viewport
-    RenderResources _viewport{ VK_FORMAT_R32G32B32A32_SFLOAT };
+    GraphicsPass _viewport{ VK_FORMAT_R32G32B32A32_SFLOAT };
     std::vector<AllocatedImage> _viewportImages; // Allocated with VMA
     
  
     UploadContext _uploadContext;
 
-
     VkPipeline _mainPipeline;
 
-    
-    
-
-    Compute _compute;
+    ComputePass _compute;
 
     
     FrameData _frames[MAX_FRAMES_IN_FLIGHT];
@@ -237,7 +223,8 @@ private:
     std::vector<const char*> _deviceExtensions{ 
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
         "VK_KHR_maintenance4", "VK_KHR_push_descriptor",
-        "VK_EXT_robustness2", "VK_KHR_synchronization2"
+        "VK_EXT_robustness2"
+        //, "VK_KHR_synchronization2"
     };
 
 public:

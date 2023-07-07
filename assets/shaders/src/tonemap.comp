@@ -11,7 +11,7 @@
 #define THREADS_X 32
 #define THREADS_Y 32
 
-layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
+layout (rgba32f, set = 0, binding = 2) uniform image2D inOutHDRImage;
 
 const float WHITE_POINT = 10.f;
 const float GAMMA = 2.2f;
@@ -25,12 +25,12 @@ void main() {
         vec3 hdrColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
         // Apply eye adaptation
         vec3 outColor = hdrColor;
-        if (ssbo.enableAdaptation == 1) {
+        if (ssbo_ro.enableAdaptation) {
             outColor = outColor / (9.6 * ssbo.averageLuminance);
         }
         // Apply tone mapping
-        if (ssbo.enableToneMapping == 1) { // If enable tone mapping
-            switch (ssbo.toneMappingMode) {
+        if (ssbo_ro.enableToneMapping) { // If enable tone mapping
+            switch (ssbo_ro.toneMappingMode) {
                 case 0: outColor = ReinhardExtended(outColor, WHITE_POINT); break;
                 case 1: outColor = Reinhard(outColor); break;
                 case 2: outColor = Uncharted2Filmic(outColor); break;
@@ -40,7 +40,7 @@ void main() {
         }
 
         // Gamma correction
-        switch (ssbo.gammaMode) {
+        switch (ssbo_ro.gammaMode) {
             case 0: outColor = outColor; break;
             case 1: outColor = pow(outColor, vec3(GAMMA)); break;
             case 2: outColor = pow(outColor, vec3(1.f / GAMMA)); break;

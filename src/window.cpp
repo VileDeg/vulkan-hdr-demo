@@ -38,7 +38,7 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
                 eng._cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
         case GLFW_KEY_T: // Toggle tone mapping
-            toggle(eng._state.enableToneMapping);
+            toggle(eng._state.cmp.enableToneMapping);
             break;
         case GLFW_KEY_E: // Toggle exposure
             toggle(eng._state.enableExposure);
