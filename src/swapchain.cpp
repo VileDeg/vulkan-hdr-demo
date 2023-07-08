@@ -161,7 +161,7 @@ void Engine::createSwapchain()
     _swapchain.imageFormat = surfaceFormat.format;
 }
 
-void Engine::createSwapchainImages() {
+void Engine::prepareMainPass() {
     VkExtent3D imageExtent3D = {
         _swapchain.imageExtent.width,
         _swapchain.imageExtent.height,
@@ -241,7 +241,7 @@ void Engine::recreateSwapchain()
     cleanupSwapchainResources();
 
     createSwapchain();
-    createSwapchainImages();
+    prepareMainPass();
 }
 
 void Engine::cleanupSwapchainResources()

@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Camera.h"
+#include "camera.h"
 #include "engine.h"
 
 void Camera::calculateFPS()

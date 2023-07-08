@@ -53,9 +53,8 @@ vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     return lightVal;
 }
 
-vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos) {
-    vec3 lightVal = ambientColor;
-
+vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 fragPos, vec3 normal, vec3 cameraPos) {
+    vec3 lightVal = vec3(0);
     for (int i = 0; i < MAX_LIGHTS; i++) {
         LightData ld = lights[i];
         /*float dist = distance(ld.pos.xyz, fragPos);

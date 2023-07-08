@@ -150,6 +150,21 @@ void Engine::imgui_UnregisterViewportImageViews()
 	_imguiViewportImageViewDescriptorSets.clear();
 }
 
+void Engine::uiUpdateScene()
+{
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+	if (ImGui::TreeNode("Scene configs")) {
+		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
+		ImGui::Separator();
+		ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
+		ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
+		ImGui::SliderFloat("Shadow Opacity", &_renderContext.sceneData.shadowOpacity, 0.f, 1.0f);
+		ImGui::SliderFloat("Shadow Display Brightness", &_renderContext.sceneData.shadowMapDisplayBrightness, 1.f, 10.f);
+
+		ImGui::TreePop();
+	}
+}
+
 void Engine::uiUpdateHDR()
 {
 	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -219,7 +234,7 @@ void Engine::uiUpdateHDR()
 
 	ImGui::SeparatorText("Plots"); {
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Exposure Window")) {
 				
 			ImGui::Separator();
@@ -263,7 +278,7 @@ void Engine::uiUpdateHDR()
 			ImGui::TreePop();
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Histogram")) {
 
 				
@@ -318,19 +333,16 @@ void Engine::uiUpdateHDR()
 
 void Engine::uiUpdateRenderContext()
 {
-	ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
-
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 	if (ImGui::TreeNode("Scene lighting")) {
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
 
-			// Use SetNextItemOpen() so set the default state of a node to be open. We could
-			// also use TreeNodeEx() with the ImGuiTreeNodeFlags_DefaultOpen flag to achieve the same thing!
 			if (i == 0) {
 				ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			}
 
 			if (ImGui::TreeNode((void*)(intptr_t)i, "Light source %d", i)) {
-				Light& l = _renderContext.sceneData.lights[i];
+				GPULight& l = _renderContext.sceneData.lights[i];
 
 				glm::vec3 tmpPos = l.position;
 				if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.1f, -100.f, 100.f)) {
@@ -447,10 +459,14 @@ void Engine::imguiUpdate()
 
 		ImGui::Begin("Config");
 		{
+			for (int i = 0; i < _imguiFlags.size(); ++i) {
+				auto s = std::string("Flag ") + std::to_string(i);
+				ImGui::Checkbox(s.c_str(), _imguiFlags[i]);
+			}
 
+			uiUpdateScene();
 			uiUpdateHDR();
 			uiUpdateRenderContext();
-
 
 			static std::vector<std::string> models;
 			static std::vector<const char*> models_cstr;

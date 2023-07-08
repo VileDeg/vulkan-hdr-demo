@@ -3,22 +3,25 @@
 
 #include "imgui/imgui.h"
 
-static int getLumIndex(int(&lumHist)[MAX_LUMINANCE_BINS], int matchPx) {
-	int i = 0;
-	int lum_sum = 0;
-	while (i < MAX_LUMINANCE_BINS) {
-		if ((lum_sum + lumHist[i]) > matchPx) {
-			/*if ((lum_sum + lumHist[i] / 2) < matchPx) {
-				++i;
-			}*/
-			break;
-		}
-		lum_sum += lumHist[i];
-		++i;
-	}
+static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h) 
+{
+	VkViewport viewport{
+			.x = 0.0f,
+			.y = 0.0f,
+			.width = static_cast<float>(w),
+			.height = static_cast<float>(h),
+			.minDepth = 0.0f,
+			.maxDepth = 1.0f
+	};
 
-	i = std::clamp(i, 0, MAX_LUMINANCE_BINS-1);
-	return i;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor{
+		.offset = { 0, 0 },
+		.extent = { w, h }
+	};
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
 void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index) {
@@ -31,7 +34,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		ASSERT(mesh && mesh->material);
 
 		//offset for our scene buffer
-		uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
 
 		// Always add the sceneData and SSBO descriptor
 		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalSet, getCurrentFrame().objectSet };
@@ -54,46 +57,20 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		}
 
 		// Load push constants to GPU
-		GPUPushConstantData pc = {
+		GPUScenePC pc = {
 			.hasTexture = (mesh->p_tex != nullptr),
 			.lightAffected = model->lightAffected,
 			.isCubemap = obj.isSkybox
 		};
-		/*_renderContext.pushConstantData = {
-			.hasTexture = (mesh->p_tex != nullptr),
-			.lightAffected = model->lightAffected,
-			.isCubemap = obj.isSkybox
-		};*/
 
 		vkCmdPushConstants(
 			cmd, mesh->material->pipelineLayout,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUPushConstantData),
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUScenePC),
 			&pc);
 
 		// If the material is different, bind the new material
 		if (mesh->material != *lastMaterial) {
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipeline);
-
-			{
-				VkViewport viewport{
-					.x = 0.0f,
-					.y = 0.0f,
-					.width = static_cast<float>(_viewport.imageExtent.width),
-					.height = static_cast<float>(_viewport.imageExtent.height),
-					.minDepth = 0.0f,
-					.maxDepth = 1.0f
-				};
-
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor{
-					.offset = { 0, 0 },
-					.extent = { _viewport.imageExtent.width, _viewport.imageExtent.height }
-				};
-
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
-			}
-
 
 			*lastMaterial = mesh->material;
 			// Bind the descriptor sets
@@ -132,11 +109,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	// Load UNIFORM BUFFER of scene parameters to GPU
 	{
 		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
-		sd += pad_uniform_buffer_size(sizeof(GPUSceneData)) * _frameInFlightNum;
+		sd += pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
 
 		_renderContext.sceneData.cameraPos = _camera.GetPos();
+		//flag(_renderContext.sceneData.showShadowMap);
+		_renderContext.sceneData.lightFarPlane = _renderContext.zFar;
+		//_renderContext.sceneData.showShadowMap = false;
 
-		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneData));
+		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneUB));
 	}
 	
 	{ // Load UNIFORM BUFFER of camera to GPU
@@ -151,30 +131,6 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	}
 
 	{ // Load compute SSBO to GPU
-		/*if (_gpu.compSSBO->averageLuminance == 0.f) {
-			_gpu.compSSBO->averageLuminance = 1.f;
-		}
-		if (_gpu.compSSBO->targetAverageLuminance == 0.f) {
-			_gpu.compSSBO->targetAverageLuminance = 1.f;
-		}*/
-
-		
-
-		
-
-		/*_gpu.compSSBO->minLogLum = _state.minLogLuminance;
-		_gpu.compSSBO->logLumRange = _state.maxLogLuminance - _state.minLogLuminance;
-		_gpu.compSSBO->oneOverLogLumRange = 1.f / _gpu.compSSBO->logLumRange;
-		_gpu.compSSBO->timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
-
-		
-
-		_gpu.compSSBO->enableToneMapping = _state.enableToneMapping;
-		_gpu.compSSBO->gammaMode = _state.gammaMode;
-		_gpu.compSSBO->enableAdaptation = _state.enableEyeAdaptation;
-
-		_gpu.compSSBO->toneMappingMode = _state.toneMappingMode;*/
-
 		using uint = unsigned int;
 		uint sum = 0;
 		//uint tmp_sum = 0;
@@ -215,15 +171,6 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 		_state.cmp.lumLowerIndex = li;
 		_state.cmp.lumUpperIndex = ui;
 
-		//_gpu.compSSBO->lumLowerIndex = li;
-		//_gpu.compSSBO->lumUpperIndex = ui;
-
-		////_gpu.compSSBO->totalPixelNum = _state.totalViewportPixels - sum_skipped;
-		//_gpu.compSSBO->totalPixelNum = _state.totalViewportPixels;
-		////_gpu.compSSBO->totalPixelNum = total_px;
-
-		//_gpu.compSSBO->weights = _state.weights;
-
 		memcpy(_gpu.compSSBO_ro, &_state.cmp, sizeof(GPUCompSSBO_ReadOnly));
 
 		// Reset luminance from previous frame
@@ -242,27 +189,106 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	}
 }
 
+void Engine::updateCubeFace(FrameData& f, uint32_t faceIndex)
+{
+	VkClearValue clearValues[2];
+	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo renderPassBeginInfo = 
+		vkinit::renderpass_begin_info(_shadow.renderpass, { _shadow.width, _shadow.height }, _shadow.faceFramebuffers[faceIndex]);
+	renderPassBeginInfo.clearValueCount = 2;
+	renderPassBeginInfo.pClearValues = clearValues;
+
+	// Render scene from cube face's point of view
+	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	Material& mat = _materials["shadow"];
+
+	GPUShadowPC pc = {
+		.view = _renderContext.lightView[faceIndex],
+		.far_plane = _renderContext.zFar
+	};
+
+	// Update shader push constant block
+	// Contains current face view matrix
+	vkCmdPushConstants(
+		f.cmd,
+		mat.pipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(GPUShadowPC),
+		&pc);
+
+	vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
+	vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 0, NULL);
+
+	{ // Draw all objects' shadows
+		for (int i = 0; i < _renderables.size(); ++i) {
+			const RenderObject& obj = *_renderables[i];
+			Model* model = obj.model;
+			if (model == nullptr || !model->lightAffected) {
+				continue;
+			}
+
+			for (int m = 0; m < model->meshes.size(); ++m) {
+				Mesh* mesh = model->meshes[m];
+
+				VkDeviceSize zeroOffset = 0;
+				vkCmdBindVertexBuffers(f.cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
+
+				vkCmdBindIndexBuffer(f.cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+				// We send loop index as instance index to use it in shader to access object data in SSBO
+				vkCmdDrawIndexed(f.cmd, mesh->indices.size(), 1, 0, 0, i);
+			}
+		}
+	}
+
+	vkCmdEndRenderPass(f.cmd);
+}
+
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
-	VkClearValue colorClear{ .color = { 0.1f, 0.0f, 0.1f, 1.0f } };
-	VkClearValue depthClear{ .depthStencil = { 1.0f, 0 } };
-	VkClearValue clearValues[] = { colorClear, depthClear };
+	{ // Shadow pass
+		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
-	VkRenderPassBeginInfo renderPassBeginInfo{
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		.renderPass = _viewport.renderpass,
-		.framebuffer = _viewport.framebuffers[imageIndex],
-		.renderArea = {
-			.offset = { 0, 0 },
-			.extent = _viewport.imageExtent
-		},
-		.clearValueCount = 2,
-		.pClearValues = clearValues
-	};
+		// Update light view matrices based on lights current position
+		glm::vec3 p = _renderContext.sceneData.lights[0].position;
+		_renderContext.lightView = {
+			glm::lookAt(p, p + glm::vec3(1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
+			glm::lookAt(p, p + glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
+			glm::lookAt(p, p + glm::vec3(0.0, 1.0, 0.0), glm::vec3(0.0, 0.0, 1.0)),
+			glm::lookAt(p, p + glm::vec3(0.0, -1.0, 0.0), glm::vec3(0.0, 0.0, -1.0)),
+			glm::lookAt(p, p + glm::vec3(0.0, 0.0, 1.0), glm::vec3(0.0, -1.0, 0.0)),
+			glm::lookAt(p, p + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, -1.0, 0.0))
+		};
+
+		*_gpu.shadow = {
+			.projection = _renderContext.lightPerspective,
+			.lightPos = { _renderContext.sceneData.lights[0].position, 1.f}
+		};
+
+		for (uint32_t i = 0; i < 6; ++i) {
+			updateCubeFace(f, i);
+		}
+	}
+
+	VkClearValue clearValues[] = { {.color = { 0.1f, 0.0f, 0.1f, 1.0f } }, {.depthStencil = { 1.0f, 0 } } };
+
+	VkRenderPassBeginInfo renderPassBeginInfo =
+		vkinit::renderpass_begin_info(_viewport.renderpass, _viewport.imageExtent, _viewport.framebuffers[imageIndex]);
+	renderPassBeginInfo.pClearValues = clearValues;
+	renderPassBeginInfo.clearValueCount = 2;
+
+
+	cmdSetViewportScissor(f.cmd, _viewport.imageExtent.width, _viewport.imageExtent.height);
 
 	// Viewport pass
 	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
+		
+
 		drawObjects(f.cmd, _renderables);
 	}
 	vkCmdEndRenderPass(f.cmd);
@@ -336,23 +362,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 
-
-#if 0 // Compute average luminance on CPU
-		unsigned int sum = 0;
-		for (size_t i = _gpu.compSSBO->lumLowerIndex; i < _gpu.compSSBO->lumUpperIndex+1; ++i) {
-			sum += _gpu.compSSBO->luminance[i] * i;
-		}
-		float weightedLogAverage = (sum / std::max(float(_gpu.compSSBO->totalPixelNum), 1.f)) - 1.f;
-		// Map from our histogram space to actual luminance
-		float weightedAvgLum = std::exp2(((weightedLogAverage / 254.0) * _gpu.compSSBO->logLumRange) + _gpu.compSSBO->minLogLum);
-		// Set target luminance for display and comparison
-		_gpu.compSSBO->targetAverageLuminance = weightedAvgLum;
-		// The new stored value will be interpolated using the last frames value
-		// to prevent sudden shifts in the exposure.
-		float lumLastFrame = _gpu.compSSBO->averageLuminance;
-		float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * _gpu.compSSBO->timeCoeff;
-		_gpu.compSSBO->averageLuminance = adaptedLum;
-#else // Compute average luminance on GPU
+		// Compute average luminance
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
 		{
 			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipelineLayout, 0, 1, &f.compAvgLumSet, 0, nullptr);
@@ -376,7 +386,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
 			vkCmdDispatch(f.cmd, 1, 1, 1);
 		}
-#endif
+
 		// Compute tone mapping
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipeline);
 		{

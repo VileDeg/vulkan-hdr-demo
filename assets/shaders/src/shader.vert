@@ -10,8 +10,8 @@ layout(location = 1) out vec3 fragColor;
 layout(location = 2) out vec2 texCoord;
 layout(location = 3) out flat vec4 objectColor;
 layout(location = 4) out vec3 normal;
-
 layout(location = 5) out vec3 uvw; //For cubemap sampling
+//layout(location = 6) out vec3 worldPos; //Fragment world pos for shadow cubemap sampling
 
 #include "defs.glsl"
 
@@ -47,6 +47,7 @@ void main()
 	texCoord = vTexCoord;
 	objectColor = ssbo.objects[gl_BaseInstance].color;
 	normal = mat3(transpose(inverse(modelMat))) * vNormal;
+	//worldPos = vPosition;
 
 	uvw = vPosition;
 	//uvw.xy *= -1.0;

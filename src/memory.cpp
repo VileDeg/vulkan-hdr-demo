@@ -31,6 +31,12 @@ AllocatedBuffer Engine::createBuffer(size_t allocSize, VkBufferUsageFlags usage,
     AllocatedBuffer newBuffer;
     newBuffer.create(_allocator, bufferInfo, allocInfo);
 
+    newBuffer.descInfo = {
+        .buffer = newBuffer.buffer,
+        .offset = 0,
+        .range = VK_WHOLE_SIZE
+    };
+
     return newBuffer;
 }
 

@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-#include "resources.h"
+#include "types.h"
 #include "engine.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -948,10 +948,13 @@ void Engine::uploadMesh(Mesh& mesh)
 }
 
 
-void GPUData::Reset(FrameData fd)
+void GPUData::Reset(FrameData& fd)
 {
-	ssbo		= reinterpret_cast<GPUSSBOData*>  (fd.objectBuffer.gpu_ptr);
-	camera		= reinterpret_cast<GPUCameraData*>(fd.cameraBuffer.gpu_ptr);
+	ssbo		= reinterpret_cast<GPUSceneSSBO*>  (fd.objectBuffer.gpu_ptr);
+	camera		= reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.gpu_ptr);
+
+	shadow		= reinterpret_cast<GPUShadowUB*>(fd.shadowUB.gpu_ptr);
+
 	compSSBO	= reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
 	compSSBO_ro = reinterpret_cast<GPUCompSSBO_ReadOnly*>(fd.compSSBO_ro.gpu_ptr);
 }
@@ -982,7 +985,7 @@ int RenderContext::GetClosestRadiusIndex(int radius) {
 
 void RenderContext::UpdateLightAttenuation(int lightIndex, int mode)
 {
-	Light& l = sceneData.lights[lightIndex];
+	GPULight& l = sceneData.lights[lightIndex];
 
 	// Set the radius to the closest radius that is present in table
 	// Find the attenuation values that correspond to the radius
@@ -1026,9 +1029,16 @@ void RenderContext::Init()
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
+	std::vector<bool> enable = { true, false, false, false };
+
 
 	float amb = 0.01f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
+
+	sceneData.showShadowMap = false;
+	sceneData.shadowBias = 0.15f;
+	sceneData.shadowOpacity = 0.5f;
+	sceneData.shadowMapDisplayBrightness = 3.5f;
 	/*sceneData.minLogLum = -10.f;
 	sceneData.oneOverLogLumRange = 1.f / 12.f;*/
 
@@ -1046,27 +1056,14 @@ void RenderContext::Init()
 
 			//Attenuation skipped. Will be updated based on radius
 
-			.enabled = true
+			.enabled = enable[i]
 		};
 
 		UpdateLightAttenuation(i, 0);
 	}
+
+	lightPerspective = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
 }
-
-
-
-//void RenderContext::UpdateHistogramBoundsIndices(int totalViewportPixels)
-//{
-//	int start_px = totalViewportPixels * luminanceHistogramBounds.x;
-//	int end_px	 = totalViewportPixels * luminanceHistogramBounds.y;
-//
-//	lumHistStartI = getLumIndex(, start_px);
-//	lumHistEndI	  = getLumIndex(lumHist, end_px);
-//
-//	ASSERT(lumHistStartI <= lumHistEndI);
-//}
-
-
 
 Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
 {
@@ -1081,10 +1078,6 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 	return &_materials[name];
 }
 
-
-
-
-
 glm::mat4 RenderObject::Transform() {
 	ASSERT(model != nullptr);
 	glm::vec3 scales = scale;
@@ -1098,8 +1091,6 @@ glm::mat4 RenderObject::Transform() {
 		glm::rotate(glm::radians(rot.z), glm::vec3(0, 0, 1)) *
 		glm::scale(glm::mat4(1.f), scales);
 }
-
-
 
 VertexInputDescription Vertex::getDescription()
 {

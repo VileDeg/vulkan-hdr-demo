@@ -2,6 +2,8 @@
 
 struct PipelineData {
     PipelineShaders shaders;
+    VkShaderStageFlags pushConstantsStages;
+    uint32_t pushConstantsSize;
     std::vector<VkDescriptorSetLayout> setLayouts;
 };
 

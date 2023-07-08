@@ -3,7 +3,7 @@
 #define MAX_FRAMES_IN_FLIGHT 3
 
 #include "types.h"
-#include "resources.h"
+#include "camera.h"
 #include "vk_descriptors.h"
 
 struct GlobalState {
@@ -40,9 +40,11 @@ private: /* Methods used from Init directly */
 
     void createRenderpass();
 
-    void createSwapchainImages();
+    void prepareMainPass();
 
-    void createViewportImages(uint32_t extentX, uint32_t extentY);
+    void prepareViewportPass(uint32_t extentX, uint32_t extentY);
+
+    void prepareShadowPass();
 
     void createPipelines();
     //void createFramebuffers();
@@ -91,6 +93,8 @@ private: /* Secondary methods */
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
 
+    void updateCubeFace(FrameData& f, uint32_t faceIndex);
+
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
     void drawFrame();
@@ -111,10 +115,21 @@ private:  // UI
     void imguiOnDrawStart();
     void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
 
-    void uiUpdateRenderContext();
+    void uiUpdateScene();
     void uiUpdateHDR();
+    void uiUpdateRenderContext();
+
+
+    std::vector<bool*> _imguiFlags;
+    void flag(bool& b) {
+        if (std::find(_imguiFlags.begin(), _imguiFlags.end(), &b) == _imguiFlags.end()) {
+            _imguiFlags.push_back(&b);
+        }
+    }
 
     std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
+
+    
 
 private:
     float _fovY = 90.f; // degrees
@@ -147,9 +162,10 @@ private:
     std::vector<AllocatedImage> _viewportImages; // Allocated with VMA
     
  
-    UploadContext _uploadContext;
+    ShadowPass _shadow;
+    VkDescriptorSetLayout _shadowSetLayout;
 
-    VkPipeline _mainPipeline;
+    UploadContext _uploadContext;
 
     ComputePass _compute;
 
