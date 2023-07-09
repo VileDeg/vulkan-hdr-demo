@@ -64,10 +64,10 @@ struct GPUSceneUB {
     float shadowOpacity;
     GPUBool showShadowMap;
 
+    GPUBool enablePCF;
     float shadowMapDisplayBrightness;
     int _pad2;
     int _pad3;
-    int _pad4;
 
 #define MAX_LIGHTS 4
     GPULight lights[MAX_LIGHTS];

@@ -26,13 +26,13 @@ layout(set = 0, binding = 1) uniform SceneData {
 
     float lightFarPlane;
     float shadowBias;
-    float shadowOpacity;
+    float shadowOpacity; // Unused?
     bool showShadowMap;
 
+    bool enablePCF;
     float shadowMapDisplayBrightness;
     int _pad2;
     int _pad3;
-    int _pad4;
 
     LightData[MAX_LIGHTS] lights;
 } sd;
@@ -50,6 +50,53 @@ layout(set = 1, binding = 1) uniform samplerCube skybox;
 
 layout(set = 1, binding = 2) uniform samplerCube shadowCubeMap;
 
+// array of offset direction for sampling
+const vec3 gridSamplingDisk[20] = vec3[]
+(
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
+
+
+
+float shadowCalculation(samplerCube shadowCubeMap, vec3 fragPos, vec3 lightPos, vec3 cameraPos, float farPlane, float shadowBias, bool enablePCF)
+{
+    // Sample shadow cube map
+    vec3 lightToFrag = fragPos - lightPos;
+
+	// Check if fragment is in shadow
+    float currentDepth = length(lightToFrag);
+
+    float shadow = 0.0;
+    
+    if (enablePCF) {
+        const int PCF_samples = 20;
+
+        float viewDistance = length(cameraPos - fragPos);
+        float diskRadius = (1.0 + (viewDistance / farPlane)) / 25.0;
+        for(int i = 0; i < PCF_samples; ++i)
+        {
+            float sampledDepth = texture(shadowCubeMap, lightToFrag + gridSamplingDisk[i] * diskRadius).r;
+            //sampledDepth *= farPlane;   // undo mapping [0;1]
+            if(currentDepth - shadowBias > sampledDepth) {
+                shadow += 1.0;
+            }
+        }
+        shadow /= float(PCF_samples);
+    } else {
+        float sampledDepth = texture(shadowCubeMap, lightToFrag).r;
+        //sampledDepth *= farPlane;
+        if(currentDepth - shadowBias > sampledDepth) {
+            shadow = 1.0;
+        }
+    }
+
+    return shadow;
+}
+
 void main()  
 {
     if (ssbo.showNormals == 1) {
@@ -66,32 +113,28 @@ void main()
             result = texture(diffuse, texCoord).rgb; 
         } else {
             result = objectColor.rgb;
-
         }
     }
 
     if (pc.lightAffected == 1) {
 
         if (pc.isCubemap == 0) {
-            // Calculate total lighting from all sources
-            vec3 lightVal = calculateLighting(sd.lights, fragPos, normal, sd.cameraPos);
-            // Sample shadow cube map
-            vec3 lightVec = fragPos - sd.lights[0].pos;
-            float sampledDist = texture(shadowCubeMap, lightVec).r;
-
-	        // Check if fragment is in shadow
-            float dist = length(lightVec);
-            float shadow = (dist <= sampledDist * sd.lightFarPlane + sd.shadowBias) ? 1.0 : sd.shadowOpacity;
-            // Adjust light intensity for shadow
-            lightVal *= shadow;
-
-            // Apply lighting
-            result *= (sd.ambientColor + lightVal);
-
             if (sd.showShadowMap) {
-                FragColor = vec4(vec3(sampledDist), 1.0) * sd.shadowMapDisplayBrightness;
+                vec3 lightToFrag = fragPos - sd.lights[0].pos;
+                float sampledDepth = texture(shadowCubeMap, lightToFrag).r;
+                sampledDepth /= sd.lightFarPlane;
+                FragColor = vec4(vec3(sampledDepth), 1.0) * sd.shadowMapDisplayBrightness;
                 return;
             }
+
+            // Calculate total lighting from all sources
+            vec3 lightVal = calculateLighting(sd.lights, fragPos, normal, sd.cameraPos);
+           
+            // Adjust light intensity for shadow
+            float shadow = shadowCalculation(shadowCubeMap, fragPos, sd.lights[0].pos, sd.cameraPos, sd.lightFarPlane, sd.shadowBias, sd.enablePCF);
+
+            // Apply lighting
+            result = result * (sd.ambientColor + lightVal * (1.0 - shadow));
         }
 
         if (ssbo.enableExposure == 1) {

@@ -114,10 +114,6 @@ struct ShadowPass {
     
     uint32_t width, height;
 
-    
-
-    
-
     Texture cubemap;
 
     std::array<VkImageView, 6> faceViews;

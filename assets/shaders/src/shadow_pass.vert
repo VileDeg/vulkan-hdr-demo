@@ -9,7 +9,6 @@ layout(location = 3) in vec2 vTexCoord;
 
 layout (location = 0) out vec4 fragPos;
 layout (location = 1) out flat vec3 lightPos;
-layout (location = 2) out flat float farPlane;
 
 #include "defs.glsl"
 
@@ -53,12 +52,8 @@ void main()
 {
 	mat4 modelMat = ssbo.objects[gl_BaseInstance].model;
 	
-	//fragPos = vec4(vPosition, 1.0);	
 	fragPos = modelMat * vec4(vPosition, 1.0);	
 	lightPos = ubo.lightPos.xyz; 
-	//outLightPos = ubo.model[3].xyz; 
-	farPlane = pushConsts.far_plane;
-
 	
 	gl_Position = ubo.projection * pushConsts.view * 
 		modelMat * vec4(vPosition, 1.0);

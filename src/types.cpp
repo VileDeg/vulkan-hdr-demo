@@ -1029,16 +1029,17 @@ void RenderContext::Init()
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
-	std::vector<bool> enable = { true, false, false, false };
+	std::vector<bool> enable = { true, true, true, true };
 
 
-	float amb = 0.01f;
+	float amb = 0.1f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
 
 	sceneData.showShadowMap = false;
-	sceneData.shadowBias = 0.15f;
+	sceneData.shadowBias = 0.0f;
 	sceneData.shadowOpacity = 0.5f;
 	sceneData.shadowMapDisplayBrightness = 3.5f;
+	sceneData.enablePCF = true;
 	/*sceneData.minLogLum = -10.f;
 	sceneData.oneOverLogLumRange = 1.f / 12.f;*/
 

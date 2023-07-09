@@ -358,9 +358,6 @@ void Engine::prepareShadowPass()
         VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
             &_shadow.cubemap.image.image, &_shadow.cubemap.image.allocation, nullptr));
 
-        
-
-
         // Image barrier for optimal image (target)
         VkImageSubresourceRange subresourceRange = {};
         subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

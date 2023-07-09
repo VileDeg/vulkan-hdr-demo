@@ -154,12 +154,22 @@ void Engine::uiUpdateScene()
 {
 	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 	if (ImGui::TreeNode("Scene configs")) {
-		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
-		ImGui::Separator();
+
+		float amb = _renderContext.sceneData.ambientColor.x;
+		if (ImGui::SliderFloat("Ambient factor", &amb, 0.f, 1.f)) {
+			_renderContext.sceneData.ambientColor = { amb, amb, amb };
+		}
+		
+
+		ImGui::SeparatorText("Shadow");
 		ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
 		ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
 		ImGui::SliderFloat("Shadow Opacity", &_renderContext.sceneData.shadowOpacity, 0.f, 1.0f);
 		ImGui::SliderFloat("Shadow Display Brightness", &_renderContext.sceneData.shadowMapDisplayBrightness, 1.f, 10.f);
+		ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
+
+		ImGui::Separator();
+		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
 
 		ImGui::TreePop();
 	}
