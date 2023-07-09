@@ -9,11 +9,6 @@ struct ObjectData{
 };
 
 layout(std430, set = 1, binding = 0) buffer GlobalBuffer{
-    int showNormals;
-    float exposure;
-    int enableExposure;
-    int _pad0;
-
 	ObjectData objects[MAX_OBJECTS];
 } ssbo;
 

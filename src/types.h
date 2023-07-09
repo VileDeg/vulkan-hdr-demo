@@ -54,8 +54,8 @@ struct AllocatedImage {
 
 struct Texture {
     std::string tag = "";
-    AllocatedImage image;
-    VkImageView imageView;
+    AllocatedImage allocImage;
+    VkImageView view;
 };
 
 struct FrameData {
@@ -98,15 +98,9 @@ struct ComputePass {
     ComputeParts toneMapping;
 };
 
-
-struct FrameBufferAttachment {
-    AllocatedImage allocImage;
-    VkImageView view;
-};
-
 struct ShadowPass {
 // Texture properties
-    static constexpr int TEX_DIM = 1024;
+    static constexpr int TEX_DIM = 2048; //1024
     static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
 // Framebuffer properties
     static constexpr int FB_DIM = TEX_DIM;
@@ -114,12 +108,11 @@ struct ShadowPass {
     
     uint32_t width, height;
 
-    Texture cubemap;
+    Texture cubemapArray;
+    std::array<Texture, MAX_LIGHTS> depth;
 
-    std::array<VkImageView, 6> faceViews;
-    std::array<VkFramebuffer, 6> faceFramebuffers;
-
-    FrameBufferAttachment depth;
+    std::array<std::array<VkImageView  , 6>, MAX_LIGHTS> faceViews;
+    std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
 
     VkSampler sampler;
 

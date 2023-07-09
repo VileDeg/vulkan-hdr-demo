@@ -42,7 +42,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		{ // Push diffuse texture descriptor set
 			VkImageView imageView = VK_NULL_HANDLE;
 			if (mesh->p_tex != nullptr && !obj.isSkybox) {
-				imageView = mesh->p_tex->imageView;
+				imageView = mesh->p_tex->view;
 			}
 			VkDescriptorImageInfo imageBufferInfo{
 				.sampler = _linearSampler,
@@ -94,89 +94,6 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 
 void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects)
 {
-	// Load SSBO to GPU
-	{
-		_gpu.ssbo->enableExposure = _state.enableExposure;
-		_gpu.ssbo->exposure = _state.exposure;
-
-		for (int i = 0; i < objects.size(); i++) {
-			_gpu.ssbo->objects[i].modelMatrix = objects[i]->Transform();
-			_gpu.ssbo->objects[i].color = objects[i]->color;
-			_gpu.ssbo->objects[i].useObjectColor = objects[i]->model->useObjectColor;
-		}
-	}
-
-	// Load UNIFORM BUFFER of scene parameters to GPU
-	{
-		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
-		sd += pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
-
-		_renderContext.sceneData.cameraPos = _camera.GetPos();
-		//flag(_renderContext.sceneData.showShadowMap);
-		_renderContext.sceneData.lightFarPlane = _renderContext.zFar;
-		//_renderContext.sceneData.showShadowMap = false;
-
-		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneUB));
-	}
-	
-	{ // Load UNIFORM BUFFER of camera to GPU
-		glm::mat4 viewMat = _camera.GetViewMat();
-		glm::mat4 projMat = _camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
-
-		*_gpu.camera = {
-			.view = viewMat,
-			.proj = projMat,
-			.viewproj = projMat * viewMat,
-		};
-	}
-
-	{ // Load compute SSBO to GPU
-		using uint = unsigned int;
-		uint sum = 0;
-		//uint tmp_sum = 0;
-		uint li = 0;
-		uint ui = MAX_LUMINANCE_BINS - 1;
-		float lb = _state.lumPixelLowerBound * _state.cmp.totalPixelNum;
-		float ub = _state.lumPixelUpperBound * _state.cmp.totalPixelNum;
-
-		uint sum_skipped = 0;
-
-		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compSSBO->luminance[i];
-			
-			sum += _gpu.compSSBO->luminance[i];
-			if (sum > lb) {
-				li = i;
-				break;
-			}
-		}
-
-		sum_skipped += sum;
-
-		for (uint i = li+1; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compSSBO->luminance[i];
-			sum += _gpu.compSSBO->luminance[i];
-			if (sum > ub) {
-				ui = i;
-				break;
-			}
-		}
-
-		sum_skipped += _state.cmp.totalPixelNum - sum;
-
-		_state.cmp.logLumRange = _state.maxLogLuminance - _state.cmp.minLogLum;
-		_state.cmp.oneOverLogLumRange = 1.f / _state.cmp.logLumRange;
-		_state.cmp.totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
-		_state.cmp.timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
-		_state.cmp.lumLowerIndex = li;
-		_state.cmp.lumUpperIndex = ui;
-
-		memcpy(_gpu.compSSBO_ro, &_state.cmp, sizeof(GPUCompSSBO_ReadOnly));
-
-		// Reset luminance from previous frame
-		memset(_gpu.compSSBO->luminance, 0, sizeof(_gpu.compSSBO->luminance));
-	}
-
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	for (int i = 0; i < objects.size(); i++) {
@@ -189,14 +106,14 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 	}
 }
 
-void Engine::updateCubeFace(FrameData& f, uint32_t faceIndex)
+void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex)
 {
 	VkClearValue clearValues[2];
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = 
-		vkinit::renderpass_begin_info(_shadow.renderpass, { _shadow.width, _shadow.height }, _shadow.faceFramebuffers[faceIndex]);
+		vkinit::renderpass_begin_info(_shadow.renderpass, { _shadow.width, _shadow.height }, _shadow.faceFramebuffers[lightIndex][faceIndex]);
 	renderPassBeginInfo.clearValueCount = 2;
 	renderPassBeginInfo.pClearValues = clearValues;
 
@@ -248,29 +165,120 @@ void Engine::updateCubeFace(FrameData& f, uint32_t faceIndex)
 	vkCmdEndRenderPass(f.cmd);
 }
 
+void Engine::loadDataToGPU()
+{
+	auto& objects = _renderables;
+	// Load SSBO to GPU
+	{
+		for (int i = 0; i < objects.size(); i++) {
+			_gpu.ssbo->objects[i].modelMatrix = objects[i]->Transform();
+			_gpu.ssbo->objects[i].color = objects[i]->color;
+			_gpu.ssbo->objects[i].useObjectColor = objects[i]->model->useObjectColor;
+		}
+	}
+
+	// Load UNIFORM BUFFER of scene parameters to GPU
+	{
+		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
+		sd += pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
+
+		_renderContext.sceneData.cameraPos = _camera.GetPos();
+		//flag(_renderContext.sceneData.showShadowMap);
+		_renderContext.sceneData.lightFarPlane = _renderContext.zFar;
+		//_renderContext.sceneData.showShadowMap = false;
+
+		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneUB));
+	}
+
+	{ // Load UNIFORM BUFFER of camera to GPU
+		glm::mat4 viewMat = _camera.GetViewMat();
+		glm::mat4 projMat = _camera.GetProjMat(_fovY, _viewport.imageExtent.width, _viewport.imageExtent.height);
+
+		*_gpu.camera = {
+			.view = viewMat,
+			.proj = projMat,
+			.viewproj = projMat * viewMat,
+		};
+	}
+
+	{ // Load compute SSBO to GPU
+		using uint = unsigned int;
+		uint sum = 0;
+		//uint tmp_sum = 0;
+		uint li = 0;
+		uint ui = MAX_LUMINANCE_BINS - 1;
+		float lb = _state.lumPixelLowerBound * _state.cmp.totalPixelNum;
+		float ub = _state.lumPixelUpperBound * _state.cmp.totalPixelNum;
+
+		uint sum_skipped = 0;
+
+		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+			//tmp_sum += _gpu.compSSBO->luminance[i];
+
+			sum += _gpu.compSSBO->luminance[i];
+			if (sum > lb) {
+				li = i;
+				break;
+			}
+		}
+
+		sum_skipped += sum;
+
+		for (uint i = li + 1; i < MAX_LUMINANCE_BINS; ++i) {
+			//tmp_sum += _gpu.compSSBO->luminance[i];
+			sum += _gpu.compSSBO->luminance[i];
+			if (sum > ub) {
+				ui = i;
+				break;
+			}
+		}
+
+		sum_skipped += _state.cmp.totalPixelNum - sum;
+
+		_state.cmp.logLumRange = _state.maxLogLuminance - _state.cmp.minLogLum;
+		_state.cmp.oneOverLogLumRange = 1.f / _state.cmp.logLumRange;
+		_state.cmp.totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		_state.cmp.timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
+		_state.cmp.lumLowerIndex = li;
+		_state.cmp.lumUpperIndex = ui;
+
+		memcpy(_gpu.compSSBO_ro, &_state.cmp, sizeof(GPUCompSSBO_ReadOnly));
+
+		// Reset luminance from previous frame
+		memset(_gpu.compSSBO->luminance, 0, sizeof(_gpu.compSSBO->luminance));
+	}
+}
+
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
+	loadDataToGPU();
+
 	{ // Shadow pass
 		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
-		// Update light view matrices based on lights current position
-		glm::vec3 p = _renderContext.sceneData.lights[0].position;
-		_renderContext.lightView = {
-			glm::lookAt(p, p + glm::vec3(1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
-			glm::lookAt(p, p + glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
-			glm::lookAt(p, p + glm::vec3(0.0, 1.0, 0.0), glm::vec3(0.0, 0.0, 1.0)),
-			glm::lookAt(p, p + glm::vec3(0.0, -1.0, 0.0), glm::vec3(0.0, 0.0, -1.0)),
-			glm::lookAt(p, p + glm::vec3(0.0, 0.0, 1.0), glm::vec3(0.0, -1.0, 0.0)),
-			glm::lookAt(p, p + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, -1.0, 0.0))
-		};
+		for (int i = 0; i < MAX_LIGHTS; ++i) {
+			if (!_renderContext.sceneData.lights[i].enabled) {
+				continue;
+			}
+			// Update light view matrices based on lights current position
+			glm::vec3 p = _renderContext.sceneData.lights[i].position;
+			_renderContext.lightView = {
+				glm::lookAt(p, p + glm::vec3(1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
+				glm::lookAt(p, p + glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)),
+				glm::lookAt(p, p + glm::vec3(0.0, 1.0, 0.0), glm::vec3(0.0, 0.0, 1.0)),
+				glm::lookAt(p, p + glm::vec3(0.0, -1.0, 0.0), glm::vec3(0.0, 0.0, -1.0)),
+				glm::lookAt(p, p + glm::vec3(0.0, 0.0, 1.0), glm::vec3(0.0, -1.0, 0.0)),
+				glm::lookAt(p, p + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, -1.0, 0.0))
+			};
 
-		*_gpu.shadow = {
-			.projection = _renderContext.lightPerspective,
-			.lightPos = { _renderContext.sceneData.lights[0].position, 1.f}
-		};
+			*_gpu.shadow = {
+				.projection = _renderContext.lightPerspective,
+				.lightPos = { p, 1.f}
+			};
 
-		for (uint32_t i = 0; i < 6; ++i) {
-			updateCubeFace(f, i);
+			for (uint32_t face = 0; face < 6; ++face) {
+				updateCubeFace(f, i, face);
+			}
 		}
 	}
 
@@ -287,8 +295,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	// Viewport pass
 	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		
-
 		drawObjects(f.cmd, _renderables);
 	}
 	vkCmdEndRenderPass(f.cmd);

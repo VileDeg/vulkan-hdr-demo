@@ -7,10 +7,8 @@
 #include "vk_descriptors.h"
 
 struct GlobalState {
-    bool enableExposure = true;
     bool showNormals = false;
 
-    float exposure = 1.f; // EV steps
     float lumPixelLowerBound = 0.2f;
     float lumPixelUpperBound = 0.95f;
 
@@ -93,8 +91,9 @@ private: /* Secondary methods */
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
 
-    void updateCubeFace(FrameData& f, uint32_t faceIndex);
+    void updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
 
+    void loadDataToGPU();
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
     void drawFrame();

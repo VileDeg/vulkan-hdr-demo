@@ -15,13 +15,11 @@ struct LightData {
     float constant;
     float linear;
     float quadratic;
-    int  enabled;
+    bool  enabled;
 };
 
 vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
-    if (ld.enabled == 0) {
-        return vec3(0);
-    }
+    
     
     vec3 lightColor = vec3(ld.color);
 
@@ -53,15 +51,75 @@ vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     return lightVal;
 }
 
-vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 fragPos, vec3 normal, vec3 cameraPos) {
-    vec3 lightVal = vec3(0);
+// array of offset direction for sampling
+const vec3 gridSamplingDisk[20] = vec3[]
+(
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
+
+float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 fragPos, vec3 lightPos, vec3 cameraPos, float farPlane, float shadowBias, bool enablePCF)
+{
+    // Sample shadow cube map
+    vec3 lightToFrag = fragPos - lightPos;
+
+	// Check if fragment is in shadow
+    float currentDepth = length(lightToFrag);
+
+    float shadow = 0.0;
+    
+    if (enablePCF) {
+        const int PCF_samples = 20;
+
+        float viewDistance = length(cameraPos - fragPos);
+        float diskRadius = (1.0 + (viewDistance / farPlane)) / 25.0;
+        for(int i = 0; i < PCF_samples; ++i)
+        {
+            float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag + gridSamplingDisk[i] * diskRadius, lightIndex)).r;
+            //sampledDepth *= farPlane;   // undo mapping [0;1]
+            if(currentDepth - shadowBias > sampledDepth) {
+                shadow += 1.0;
+            }
+        }
+        shadow /= float(PCF_samples);
+    } else {
+        float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag, lightIndex)).r;
+        //sampledDepth *= farPlane;
+        if(currentDepth - shadowBias > sampledDepth) {
+            shadow = 1.0;
+        }
+    }
+
+    return shadow;
+}
+
+vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos, 
+    bool enableShadows, samplerCubeArray shadowCubeArray, float lightFarPlane, float shadowBias, 
+    bool enablePCF) 
+{
+    vec3 lightVal = ambientColor;
     for (int i = 0; i < MAX_LIGHTS; i++) {
         LightData ld = lights[i];
+        if (!ld.enabled) {
+            continue;
+        }
         /*float dist = distance(ld.pos.xyz, fragPos);
         if (dist > ld.radius) {
     		continue;
 	    }*/
-		lightVal += pointLight(ld, fragPos, normal, cameraPos.xyz);
-	}
+        vec3 light = pointLight(ld, fragPos, normal, cameraPos);
+        
+        // Adjust light intensity for shadow
+        if (enableShadows) {
+            float shadow = 0.0;
+            shadow = shadowCalculation(shadowCubeArray, i, fragPos, ld.pos, cameraPos, lightFarPlane, shadowBias, enablePCF);
+            light *= 1.0 - shadow;
+        }
+        
+        lightVal += light;
+    }
     return lightVal;
 };

@@ -327,204 +327,205 @@ void Engine::cleanupViewportResources()
 
 void Engine::prepareShadowPass()
 {
-    {
-        // 32 bit float format for higher precision
-        VkFormat format = VK_FORMAT_R32_SFLOAT;
+    _shadow.width = ShadowPass::FB_DIM;
+    _shadow.height = ShadowPass::FB_DIM;
 
-        // Cube map image description
-        VkImageCreateInfo imageCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = format,
-            .extent = { ShadowPass::TEX_DIM, ShadowPass::TEX_DIM, 1 },
-            .mipLevels = 1,
-            .arrayLayers = 6,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        };
+    Texture& cubemap = _shadow.cubemapArray;
+    // 32 bit float format for higher precision
+    VkFormat format = ShadowPass::FB_COLOR_FORMAT;
 
-        //allocate temporary buffer for holding texture data to upload
-        //VkDeviceSize imageSize = _shadow.width * _shadow.height;
-        VmaAllocationCreateInfo imgAllocinfo = {
-                .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-                .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        };
+    const uint32_t cubeArrayLayerCount = 6 * MAX_LIGHTS;
 
-        //create cubemap image
-        VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
-            &_shadow.cubemap.image.image, &_shadow.cubemap.image.allocation, nullptr));
+    // Cube map image description
+    VkImageCreateInfo imageCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = format,
+        .extent = { ShadowPass::TEX_DIM, ShadowPass::TEX_DIM, 1 },
+        .mipLevels = 1,
+        .arrayLayers = cubeArrayLayerCount,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
 
-        // Image barrier for optimal image (target)
-        VkImageSubresourceRange subresourceRange = {};
-        subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        subresourceRange.baseMipLevel = 0;
-        subresourceRange.levelCount = 1;
-        subresourceRange.layerCount = 6;
+    //allocate temporary buffer for holding texture data to upload
+           //VkDeviceSize imageSize = _shadow.width * _shadow.height;
+    VmaAllocationCreateInfo imgAllocinfo = {
+            .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
 
-        immediate_submit([&](VkCommandBuffer cmd) {
-            utils::setImageLayout(
-                cmd,
-                _shadow.cubemap.image.image,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                subresourceRange);
-            });
+    //create cubemap image
+    VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
+        &cubemap.allocImage.image, &cubemap.allocImage.allocation, nullptr));
 
-        // Create sampler
-        VkSamplerCreateInfo sampler = {};
-        sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler.magFilter = ShadowPass::TEX_FILTER;
-        sampler.minFilter = ShadowPass::TEX_FILTER;
-        sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-        sampler.addressModeV = sampler.addressModeU;
-        sampler.addressModeW = sampler.addressModeU;
-        sampler.mipLodBias = 0.0f;
-        sampler.maxAnisotropy = 1.0f;
-        sampler.compareOp = VK_COMPARE_OP_NEVER;
-        sampler.minLod = 0.0f;
-        sampler.maxLod = 1.0f;
-        sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-        VKASSERT(vkCreateSampler(_device, &sampler, nullptr, &_shadow.sampler));
+    // Image barrier for optimal image (target)
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.layerCount = cubeArrayLayerCount;
 
-        // Create image view
+    immediate_submit([&](VkCommandBuffer cmd) {
+        utils::setImageLayout(
+            cmd,
+            cubemap.allocImage.image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            subresourceRange);
+    });
+
+    // Create image view
+    VkImageViewCreateInfo arrayView = {};
+    arrayView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    arrayView.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    arrayView.format = format;
+    arrayView.components = { VK_COMPONENT_SWIZZLE_R };
+    arrayView.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    arrayView.subresourceRange.layerCount = cubeArrayLayerCount;
+    arrayView.image = cubemap.allocImage.image;
+    VKASSERT(vkCreateImageView(_device, &arrayView, nullptr, &cubemap.view));
+
+    // Create sampler
+    VkSamplerCreateInfo sampler = {};
+    sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler.magFilter = ShadowPass::TEX_FILTER;
+    sampler.minFilter = ShadowPass::TEX_FILTER;
+    sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    sampler.addressModeV = sampler.addressModeU;
+    sampler.addressModeW = sampler.addressModeU;
+    sampler.mipLodBias = 0.0f;
+    sampler.maxAnisotropy = 1.0f;
+    sampler.compareOp = VK_COMPARE_OP_NEVER;
+    sampler.minLod = 0.0f;
+    sampler.maxLod = 1.0f;
+    sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    VKASSERT(vkCreateSampler(_device, &sampler, nullptr, &_shadow.sampler));
+
+    for (int i = 0; i < MAX_LIGHTS; ++i) {
+        
+        Texture& depth = _shadow.depth[i];
+        auto& faceViews = _shadow.faceViews[i];
+        auto& faceFramebuffers = _shadow.faceFramebuffers[i];
+
         VkImageViewCreateInfo view = {};
         view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view.image = VK_NULL_HANDLE;
-        view.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        view.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view.format = format;
         view.components = { VK_COMPONENT_SWIZZLE_R };
         view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        view.subresourceRange.layerCount = 6;
-        view.image = _shadow.cubemap.image.image;
-        VKASSERT(vkCreateImageView(_device, &view, nullptr, &_shadow.cubemap.imageView));
-
-        view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view.subresourceRange.layerCount = cubeArrayLayerCount;
+        view.image = cubemap.allocImage.image;
         view.subresourceRange.layerCount = 1;
-        view.image = _shadow.cubemap.image.image;
-
-        for (uint32_t i = 0; i < 6; i++)
+       
+        for (uint32_t face = 0; face < 6; ++face)
         {
-            view.subresourceRange.baseArrayLayer = i;
-            VKASSERT(vkCreateImageView(_device, &view, nullptr, &_shadow.faceViews[i]));
-        }
-    }
-
-    {
-        _shadow.width = ShadowPass::FB_DIM;
-        _shadow.height = ShadowPass::FB_DIM;
-
-        VkFormat fbColorFormat = ShadowPass::FB_COLOR_FORMAT;
-
-        // Color attachment
-        VkImageCreateInfo imageCreateInfo = {};
-        imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageCreateInfo.format = fbColorFormat;
-        imageCreateInfo.extent.width = _shadow.width;
-        imageCreateInfo.extent.height = _shadow.height;
-        imageCreateInfo.extent.depth = 1;
-        imageCreateInfo.mipLevels = 1;
-        imageCreateInfo.arrayLayers = 1;
-        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        // Image of the framebuffer is blit source
-        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VkImageViewCreateInfo colorImageView = {};
-        colorImageView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        colorImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        colorImageView.format = fbColorFormat;
-        colorImageView.flags = 0;
-        colorImageView.subresourceRange = {};
-        colorImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        colorImageView.subresourceRange.baseMipLevel = 0;
-        colorImageView.subresourceRange.levelCount = 1;
-        colorImageView.subresourceRange.baseArrayLayer = 0;
-        colorImageView.subresourceRange.layerCount = 1;
-
-        // Depth stencil attachment
-        imageCreateInfo.format = _shadow.fbDepthFormat;
-        imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-        VkImageViewCreateInfo depthStencilView = {};
-        depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        depthStencilView.format = _shadow.fbDepthFormat;
-        depthStencilView.flags = 0;
-        depthStencilView.subresourceRange = {};
-        depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (_shadow.fbDepthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
-            depthStencilView.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-        depthStencilView.subresourceRange.baseMipLevel = 0;
-        depthStencilView.subresourceRange.levelCount = 1;
-        depthStencilView.subresourceRange.baseArrayLayer = 0;
-        depthStencilView.subresourceRange.layerCount = 1;
-
-        VmaAllocationCreateInfo imgAllocinfo = {
-                .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-                .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        };
-
-        VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo, 
-            &_shadow.depth.allocImage.image, &_shadow.depth.allocImage.allocation, nullptr));
-
-        immediate_submit([&](VkCommandBuffer cmd) {
-            utils::setImageLayout(
-                cmd,
-                _shadow.depth.allocImage.image,
-                VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-            });
-
-        depthStencilView.image = _shadow.depth.allocImage.image;
-        VKASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &_shadow.depth.view));
-
-        VkImageView attachments[2];
-        attachments[1] = _shadow.depth.view;
-
-        VkFramebufferCreateInfo fbufCreateInfo = {};
-        fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        fbufCreateInfo.renderPass = _shadow.renderpass;
-        fbufCreateInfo.attachmentCount = 2;
-        fbufCreateInfo.pAttachments = attachments;
-        fbufCreateInfo.width = _shadow.width;
-        fbufCreateInfo.height = _shadow.height;
-        fbufCreateInfo.layers = 1;
-
-        for (uint32_t i = 0; i < 6; i++)
-        {
-            attachments[0] = _shadow.faceViews[i];
-            VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &_shadow.faceFramebuffers[i]));
+            view.subresourceRange.baseArrayLayer = i * 6 + face;
+            vkCreateImageView(_device, &view, nullptr, &faceViews[face]);
         }
 
+        {
+            VkFormat fbColorFormat = ShadowPass::FB_COLOR_FORMAT;
+
+            // Color attachment
+            VkImageCreateInfo imageCreateInfo = {};
+            imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+            imageCreateInfo.format = fbColorFormat;
+            imageCreateInfo.extent.width = _shadow.width;
+            imageCreateInfo.extent.height = _shadow.height;
+            imageCreateInfo.extent.depth = 1;
+            imageCreateInfo.mipLevels = 1;
+            imageCreateInfo.arrayLayers = 1;
+            imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            // Image of the framebuffer is blit source
+            imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            // Depth stencil attachment
+            imageCreateInfo.format = _shadow.fbDepthFormat;
+            imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+            VmaAllocationCreateInfo imgAllocinfo = {
+                    .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+                    .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+            };
+
+            VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
+                &depth.allocImage.image, &depth.allocImage.allocation, nullptr));
+
+            immediate_submit([&](VkCommandBuffer cmd) {
+                utils::setImageLayout(
+                    cmd,
+                    depth.allocImage.image,
+                    VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                });
+
+            VkImageViewCreateInfo depthStencilView = {};
+            depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            depthStencilView.format = _shadow.fbDepthFormat;
+            depthStencilView.flags = 0;
+            depthStencilView.subresourceRange = {};
+            depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            if (_shadow.fbDepthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
+                depthStencilView.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            depthStencilView.subresourceRange.baseMipLevel = 0;
+            depthStencilView.subresourceRange.levelCount = 1;
+            depthStencilView.subresourceRange.baseArrayLayer = 0;
+            depthStencilView.subresourceRange.layerCount = 1;
+            depthStencilView.image = depth.allocImage.image;
+            VKASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &depth.view));
+
+            VkImageView attachments[2];
+            attachments[1] = depth.view;
+
+            VkFramebufferCreateInfo fbufCreateInfo = {};
+            fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbufCreateInfo.renderPass = _shadow.renderpass;
+            fbufCreateInfo.attachmentCount = 2;
+            fbufCreateInfo.pAttachments = attachments;
+            fbufCreateInfo.width = _shadow.width;
+            fbufCreateInfo.height = _shadow.height;
+            fbufCreateInfo.layers = 1;
+
+            for (uint32_t i = 0; i < 6; i++)
+            {
+                attachments[0] = faceViews[i];
+                VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[i]));
+            }
+
+        }
+
+        // Cleanup all shadow pass resources for current light
+        _deletionStack.push([=]() mutable {
+            for (auto& fb : faceFramebuffers) {
+                vkDestroyFramebuffer(_device, fb, nullptr);
+            }
+
+            // Destroy depth image
+            vkDestroyImageView(_device, depth.view, nullptr);
+            vmaDestroyImage(_allocator, depth.allocImage.image, depth.allocImage.allocation);
+
+            for (auto& view : faceViews) {
+                vkDestroyImageView(_device, view, nullptr);
+            }
+        });
     }
 
-    // Cleanup all shadow pass resources
     _deletionStack.push([=]() mutable {
-        for (auto& fb : _shadow.faceFramebuffers) {
-            vkDestroyFramebuffer(_device, fb, nullptr);
-        }
-
-        // Destroy depth image
-        vkDestroyImageView(_device, _shadow.depth.view, nullptr);
-        vmaDestroyImage(_allocator, _shadow.depth.allocImage.image, _shadow.depth.allocImage.allocation);
-
-        for (auto& view : _shadow.faceViews) {
-            vkDestroyImageView(_device, view, nullptr);
-        }
-
         // Destroy cubemap image
-        vkDestroyImageView(_device, _shadow.cubemap.imageView, nullptr);
-        vmaDestroyImage(_allocator, _shadow.cubemap.image.image, _shadow.cubemap.image.allocation);
-
+        vkDestroyImageView(_device, cubemap.view, nullptr);
+        vmaDestroyImage(_allocator, cubemap.allocImage.image, cubemap.allocImage.allocation);
         // Destroy sampler
         vkDestroySampler(_device, _shadow.sampler, nullptr);
     });
@@ -663,16 +664,16 @@ void Engine::initFrame(FrameData& f)
             f.objectBuffer = createBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Image descriptor for the shadow cube map
-            _shadow.cubemap.image.descInfo = {
+            _shadow.cubemapArray.allocImage.descInfo = {
                 .sampler = _shadow.sampler,
-                .imageView = _shadow.cubemap.imageView,
+                .imageView = _shadow.cubemapArray.view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
             };
 
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // SSBO
                 .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap will be passed later
-                .bind_image(2, &_shadow.cubemap.image.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap
+                .bind_image(2, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap
                 .build(f.objectSet, _objectSetLayout);
         }
 

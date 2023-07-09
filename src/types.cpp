@@ -223,9 +223,6 @@ void Engine::createScene(const std::string mainModelFullPath)
 		_textures.clear();
 	}
 
-	
-	//loadCubemap("furry_clouds", true);
-
 	// Sphere model of the light source
 	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
 
@@ -239,10 +236,7 @@ void Engine::createScene(const std::string mainModelFullPath)
 		}
 	}
 
-
-	//loadCubemap("skybox", false);
 	loadCubemap("furry_clouds", true);
-	
 
 	_renderContext.Init();
 
@@ -264,7 +258,6 @@ void Engine::createScene(const std::string mainModelFullPath)
 			));
 
 			_renderContext.lightObjects.push_back(_renderables.back());
-
 		}
 	}
 
@@ -383,7 +376,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	//allocate and create the image
-	VKASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &newTexture.image.image, &newTexture.image.allocation, nullptr));
+	VKASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr));
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
@@ -419,7 +412,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
 				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				.image = newTexture.image.image,
+				.image = newTexture.allocImage.image,
 				.subresourceRange = {
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					.baseMipLevel = 0,
@@ -435,7 +428,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				0, 0, nullptr, 0, nullptr, 1, &imageBarrier_toTransfer);
 
 			//copy the buffer into the image
-			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				static_cast<uint32_t>(bufferCopyRegions.size()), bufferCopyRegions.data());
 
 			VkImageMemoryBarrier imageBarrier_toReadable = imageBarrier_toTransfer;
@@ -455,7 +448,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	// Create image view
 	VkImageViewCreateInfo imageinfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = newTexture.image.image,
+		.image = newTexture.allocImage.image,
 		.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
 		.format = imageFormat,
 		.subresourceRange = {
@@ -467,29 +460,29 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 		},
 	};
 
-	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.imageView));
+	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
 
 
 	_sceneDisposeStack.push([=]() mutable {
-		vkDestroyImageView(_device, newTexture.imageView, nullptr);
-		vmaDestroyImage(_allocator, newTexture.image.image, newTexture.image.allocation);
+		vkDestroyImageView(_device, newTexture.view, nullptr);
+		vmaDestroyImage(_allocator, newTexture.allocImage.image, newTexture.allocImage.allocation);
 	});
 
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
 
 	// write skybox to descriptor set
-	newTexture.image.descInfo = {
+	newTexture.allocImage.descInfo = {
 		.sampler = _linearSampler,
-		.imageView = newTexture.imageView,
+		.imageView = newTexture.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	_skyboxAllocImage = newTexture.image;
+	_skyboxAllocImage = newTexture.allocImage;
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		VkWriteDescriptorSet skyboxWrite = 
-			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectSet, &newTexture.image.descInfo, 1);
+			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectSet, &newTexture.allocImage.descInfo, 1);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
 
@@ -787,7 +780,7 @@ Texture* Engine::loadTextureFromFile(const char* path)
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	//allocate and create the image
-	vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &newTexture.image.image, &newTexture.image.allocation, nullptr);
+	vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr);
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
@@ -797,7 +790,7 @@ Texture* Engine::loadTextureFromFile(const char* path)
 				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
 				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				.image = newTexture.image.image,
+				.image = newTexture.allocImage.image,
 				.subresourceRange = {
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					.baseMipLevel = 0,
@@ -826,7 +819,7 @@ Texture* Engine::loadTextureFromFile(const char* path)
 			};
 
 			//copy the buffer into the image
-			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 			VkImageMemoryBarrier imageBarrier_toReadable = imageBarrier_toTransfer;
 
@@ -842,14 +835,14 @@ Texture* Engine::loadTextureFromFile(const char* path)
 	);
 
 	VkImageViewCreateInfo imageinfo = 
-		vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, newTexture.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, newTexture.allocImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.imageView));
+	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
 
 	_sceneDisposeStack.push([=]() mutable {
-		vkDestroyImageView(_device, newTexture.imageView, nullptr);
+		vkDestroyImageView(_device, newTexture.view, nullptr);
 		//newTexture.image.destroy(_allocator);
-		vmaDestroyImage(_allocator, newTexture.image.image, newTexture.image.allocation);
+		vmaDestroyImage(_allocator, newTexture.allocImage.image, newTexture.allocImage.allocation);
 		});
 
 	stagingBuffer.destroy(_allocator);
@@ -1029,19 +1022,20 @@ void RenderContext::Init()
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
-	std::vector<bool> enable = { true, true, true, true };
+	std::vector<bool> enable = { true, true, false, false };
 
 
 	float amb = 0.1f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
 
+	sceneData.enableShadows = true;
+
 	sceneData.showShadowMap = false;
-	sceneData.shadowBias = 0.0f;
+	sceneData.shadowBias = 0.15f;
 	sceneData.shadowOpacity = 0.5f;
 	sceneData.shadowMapDisplayBrightness = 3.5f;
+
 	sceneData.enablePCF = true;
-	/*sceneData.minLogLum = -10.f;
-	sceneData.oneOverLogLumRange = 1.f / 12.f;*/
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {

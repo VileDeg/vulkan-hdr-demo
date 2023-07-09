@@ -49,7 +49,7 @@ struct GPULight {
     float constant{};
     float linear{};
     float quadratic{};
-    int   enabled{ true };
+    GPUBool enabled{ true };
 };
 
 struct GPUSceneUB {
@@ -59,15 +59,20 @@ struct GPUSceneUB {
     glm::vec3 ambientColor{};
     int _pad1;
 
-    float lightFarPlane;
-    float shadowBias;
-    float shadowOpacity;
-    GPUBool showShadowMap;
-
-    GPUBool enablePCF;
-    float shadowMapDisplayBrightness;
+    GPUBool showNormals = false;
+    float exposure{ 1.0f };
+    GPUBool enableExposure = true;
     int _pad2;
-    int _pad3;
+
+    float lightFarPlane;
+    float shadowBias = 0.15f;
+    float shadowOpacity; // Unused
+    GPUBool showShadowMap = false;
+
+    GPUBool enableShadows = true;
+    GPUBool enablePCF = true;
+    float shadowMapDisplayBrightness;
+    int shadowMapDisplayIndex = 0;
 
 #define MAX_LIGHTS 4
     GPULight lights[MAX_LIGHTS];
@@ -84,11 +89,6 @@ struct GPUObject {
 };
 
 struct GPUSceneSSBO {
-    GPUBool showNormals = false;
-    float exposure{ 1.0f };
-    GPUBool enableExposure = true;
-    int _pad0;
-
 #define MAX_OBJECTS 10
     GPUObject objects[MAX_OBJECTS]{};
 };

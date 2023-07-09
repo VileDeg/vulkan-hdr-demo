@@ -29,11 +29,6 @@ layout (set = 0, binding = 0) uniform UBO
 } ubo;
 
 layout(std430, set = 0, binding = 1) buffer GlobalBuffer{
-    int showNormals;
-    float exposure;
-    int enableExposure;
-    int _pad0;
-
 	ObjectData objects[MAX_OBJECTS];
 } ssbo;
 

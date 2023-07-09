@@ -159,14 +159,28 @@ void Engine::uiUpdateScene()
 		if (ImGui::SliderFloat("Ambient factor", &amb, 0.f, 1.f)) {
 			_renderContext.sceneData.ambientColor = { amb, amb, amb };
 		}
-		
 
 		ImGui::SeparatorText("Shadow");
-		ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
+		ImGui::Checkbox("Enable Shadows", &_renderContext.sceneData.enableShadows);
+		
 		ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
 		ImGui::SliderFloat("Shadow Opacity", &_renderContext.sceneData.shadowOpacity, 0.f, 1.0f);
 		ImGui::SliderFloat("Shadow Display Brightness", &_renderContext.sceneData.shadowMapDisplayBrightness, 1.f, 10.f);
 		ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
+
+		ImGui::Separator();
+		ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
+
+		int& light_i = _renderContext.sceneData.shadowMapDisplayIndex;
+		if (ImGui::Button("<")) {
+			light_i = std::clamp(--light_i, 0, MAX_LIGHTS);
+		}
+		ImGui::SameLine();
+		ImGui::Text("Shadow map %d", light_i);
+		ImGui::SameLine();
+		if (ImGui::Button(">")) {
+			light_i = std::clamp(++light_i, 0, MAX_LIGHTS);
+		}
 
 		ImGui::Separator();
 		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
@@ -193,13 +207,13 @@ void Engine::uiUpdateHDR()
 
 		ImGui::SeparatorText("Adjust scene EV"); {
 			if (ImGui::Button("-")) {
-				_state.exposure -= 1;
+				_renderContext.sceneData.exposure -= 1;
 			}
 			ImGui::SameLine();
-			ImGui::Text("%f", _state.exposure);
+			ImGui::Text("%f", _renderContext.sceneData.exposure);
 			ImGui::SameLine();
 			if (ImGui::Button("+")) {
-				_state.exposure += 1;
+				_renderContext.sceneData.exposure += 1;
 			}
 		}
 
@@ -381,10 +395,7 @@ void Engine::uiUpdateRenderContext()
 				}
 
 				ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f);
-				bool lon = l.enabled;
-				if (ImGui::Checkbox("Enabled", &lon)) {
-					l.enabled = lon;
-				}
+				ImGui::Checkbox("Enabled", &l.enabled);
 
 
 				ImGui::TreePop();
@@ -512,12 +523,7 @@ void Engine::imguiUpdate()
 			ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
 			ImGui::Separator();
 
-			bool showNormals = _gpu.ssbo->showNormals;
-			if (ImGui::Checkbox("Show normals", &showNormals)) {
-				_gpu.ssbo->showNormals = showNormals;
-			}
-
-			
+			ImGui::Checkbox("Show normals", &_renderContext.sceneData.showNormals);
 
 
 			static bool imgui_demo = false;

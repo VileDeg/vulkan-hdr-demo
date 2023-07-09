@@ -41,7 +41,7 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
             toggle(eng._state.cmp.enableToneMapping);
             break;
         case GLFW_KEY_E: // Toggle exposure
-            toggle(eng._state.enableExposure);
+            toggle(eng._renderContext.sceneData.enableExposure);
             break;
         }
     }

@@ -231,6 +231,7 @@ void Engine::createPipelines()
     }
     { // Shadow
         Pipeline pipeline_shadow(pd_shadow);
+        pipeline_shadow.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
         pipeline_shadow.Build(_device, _shadow.renderpass);
 
         createMaterial(pipeline_shadow.pipeline, pipeline_shadow.layout, "shadow");
