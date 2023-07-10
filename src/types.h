@@ -70,7 +70,7 @@ struct FrameData {
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer objectBuffer;
 
-    AllocatedBuffer shadowUB;
+    //AllocatedBuffer shadowUB;
 
     AllocatedBuffer compSSBO;
     AllocatedBuffer compSSBO_ro;
@@ -100,7 +100,7 @@ struct ComputePass {
 
 struct ShadowPass {
 // Texture properties
-    static constexpr int TEX_DIM = 2048; //1024
+    static constexpr int TEX_DIM = 512; //1024
     static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
 // Framebuffer properties
     static constexpr int FB_DIM = TEX_DIM;
@@ -109,7 +109,8 @@ struct ShadowPass {
     uint32_t width, height;
 
     Texture cubemapArray;
-    std::array<Texture, MAX_LIGHTS> depth;
+    //std::array<Texture, MAX_LIGHTS> depth;
+    Texture depth;
 
     std::array<std::array<VkImageView  , 6>, MAX_LIGHTS> faceViews;
     std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
@@ -246,7 +247,7 @@ struct RenderObject {
     glm::vec4 color{};
 
     Model* model;
-
+    
     bool isSkybox = false;
 
     glm::vec3 pos{0.f};
@@ -254,6 +255,9 @@ struct RenderObject {
     glm::vec3 scale{1.f};
 
     glm::mat4 Transform();
+    bool HasMoved();
+
+    glm::vec3 _prevPos{0.f};
 };
 
 // Struct with pointers to mapped GPU buffer memory
@@ -261,7 +265,7 @@ struct GPUData {
     GPUSceneSSBO* ssbo = nullptr;
     GPUCameraUB* camera = nullptr;
 
-    GPUShadowUB* shadow = nullptr;
+    //GPUShadowUB* shadow = nullptr;
 
     GPUCompSSBO* compSSBO = nullptr;
     GPUCompSSBO_ReadOnly* compSSBO_ro = nullptr;
@@ -281,7 +285,7 @@ struct RenderContext {
     float zNear = 0.1f;
     float zFar = 64.0f;
 
-    glm::mat4 lightPerspective;
+    //glm::mat4 lightPerspective;
     std::array<glm::mat4, 6> lightView;
 
     void Init();

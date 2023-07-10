@@ -109,7 +109,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex)
 {
 	VkClearValue clearValues[2];
-	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = 
@@ -120,13 +120,15 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 	// Render scene from cube face's point of view
 	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	Material& mat = _materials["shadow"];
+	
 
 	GPUShadowPC pc = {
 		.view = _renderContext.lightView[faceIndex],
-		.far_plane = _renderContext.zFar
+		.far_plane = _renderContext.zFar,
+		.lightIndex = lightIndex
 	};
 
+	Material& mat = _materials["shadow"];
 	// Update shader push constant block
 	// Contains current face view matrix
 	vkCmdPushConstants(
@@ -137,8 +139,11 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 		sizeof(GPUShadowPC),
 		&pc);
 
+	/*Material& mat = _materials["shadow"];
 	vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
-	vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 0, NULL);
+
+	uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
+	vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 1, &uniform_offset);*/
 
 	{ // Draw all objects' shadows
 		for (int i = 0; i < _renderables.size(); ++i) {
@@ -260,6 +265,9 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			if (!_renderContext.sceneData.lights[i].enabled) {
 				continue;
 			}
+			if (!_renderContext.lightObjects[i]->HasMoved()) {
+				continue;
+			}
 			// Update light view matrices based on lights current position
 			glm::vec3 p = _renderContext.sceneData.lights[i].position;
 			_renderContext.lightView = {
@@ -271,10 +279,16 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				glm::lookAt(p, p + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, -1.0, 0.0))
 			};
 
-			*_gpu.shadow = {
+			Material& mat = _materials["shadow"];
+			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
+
+			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
+			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 1, &uniform_offset);
+
+			/**_gpu.shadow = {
 				.projection = _renderContext.lightPerspective,
 				.lightPos = { p, 1.f}
-			};
+			};*/
 
 			for (uint32_t face = 0; face < 6; ++face) {
 				updateCubeFace(f, i, face);
@@ -479,8 +493,8 @@ void Engine::drawFrame()
 	_frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
 	FrameData& f = _frames[_frameInFlightNum];
 
-	// Set general GPU pointers to current frame's ones. It's handy.
-	// And they can be accessed in other files (for example UI)
+	// Since we have descriptor set copies for each frame in flight,
+	// we set the pointers to current frame's descriptor set buffers
 	_gpu.Reset(getCurrentFrame());
 
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback

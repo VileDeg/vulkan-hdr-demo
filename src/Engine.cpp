@@ -31,7 +31,6 @@ void Engine::Init()
     
     createScene(Engine::modelPath + "sponza/sponza.obj");
     //createScene(Engine::modelPath + "sibenik/sibenik.obj");
-
     
     initImgui();
 
@@ -407,9 +406,77 @@ void Engine::prepareShadowPass()
     sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     VKASSERT(vkCreateSampler(_device, &sampler, nullptr, &_shadow.sampler));
 
+
+    auto& depth = _shadow.depth;
+    { // Depth framebuffer attachment
+        
+        // Depth attachment image
+        VkImageCreateInfo imageCreateInfo = {};
+        imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.extent.width = _shadow.width;
+        imageCreateInfo.extent.height = _shadow.height;
+        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.mipLevels = 1;
+        imageCreateInfo.arrayLayers = 1;
+        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        // Image of the framebuffer is blit source
+        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        imageCreateInfo.format = _shadow.fbDepthFormat;
+        imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo imgAllocinfo = {
+                .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+                .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+        };
+
+        VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
+            &depth.allocImage.image, &depth.allocImage.allocation, nullptr));
+
+        immediate_submit([&](VkCommandBuffer cmd) {
+            utils::setImageLayout(
+                cmd,
+                depth.allocImage.image,
+                VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            });
+
+        VkImageViewCreateInfo depthStencilView = {};
+        depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        depthStencilView.format = _shadow.fbDepthFormat;
+        depthStencilView.flags = 0;
+        depthStencilView.subresourceRange = {};
+        depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (_shadow.fbDepthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
+            depthStencilView.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        depthStencilView.subresourceRange.baseMipLevel = 0;
+        depthStencilView.subresourceRange.levelCount = 1;
+        depthStencilView.subresourceRange.baseArrayLayer = 0;
+        depthStencilView.subresourceRange.layerCount = 1;
+        depthStencilView.image = depth.allocImage.image;
+        VKASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &depth.view));
+    }
+
+    VkImageView attachments[2];
+    attachments[1] = depth.view;
+
+    VkFramebufferCreateInfo fbufCreateInfo = {};
+    fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    fbufCreateInfo.renderPass = _shadow.renderpass;
+    fbufCreateInfo.attachmentCount = 2;
+    fbufCreateInfo.pAttachments = attachments;
+    fbufCreateInfo.width = _shadow.width;
+    fbufCreateInfo.height = _shadow.height;
+    fbufCreateInfo.layers = 1;
+
     for (int i = 0; i < MAX_LIGHTS; ++i) {
         
-        Texture& depth = _shadow.depth[i];
+        //Texture& depth = _shadow.depth[i];
         auto& faceViews = _shadow.faceViews[i];
         auto& faceFramebuffers = _shadow.faceFramebuffers[i];
 
@@ -418,92 +485,17 @@ void Engine::prepareShadowPass()
         view.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view.format = format;
         view.components = { VK_COMPONENT_SWIZZLE_R };
-        view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        view.subresourceRange.layerCount = cubeArrayLayerCount;
         view.image = cubemap.allocImage.image;
+        view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
         view.subresourceRange.layerCount = 1;
        
         for (uint32_t face = 0; face < 6; ++face)
         {
             view.subresourceRange.baseArrayLayer = i * 6 + face;
-            vkCreateImageView(_device, &view, nullptr, &faceViews[face]);
-        }
+            VKASSERT(vkCreateImageView(_device, &view, nullptr, &faceViews[face]));
 
-        {
-            VkFormat fbColorFormat = ShadowPass::FB_COLOR_FORMAT;
-
-            // Color attachment
-            VkImageCreateInfo imageCreateInfo = {};
-            imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-            imageCreateInfo.format = fbColorFormat;
-            imageCreateInfo.extent.width = _shadow.width;
-            imageCreateInfo.extent.height = _shadow.height;
-            imageCreateInfo.extent.depth = 1;
-            imageCreateInfo.mipLevels = 1;
-            imageCreateInfo.arrayLayers = 1;
-            imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-            // Image of the framebuffer is blit source
-            imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-            imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-            // Depth stencil attachment
-            imageCreateInfo.format = _shadow.fbDepthFormat;
-            imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-            VmaAllocationCreateInfo imgAllocinfo = {
-                    .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-                    .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-            };
-
-            VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
-                &depth.allocImage.image, &depth.allocImage.allocation, nullptr));
-
-            immediate_submit([&](VkCommandBuffer cmd) {
-                utils::setImageLayout(
-                    cmd,
-                    depth.allocImage.image,
-                    VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                    VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-                });
-
-            VkImageViewCreateInfo depthStencilView = {};
-            depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            depthStencilView.format = _shadow.fbDepthFormat;
-            depthStencilView.flags = 0;
-            depthStencilView.subresourceRange = {};
-            depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            if (_shadow.fbDepthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
-                depthStencilView.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-            depthStencilView.subresourceRange.baseMipLevel = 0;
-            depthStencilView.subresourceRange.levelCount = 1;
-            depthStencilView.subresourceRange.baseArrayLayer = 0;
-            depthStencilView.subresourceRange.layerCount = 1;
-            depthStencilView.image = depth.allocImage.image;
-            VKASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &depth.view));
-
-            VkImageView attachments[2];
-            attachments[1] = depth.view;
-
-            VkFramebufferCreateInfo fbufCreateInfo = {};
-            fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            fbufCreateInfo.renderPass = _shadow.renderpass;
-            fbufCreateInfo.attachmentCount = 2;
-            fbufCreateInfo.pAttachments = attachments;
-            fbufCreateInfo.width = _shadow.width;
-            fbufCreateInfo.height = _shadow.height;
-            fbufCreateInfo.layers = 1;
-
-            for (uint32_t i = 0; i < 6; i++)
-            {
-                attachments[0] = faceViews[i];
-                VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[i]));
-            }
-
+            attachments[0] = faceViews[face];
+            VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[face]));
         }
 
         // Cleanup all shadow pass resources for current light
@@ -512,10 +504,6 @@ void Engine::prepareShadowPass()
                 vkDestroyFramebuffer(_device, fb, nullptr);
             }
 
-            // Destroy depth image
-            vkDestroyImageView(_device, depth.view, nullptr);
-            vmaDestroyImage(_allocator, depth.allocImage.image, depth.allocImage.allocation);
-
             for (auto& view : faceViews) {
                 vkDestroyImageView(_device, view, nullptr);
             }
@@ -523,6 +511,9 @@ void Engine::prepareShadowPass()
     }
 
     _deletionStack.push([=]() mutable {
+        // Destroy depth image
+        vkDestroyImageView(_device, depth.view, nullptr);
+        vmaDestroyImage(_allocator, depth.allocImage.image, depth.allocImage.allocation);
         // Destroy cubemap image
         vkDestroyImageView(_device, cubemap.view, nullptr);
         vmaDestroyImage(_allocator, cubemap.allocImage.image, cubemap.allocImage.allocation);
@@ -530,8 +521,6 @@ void Engine::prepareShadowPass()
         vkDestroySampler(_device, _shadow.sampler, nullptr);
     });
 }
-
-
 
 
 void Engine::initDescriptors()
@@ -678,10 +667,11 @@ void Engine::initFrame(FrameData& f)
         }
 
         { // Shadow pass descriptor set
-            f.shadowUB = createBuffer(sizeof(GPUShadowUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            //f.shadowUB = createBuffer(sizeof(GPUShadowUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+                .bind_buffer(0, &_sceneParameterBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+                //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
                 .build(f.shadowPassSet, _shadowSetLayout);
         }
@@ -716,7 +706,7 @@ void Engine::initFrame(FrameData& f)
         f.cameraBuffer.destroy(_allocator);
         f.objectBuffer.destroy(_allocator);
 
-        f.shadowUB.destroy(_allocator);
+        //f.shadowUB.destroy(_allocator);
 
         f.compSSBO.destroy(_allocator);
         f.compSSBO_ro.destroy(_allocator);

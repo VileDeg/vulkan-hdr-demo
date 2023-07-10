@@ -28,6 +28,8 @@ layout(set = 0, binding = 1) uniform SceneData {
     bool enableExposure;
     int _pad2;
 
+    mat4 lightProjMat;
+
     float lightFarPlane;
     float shadowBias;
     float shadowOpacity; // Unused?

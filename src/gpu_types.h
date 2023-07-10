@@ -31,6 +31,7 @@ struct GPUScenePC {
 struct GPUShadowPC {
     glm::mat4 view;
     float far_plane;
+    uint32_t lightIndex;
 };
 
 
@@ -64,6 +65,8 @@ struct GPUSceneUB {
     GPUBool enableExposure = true;
     int _pad2;
 
+    glm::mat4 lightProjMat;
+
     float lightFarPlane;
     float shadowBias = 0.15f;
     float shadowOpacity; // Unused
@@ -94,11 +97,11 @@ struct GPUSceneSSBO {
 };
 
 
-struct GPUShadowUB {
-    //glm::mat4 model;
-    glm::mat4 projection;
-    glm::vec4 lightPos;
-};
+//struct GPUShadowUB {
+//    //glm::mat4 model;
+//    glm::mat4 projection;
+//    glm::vec4 lightPos;
+//};
 
 struct GPUCompSSBO {
     float averageLuminance = 1.f;

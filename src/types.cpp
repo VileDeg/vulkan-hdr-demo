@@ -946,7 +946,7 @@ void GPUData::Reset(FrameData& fd)
 	ssbo		= reinterpret_cast<GPUSceneSSBO*>  (fd.objectBuffer.gpu_ptr);
 	camera		= reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.gpu_ptr);
 
-	shadow		= reinterpret_cast<GPUShadowUB*>(fd.shadowUB.gpu_ptr);
+	//shadow		= reinterpret_cast<GPUShadowUB*>(fd.shadowUB.gpu_ptr);
 
 	compSSBO	= reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
 	compSSBO_ro = reinterpret_cast<GPUCompSSBO_ReadOnly*>(fd.compSSBO_ro.gpu_ptr);
@@ -1022,7 +1022,7 @@ void RenderContext::Init()
 	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
-	std::vector<bool> enable = { true, true, false, false };
+	std::vector<bool> enable = { true, true, true, true };
 
 
 	float amb = 0.1f;
@@ -1057,7 +1057,7 @@ void RenderContext::Init()
 		UpdateLightAttenuation(i, 0);
 	}
 
-	lightPerspective = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
+	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
 }
 
 Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
@@ -1079,12 +1079,20 @@ glm::mat4 RenderObject::Transform() {
 	if (model != nullptr) {
 		scales *= glm::vec3(1.f / model->maxExtent);
 	}
+
 	return
 		glm::translate(glm::mat4(1.f), pos)	   *
 		glm::rotate(glm::radians(rot.x), glm::vec3(1, 0, 0)) *
 		glm::rotate(glm::radians(rot.y), glm::vec3(0, 1, 0)) *
 		glm::rotate(glm::radians(rot.z), glm::vec3(0, 0, 1)) *
 		glm::scale(glm::mat4(1.f), scales);
+}
+
+bool RenderObject::HasMoved() {
+	bool hasMoved = pos != _prevPos;
+	_prevPos = pos;
+
+	return hasMoved;
 }
 
 VertexInputDescription Vertex::getDescription()

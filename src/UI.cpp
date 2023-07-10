@@ -173,13 +173,13 @@ void Engine::uiUpdateScene()
 
 		int& light_i = _renderContext.sceneData.shadowMapDisplayIndex;
 		if (ImGui::Button("<")) {
-			light_i = std::clamp(--light_i, 0, MAX_LIGHTS);
+			light_i = std::clamp(--light_i, 0, MAX_LIGHTS-1);
 		}
 		ImGui::SameLine();
 		ImGui::Text("Shadow map %d", light_i);
 		ImGui::SameLine();
 		if (ImGui::Button(">")) {
-			light_i = std::clamp(++light_i, 0, MAX_LIGHTS);
+			light_i = std::clamp(++light_i, 0, MAX_LIGHTS-1);
 		}
 
 		ImGui::Separator();
