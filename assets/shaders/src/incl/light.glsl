@@ -1,26 +1,6 @@
 #include "defs.glsl"
 
-struct LightData {
-    vec3 pos; // x, y, z
-    float radius;
-
-    vec3 color; // r, g, b
-    int  _pad0;
-
-    float ambientFactor;  // TODO: remove
-    float diffuseFactor;  // TODO: remove ??
-    float specularFactor; 
-    float intensity;
-
-    float constant;
-    float linear;
-    float quadratic;
-    bool  enabled;
-};
-
 vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
-    
-    
     vec3 lightColor = vec3(ld.color);
 
     vec3 lightPos   = vec3(ld.pos);
@@ -79,7 +59,6 @@ float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 f
         for(int i = 0; i < PCF_samples; ++i)
         {
             float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag + gridSamplingDisk[i] * diskRadius, lightIndex)).r;
-            //sampledDepth *= farPlane;   // undo mapping [0;1]
             if(currentDepth - shadowBias > sampledDepth) {
                 shadow += 1.0;
             }
@@ -87,7 +66,6 @@ float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 f
         shadow /= float(PCF_samples);
     } else {
         float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag, lightIndex)).r;
-        //sampledDepth *= farPlane;
         if(currentDepth - shadowBias > sampledDepth) {
             shadow = 1.0;
         }

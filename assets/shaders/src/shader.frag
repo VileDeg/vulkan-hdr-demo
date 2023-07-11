@@ -10,38 +10,8 @@ layout(location = 5) in vec3 uvw; //For skybox cubemap sampling
 
 layout(location = 0) out vec4 FragColor;
 
-
-#include "defs.glsl"
-#include "light.glsl"
-
-#include "structs.glsl"
-
-layout(set = 0, binding = 1) uniform SceneData {
-    vec3 cameraPos;
-    int _pad0;
-
-    vec3 ambientColor;
-    int _pad1;
-
-    bool showNormals;
-    float exposure;
-    bool enableExposure;
-    int _pad2;
-
-    mat4 lightProjMat;
-
-    float lightFarPlane;
-    float shadowBias;
-    float shadowOpacity; // Unused?
-    bool showShadowMap;
-
-    bool enableShadows;
-    bool enablePCF;
-    float shadowMapDisplayBrightness;
-    int shadowMapDisplayIndex;
-
-    LightData[MAX_LIGHTS] lights;
-} sd;
+#include "incl/defs.glsl"
+#include "incl/light.glsl"
 
 layout(push_constant) uniform PushConstants {
     int hasTextures;
@@ -50,12 +20,18 @@ layout(push_constant) uniform PushConstants {
     int _pad0;
 } pc;
 
-layout(set = 2, binding = 0) uniform sampler2D diffuse;
+layout(set = 0, binding = 1)
+#include "incl/sceneUB.incl" 
+sd;
+
+layout(std430, set = 1, binding = 0)
+#include "incl/objectSSBO.incl" 
+ssbo;
 
 layout(set = 1, binding = 1) uniform samplerCube skybox;
-
 layout(set = 1, binding = 2) uniform samplerCubeArray shadowCubeArray;
 
+layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
 void main()  
 {

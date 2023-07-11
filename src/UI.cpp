@@ -304,26 +304,20 @@ void Engine::uiUpdateHDR()
 
 		//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::TreeNode("Histogram")) {
-
-				
 			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-				constexpr int arr_size = ARRAY_SIZE(_gpu.compSSBO->luminance);
+				uint32_t bins = MAX_LUMINANCE_BINS;
+				uint32_t xs[MAX_LUMINANCE_BINS];
 
-				int bins = arr_size;
-				int xs[arr_size];
-
-				for (int i = 0; i < arr_size; ++i) {
+				for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
 					xs[i] = i;
 				}
 
-				// Skip values that don't lie withing bounds
-				/*int start_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.x;
-				int end_i = (arr_size-1) * _renderContext.luminanceHistogramBounds.y;*/
-
-				std::vector<int> vals(_gpu.compSSBO->luminance, _gpu.compSSBO->luminance + arr_size);
-
-				auto it = std::max_element(vals.begin(), vals.end());
-				int maxBin = *it;
+				uint32_t maxBin = 0;
+				for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+					if (_gpu.compSSBO->luminance[i] > maxBin) {
+						maxBin = _gpu.compSSBO->luminance[i];
+					}
+				}
 
 				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
@@ -334,13 +328,13 @@ void Engine::uiUpdateHDR()
 				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
 
 
-				ImPlot::PlotStems("Luminance", xs, vals.data(), bins);
+				ImPlot::PlotStems("Luminance", xs, _gpu.compSSBO->luminance, bins);
 
-				int start_i = _state.cmp.lumLowerIndex;
-				int end_i   = _state.cmp.lumUpperIndex;
+				uint32_t start_i = _state.cmp.lumLowerIndex;
+				uint32_t end_i   = _state.cmp.lumUpperIndex;
 
-				int xs1[2] = { start_i, end_i };
-				int vals1[2] = { vals[start_i], vals[end_i] };
+				uint32_t xs1[2] = { start_i, end_i };
+				uint32_t vals1[2] = { _gpu.compSSBO->luminance[start_i], _gpu.compSSBO->luminance[end_i] };
 				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
 
 				ImPlot::PlotStems("Bounds", xs1, vals1, 2);

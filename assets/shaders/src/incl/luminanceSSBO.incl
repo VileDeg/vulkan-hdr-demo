@@ -1,0 +1,8 @@
+buffer Luminance {
+    float averageLuminance;
+    float targetAverageLuminance;
+    int _pad0;
+    int _pad1;
+
+    uint histogram[MAX_LUMINANCE_BINS];
+} 

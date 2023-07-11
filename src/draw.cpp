@@ -285,11 +285,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
 			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 1, &uniform_offset);
 
-			/**_gpu.shadow = {
-				.projection = _renderContext.lightPerspective,
-				.lightPos = { p, 1.f}
-			};*/
-
 			for (uint32_t face = 0; face < 6; ++face) {
 				updateCubeFace(f, i, face);
 			}
@@ -313,98 +308,37 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	}
 	vkCmdEndRenderPass(f.cmd);
 
-	{ // Sync graphics to compute
-		VkImageMemoryBarrier imageMemoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
-			/* .image and .subresourceRange should identify image subresource accessed */ 
-			.image = _viewportImages[imageIndex].image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
-		};
-
-		vkCmdPipelineBarrier(
-			f.cmd,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // dstStageMask
-			0,
-			0, nullptr,
-			0, nullptr,
-			1,                                             // imageMemoryBarrierCount
-			&imageMemoryBarrier
-		);
-	}
-
 	{ // Compute step
-		// Compute luminance histogram
-		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
-		{
-			VkDescriptorImageInfo imageBufferInfo{
-				.sampler = _linearSampler,
-				.imageView = _viewport.imageViews[imageIndex],
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-			};
-			VkWriteDescriptorSet readonlyHDRImage =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compHistogramSet, &imageBufferInfo, 2);
+		if (_state.cmp.enableAdaptation) {
+			// Compute luminance histogram
+			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
+			{
+				VkDescriptorImageInfo imageBufferInfo{
+					.sampler = _linearSampler,
+					.imageView = _viewport.imageViews[imageIndex],
+					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+				};
+				VkWriteDescriptorSet readonlyHDRImage =
+					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+						f.compHistogramSet, &imageBufferInfo, 2);
 
 
-			vkUpdateDescriptorSets(_device, 1, &readonlyHDRImage, 0, nullptr);
-			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipelineLayout, 0, 1, &f.compHistogramSet, 0, nullptr);
+				vkUpdateDescriptorSets(_device, 1, &readonlyHDRImage, 0, nullptr);
+				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipelineLayout, 0, 1, &f.compHistogramSet, 0, nullptr);
 
-			VkMemoryBarrier memoryBarrier = {
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-				.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-			};
+				ASSERT(MAX_LUMINANCE_BINS == 256);
+				constexpr uint32_t thread_size = 16;
+				vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
+			}
 
-			vkCmdPipelineBarrier(
-				f.cmd,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-				0,
-				1, &memoryBarrier,
-				0, nullptr,
-				0, nullptr
-			);
+			// Compute average luminance
+			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
+			{
+				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipelineLayout, 0, 1, &f.compAvgLumSet, 0, nullptr);
 
-	
-			ASSERT(MAX_LUMINANCE_BINS == 256);
-			constexpr uint32_t thread_size = 16;
-			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
-		}
-
-		// Compute average luminance
-		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
-		{
-			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipelineLayout, 0, 1, &f.compAvgLumSet, 0, nullptr);
-
-			VkMemoryBarrier memoryBarrier = {
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-				.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-			};
-
-			vkCmdPipelineBarrier(
-				f.cmd,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-				0,
-				1, &memoryBarrier,
-				0, nullptr,
-				0, nullptr
-			);
-
-			// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
-			vkCmdDispatch(f.cmd, 1, 1, 1);
+				// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
+				vkCmdDispatch(f.cmd, 1, 1, 1);
+			}
 		}
 
 		// Compute tone mapping
@@ -423,57 +357,10 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipelineLayout, 0, 1, &f.compTonemapSet, 0, nullptr);
 
-			VkMemoryBarrier memoryBarrier = {
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-				.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-			};
-
-			vkCmdPipelineBarrier(
-				f.cmd,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-				0,
-				1, &memoryBarrier,
-				0, nullptr,
-				0, nullptr
-			);
-
 			constexpr uint32_t thread_size = 32;
 			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 	}
-
-	{ // Sync compute to graphics
-		VkImageMemoryBarrier imageMemoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
-			/* .image and .subresourceRange should identify image subresource accessed */
-			.image = _viewportImages[imageIndex].image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
-		};
-
-		vkCmdPipelineBarrier(
-			f.cmd,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // srcStageMask
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // dstStageMask
-			0,
-			0, nullptr,
-			0, nullptr,
-			1,                                             // imageMemoryBarrierCount
-			&imageMemoryBarrier
-		);
-	}
-
 
 	renderPassBeginInfo.renderPass = _swapchain.renderpass;
 	renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];

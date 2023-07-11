@@ -13,9 +13,11 @@ layout(location = 4) out vec3 normal;
 layout(location = 5) out vec3 uvw; //For cubemap sampling
 //layout(location = 6) out vec3 worldPos; //Fragment world pos for shadow cubemap sampling
 
-#include "defs.glsl"
+#include "incl/defs.glsl"
 
-#include "structs.glsl"
+layout(std430, set = 1, binding = 0)
+#include "incl/objectSSBO.incl" 
+ssbo;
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
 	mat4 view;

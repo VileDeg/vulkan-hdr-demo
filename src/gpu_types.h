@@ -97,12 +97,6 @@ struct GPUSceneSSBO {
 };
 
 
-//struct GPUShadowUB {
-//    //glm::mat4 model;
-//    glm::mat4 projection;
-//    glm::vec4 lightPos;
-//};
-
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
     float targetAverageLuminance = 1.f;
@@ -110,25 +104,25 @@ struct GPUCompSSBO {
     int _pad1;
 
 #define MAX_LUMINANCE_BINS 256
-    unsigned int luminance[MAX_LUMINANCE_BINS]{};
+    uint32_t luminance[MAX_LUMINANCE_BINS]{};
 };
 
 struct GPUCompSSBO_ReadOnly {
     float minLogLum = -2.f;
     float logLumRange = 12.f;
     float oneOverLogLumRange;
-    unsigned int totalPixelNum;
+    uint32_t totalPixelNum;
 
     float timeCoeff = 1.f;
-    unsigned int lumLowerIndex;
-    unsigned int lumUpperIndex;
+    uint32_t lumLowerIndex;
+    uint32_t lumUpperIndex;
     int _pad0;
 
     glm::vec4 weights = { 1.f, 128.f, 1.f, 1.f };
 
     GPUBool enableToneMapping = true;
     int toneMappingMode{ 3 };
-    GPUBool enableAdaptation = false; // true
+    GPUBool enableAdaptation = true;
     int gammaMode{ 1 };
 };
 

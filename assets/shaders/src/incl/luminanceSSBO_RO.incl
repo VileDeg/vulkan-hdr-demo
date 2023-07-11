@@ -1,13 +1,4 @@
-layout (std430, set = 0, binding = 0) buffer Luminance {
-    float averageLuminance;
-    float targetAverageLuminance;
-    int _pad0;
-    int _pad1;
-
-    uint histogram[MAX_LUMINANCE_BINS];
-} ssbo;
-
-layout (std430, set = 0, binding = 1) readonly buffer RO {
+readonly buffer RO {
     float minLogLum;
     float logLumRange;
     float oneOverLogLumRange;
@@ -24,5 +15,5 @@ layout (std430, set = 0, binding = 1) readonly buffer RO {
     int toneMappingMode;
     bool enableAdaptation;
     int gammaMode;
-} ssbo_ro;
+}
 
