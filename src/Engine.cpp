@@ -29,8 +29,9 @@ void Engine::Init()
     createPipelines();
     createSamplers();
     
+    createScene(Engine::modelPath + "crytek_sponza/sponza.obj");
     //createScene(Engine::modelPath + "sponza/sponza.obj");
-    createScene(Engine::modelPath + "sibenik/sibenik.obj");
+    //createScene(Engine::modelPath + "sibenik/sibenik.obj");
     
     initImgui();
 

@@ -9,10 +9,10 @@
     #define MAX_LUMINANCE_BINS 256
 
     struct LightData {
-        vec3 pos; // x, y, z
+        vec3 pos;
         float radius;
 
-        vec3 color; // r, g, b
+        vec3 color;
         float intensity;
 
         float constant;

@@ -50,7 +50,7 @@ void main()
 	//objectColor = ssbo.objects[pc.objectIndex].color;
 
 	//normalMat = mat3(transpose(inverse(modelMat)));
-	normal = mat3(ssbo.objects[pc.objectIndex].normalMatrix) * vNormal;
+	normal = normalize(mat3(ssbo.objects[pc.objectIndex].normalMatrix) * vNormal);
 
 	uvw = vPosition;
 }

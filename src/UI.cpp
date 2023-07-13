@@ -379,6 +379,13 @@ void Engine::uiUpdateRenderContext()
 		if (ImGui::SliderFloat("Ambient factor", &amb, 0.f, 1.f)) {
 			_renderContext.sceneData.ambientColor = { amb, amb, amb };
 		}
+
+		if (ImGui::SliderFloat("Radius brightness treshold", &_renderContext.lightRadiusTreshold, 0.f, 0.25f)) {
+			for (int i = 0; i < MAX_LIGHTS; ++i) {
+				_renderContext.UpdateLightRadius(i);
+			}
+		}
+
 		ImGui::Spacing();
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
 
@@ -392,7 +399,7 @@ void Engine::uiUpdateRenderContext()
 					_renderContext.UpdateLightPosition(i, tmpPos);
 				}
 
-				{
+				/*{
 					ImGui::Text("Radius %f", l.radius);
 					ImGui::SameLine();
 					if (ImGui::Button("+")) {
@@ -402,13 +409,27 @@ void Engine::uiUpdateRenderContext()
 					if (ImGui::Button("-")) {
 						_renderContext.UpdateLightAttenuation(i, 2);
 					}
-				}
+				}*/
 
-				ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f);
+				if (ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f)) {
+					_renderContext.UpdateLightRadius(i);
+				}
 
 				if (ImGui::Button("Reset Intensity")) {
 					l.intensity = 1.f;
 				}
+
+				static float atten = 0.1f;
+				if (ImGui::DragFloat("Attenuation", &atten, 0.01f, 0.f, 1.f, "%.5f")) {
+					l.linear = (0.7 - 0.0014) * atten;
+					l.quadratic = (0.44 - 0.000007) * atten;
+
+					_renderContext.UpdateLightRadius(i);
+				}
+				/*ImGui::SliderFloat("Linear", &l.linear, 0.0014, 0.7);
+				ImGui::SliderFloat("Quadratic", &l.linear, 0.000007, 0.44);*/
+
+				ImGui::Text("Radius %f", l.radius);
 
 				if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
 					ImGui::PushItemWidth(100.f);

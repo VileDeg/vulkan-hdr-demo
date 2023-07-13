@@ -301,10 +301,14 @@ struct RenderContext {
     float maxLogLuminance = 10.f;
     float eyeAdaptationTimeCoefficient = 1.1f;
 
+    // Treshold to calculate light's effective radius for optimization
+    float lightRadiusTreshold = 1.f / 255.f;
+
     void Init();
 
     void UpdateLightPosition(int lightIndex, glm::vec3 newPos);
-    void UpdateLightAttenuation(int lightIndex, int mode /* 0 = Closest */);
+    //void UpdateLightAttenuation(int lightIndex, int mode /* 0 = Closest */);
+    void UpdateLightRadius(int lightIndex);
 
     int GetClosestRadiusIndex(int radius);
 

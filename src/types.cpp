@@ -140,30 +140,44 @@ int RenderContext::GetClosestRadiusIndex(int radius) {
 	return closest_index;
 }
 
-void RenderContext::UpdateLightAttenuation(int lightIndex, int mode)
+//void RenderContext::UpdateLightAttenuation(int lightIndex, int mode)
+//{
+//	GPULight& l = sceneData.lights[lightIndex];
+//
+//	// Set the radius to the closest radius that is present in table
+//	// Find the attenuation values that correspond to the radius
+//	int ind = GetClosestRadiusIndex(l.radius);
+//	if (mode == 1) { // Increase
+//		if (ind != atten_map.size() - 1) {
+//			++ind;
+//		}
+//	} else if (mode == 2) { // Decrease
+//		if (ind > 0) {
+//			--ind;
+//		}
+//	}
+//	l.radius = atten_map[ind].first;
+//	pr("Light radius[" << lightIndex << "] set to: " << l.radius << " units");
+//
+//	glm::vec3 att = atten_map[ind].second;
+//
+//	l.constant = att.x;
+//	l.linear = att.y;
+//	l.quadratic = att.z;
+//}
+
+void RenderContext::UpdateLightRadius(int i)
 {
-	GPULight& l = sceneData.lights[lightIndex];
+	float Kc = sceneData.lights[i].constant;
+	float Kl = sceneData.lights[i].linear;
+	float Kq = sceneData.lights[i].quadratic;
 
-	// Set the radius to the closest radius that is present in table
-	// Find the attenuation values that correspond to the radius
-	int ind = GetClosestRadiusIndex(l.radius);
-	if (mode == 1) { // Increase
-		if (ind != atten_map.size() - 1) {
-			++ind;
-		}
-	} else if (mode == 2) { // Decrease
-		if (ind > 0) {
-			--ind;
-		}
-	}
-	l.radius = atten_map[ind].first;
-	pr("Light radius[" << lightIndex << "] set to: " << l.radius << " units");
+	float LC = sceneData.lights[i].intensity;
+	float termC = -LC / lightRadiusTreshold + Kc;
 
-	glm::vec3 att = atten_map[ind].second;
+	float rootFrom = Kl * Kl - 4 * Kq * termC;
 
-	l.constant = att.x;
-	l.linear = att.y;
-	l.quadratic = att.z;
+	sceneData.lights[i].radius = -Kl + std::sqrt(rootFrom);
 }
 
 void RenderContext::Init()
@@ -183,7 +197,7 @@ void RenderContext::Init()
 		{ 1.f , 1.f , 1.f }
 	};
 
-	std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
+	//std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
 	std::vector<bool> enable = { true, true, true, true };
@@ -203,7 +217,7 @@ void RenderContext::Init()
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {
 			.position = lightPos[i],
-			.radius = radius[i],
+			//.radius = radius[i],
 
 			.color = lightColor[i],
 
@@ -212,12 +226,16 @@ void RenderContext::Init()
 			.specularFactor = 0.5f,*/
 			.intensity = intensity[i],
 
-			//Attenuation skipped. Will be updated based on radius
+			.constant = 1.f,
+			.linear = 0.22f,
+			.quadratic = 0.2f,
 
 			.enabled = enable[i]
 		};
 
-		UpdateLightAttenuation(i, 0);
+		//UpdateLightAttenuation(i, 0);
+		UpdateLightRadius(i);
+		
 	}
 
 	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);

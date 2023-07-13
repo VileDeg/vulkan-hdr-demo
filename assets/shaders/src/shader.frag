@@ -12,6 +12,7 @@ layout(location = 0) out vec4 FragColor;
 
 #include "incl/defs.glsl"
 #include "incl/light.glsl"
+#include "incl/bump_mapping.glsl" 
 
 layout(push_constant) uniform ScenePC {
     bool lightAffected;
@@ -46,19 +47,7 @@ void main()
     vec2 bumpUV = uv;
 
     if (sd.enableBumpMapping && !pc.isCubemap && pc.useBumpTex) {
-        float stp = sd.bumpStep;
-
-        float pxl = texture(bump, vec2(uv.x-stp, uv.y)).r;
-        float pxr = texture(bump, vec2(uv.x+stp, uv.y)).r;
-        float pxd = texture(bump, vec2(uv.x, uv.y-stp)).r;
-        float pxu = texture(bump, vec2(uv.x, uv.y+stp)).r;
-
-        vec2 dl = vec2(pxr - pxl, pxu - pxd);
-        vec3 normalShift = mat3(ssbo.objects[pc.objectIndex].normalMatrix) * vec3(dl.x, dl.y, 0);
-        normalShift *= sd.bumpStrength;
-
-        bumpNormal = normal - normalShift;
-        bumpUV = uv - dl * sd.bumpUVFactor * sd.bumpStrength;
+        bumpMapping(bump, sd.bumpStep, mat3(ssbo.objects[pc.objectIndex].normalMatrix), sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV);
     }
 
     if (sd.showNormals) {
