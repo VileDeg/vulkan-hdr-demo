@@ -6,18 +6,6 @@
 #include "camera.h"
 #include "vk_descriptors.h"
 
-struct GlobalState {
-    bool showNormals = false;
-
-    float lumPixelLowerBound = 0.2f;
-    float lumPixelUpperBound = 0.95f;
-
-    float maxLogLuminance = 10.f;
-    float eyeAdaptationTimeCoefficient = 1.1f;
-    
-    GPUCompSSBO_ReadOnly cmp{};
-};
-
 class Engine {
 public:
     void Init();
@@ -39,13 +27,10 @@ private: /* Methods used from Init directly */
     void createRenderpass();
 
     void prepareMainPass();
-
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
-
     void prepareShadowPass();
 
     void createPipelines();
-    //void createFramebuffers();
     void createFrameData();
     void createSamplers();
 
@@ -72,7 +57,6 @@ private: /* Secondary methods */
     bool loadModelFromObj(const std::string assignedName, const std::string path);
 
     Texture* loadTextureFromFile(const char* path);
-    //Texture* loadTextureFromFileHDR(const char* path);
 
     void loadCubemap(const char* cubemapDirName, bool isHDR);
 
@@ -117,6 +101,7 @@ private:  // UI
     void uiUpdateScene();
     void uiUpdateHDR();
     void uiUpdateRenderContext();
+    void uiUpdateDebugDisplay();
 
 
     std::vector<bool*> _imguiFlags;
@@ -128,14 +113,10 @@ private:  // UI
 
     std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
 
-    
-
 private:
     float _fovY = 90.f; // degrees
     
 private: 
-    GlobalState _state;
-
     GLFWwindow* _window;
 
     VkInstance _instance;
@@ -151,7 +132,12 @@ private:
     uint32_t _presentQueueFamily;
     VkQueue _graphicsQueue;
     VkQueue _presentQueue;
-    
+
+    VmaAllocator _allocator;
+
+    FrameData _frames[MAX_FRAMES_IN_FLIGHT];
+
+    UploadContext _uploadContext;
 
     GraphicsPass _swapchain{};
     VkSwapchainKHR _swapchainHandle{ VK_NULL_HANDLE };
@@ -159,19 +145,9 @@ private:
     // 32-bit float HDR format for viewport
     GraphicsPass _viewport{ VK_FORMAT_R32G32B32A32_SFLOAT };
     std::vector<AllocatedImage> _viewportImages; // Allocated with VMA
-    
- 
+
     ShadowPass _shadow;
-    VkDescriptorSetLayout _shadowSetLayout;
-
-    UploadContext _uploadContext;
-
     ComputePass _compute;
-
-    
-    FrameData _frames[MAX_FRAMES_IN_FLIGHT];
-
-    VmaAllocator _allocator;
 
     uint32_t _frameInFlightNum = 0;
     uint32_t _frameNumber = 0;
@@ -190,6 +166,7 @@ private:
     bool _framebufferResized = false;
 
     std::vector<std::shared_ptr<RenderObject>> _renderables;
+    std::shared_ptr<RenderObject> _skyboxObject;
 
     std::unordered_map<std::string, Model> _models;
     std::unordered_map<std::string, Material> _materials;
@@ -202,24 +179,19 @@ private:
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _diffuseTextureSetLayout;
-    //VkDescriptorSetLayout _skyboxTextureSetLayout;
-
-    
+    VkDescriptorSetLayout _shadowSetLayout;
 
     VkSampler _blockySampler;
     VkSampler _linearSampler;
 
     VkDescriptorPool _descriptorPool;
 
-    AllocatedBuffer _sceneParameterBuffer;
+    //AllocatedBuffer _sceneParameterBuffer;
     AllocatedImage _skyboxAllocImage;
 
     RenderContext _renderContext;
 
     GPUData _gpu;
-
-    //Texture* _skyboxTexture;
-    std::shared_ptr<RenderObject> _skyboxObject;
 
 private:
     PFN_vkCmdPipelineBarrier2 vkCmdPipelineBarrier2;

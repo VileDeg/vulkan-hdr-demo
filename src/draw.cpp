@@ -33,9 +33,6 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 
 		ASSERT(mesh && mesh->material);
 
-		//offset for our scene buffer
-		uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
-
 		// Always add the sceneData and SSBO descriptor
 		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalSet, getCurrentFrame().objectSet };
 
@@ -75,7 +72,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 			*lastMaterial = mesh->material;
 			// Bind the descriptor sets
 			vkCmdBindDescriptorSets(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 1, &uniform_offset);
+				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 0, nullptr);
 		}
 
 		if (mesh != *lastMesh) {
@@ -184,15 +181,15 @@ void Engine::loadDataToGPU()
 
 	// Load UNIFORM BUFFER of scene parameters to GPU
 	{
-		char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
-		sd += pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
+		/*char* sd = (char*)_sceneParameterBuffer.gpu_ptr;
+		sd += pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;*/
 
 		_renderContext.sceneData.cameraPos = _camera.GetPos();
 		//flag(_renderContext.sceneData.showShadowMap);
 		_renderContext.sceneData.lightFarPlane = _renderContext.zFar;
 		//_renderContext.sceneData.showShadowMap = false;
 
-		memcpy(sd, &_renderContext.sceneData, sizeof(GPUSceneUB));
+		memcpy(_gpu.scene, &_renderContext.sceneData, sizeof(GPUSceneUB));
 	}
 
 	{ // Load UNIFORM BUFFER of camera to GPU
@@ -212,8 +209,8 @@ void Engine::loadDataToGPU()
 		//uint tmp_sum = 0;
 		uint li = 0;
 		uint ui = MAX_LUMINANCE_BINS - 1;
-		float lb = _state.lumPixelLowerBound * _state.cmp.totalPixelNum;
-		float ub = _state.lumPixelUpperBound * _state.cmp.totalPixelNum;
+		float lb = _renderContext.lumPixelLowerBound * _renderContext.comp.totalPixelNum;
+		float ub = _renderContext.lumPixelUpperBound * _renderContext.comp.totalPixelNum;
 
 		uint sum_skipped = 0;
 
@@ -238,16 +235,16 @@ void Engine::loadDataToGPU()
 			}
 		}
 
-		sum_skipped += _state.cmp.totalPixelNum - sum;
+		sum_skipped += _renderContext.comp.totalPixelNum - sum;
 
-		_state.cmp.logLumRange = _state.maxLogLuminance - _state.cmp.minLogLum;
-		_state.cmp.oneOverLogLumRange = 1.f / _state.cmp.logLumRange;
-		_state.cmp.totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
-		_state.cmp.timeCoeff = 1 - std::exp(-_deltaTime * _state.eyeAdaptationTimeCoefficient);
-		_state.cmp.lumLowerIndex = li;
-		_state.cmp.lumUpperIndex = ui;
+		_renderContext.comp.logLumRange = _renderContext.maxLogLuminance - _renderContext.comp.minLogLum;
+		_renderContext.comp.oneOverLogLumRange = 1.f / _renderContext.comp.logLumRange;
+		_renderContext.comp.totalPixelNum = _viewport.imageExtent.width * _viewport.imageExtent.height;
+		_renderContext.comp.timeCoeff = 1 - std::exp(-_deltaTime * _renderContext.eyeAdaptationTimeCoefficient);
+		_renderContext.comp.lumLowerIndex = li;
+		_renderContext.comp.lumUpperIndex = ui;
 
-		memcpy(_gpu.compSSBO_ro, &_state.cmp, sizeof(GPUCompSSBO_ReadOnly));
+		memcpy(_gpu.compUB, &_renderContext.comp, sizeof(GPUCompUB));
 
 		// Reset luminance from previous frame
 		memset(_gpu.compSSBO->luminance, 0, sizeof(_gpu.compSSBO->luminance));
@@ -283,7 +280,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
 
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
-			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 1, &uniform_offset);
+			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 0, nullptr);
 
 			for (uint32_t face = 0; face < 6; ++face) {
 				updateCubeFace(f, i, face);
@@ -309,7 +306,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	vkCmdEndRenderPass(f.cmd);
 
 	{ // Compute step
-		if (_state.cmp.enableAdaptation) {
+		if (_renderContext.comp.enableAdaptation) {
 			// Compute luminance histogram
 			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
 			{

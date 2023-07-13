@@ -531,43 +531,7 @@ void Engine::initDescriptors()
     _descriptorLayoutCache = new vkutil::DescriptorLayoutCache{};
     _descriptorLayoutCache->init(_device);
 
-    // Dynamic uniform buffer
-    {
-        const size_t sceneParamBufferSize = MAX_FRAMES_IN_FLIGHT * pad_uniform_buffer_size(sizeof(GPUSceneUB));
-
-        _sceneParameterBuffer =
-            createBuffer(sceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-        _sceneParameterBuffer.descInfo = {
-                   .buffer = _sceneParameterBuffer.buffer,
-                   .offset = 0,
-                   .range = sizeof(GPUSceneUB)
-        };
-        _deletionStack.push([&]() {
-            _sceneParameterBuffer.destroy(_allocator);
-            });
-    }
-
-    { // Object descriptor set (SSBO)
-        std::vector<VkDescriptorSetLayoutBinding> bindings = {
-            // SSBO, both shaders, binding 0
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0),
-            // Skybox, fragment shader, binding 1
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
-        };
-
-        VkDescriptorSetLayoutCreateInfo objectSkyboxSetInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = 0,
-            .bindingCount = static_cast<uint32_t>(bindings.size()),
-            .pBindings = bindings.data()
-        };
-
-        _objectSetLayout = _descriptorLayoutCache->create_descriptor_layout(&objectSkyboxSetInfo);
-    }
-
-
-    { // Diffuse texture descriptor set
+    { // Diffuse texture descriptor set (push descriptor set)
         VkDescriptorSetLayoutBinding textureBind =
             vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
@@ -642,10 +606,11 @@ void Engine::initFrame(FrameData& f)
     {
         { // Create uniform buffer with camera data
             f.cameraBuffer = createBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.sceneBuffer  = createBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-                .bind_buffer(1, &_sceneParameterBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+                .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
                 .build(f.globalSet, _globalSetLayout);
         }
 
@@ -667,36 +632,34 @@ void Engine::initFrame(FrameData& f)
         }
 
         { // Shadow pass descriptor set
-            //f.shadowUB = createBuffer(sizeof(GPUShadowUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &_sceneParameterBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+                .bind_buffer(0, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
                 .build(f.shadowPassSet, _shadowSetLayout);
         }
 
         { // Compute descriptor sets
-            f.compSSBO    = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.compSSBO_ro = createBuffer(sizeof(GPUCompSSBO_ReadOnly), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compSSBO = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compUB = createBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Create layout and write descriptor set for COMPUTE histogram step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(f.compHistogramSet, _compute.histogram.setLayout);
 
             // Create layout and write descriptor set for COMPUTE average luminance step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .build(f.compAvgLumSet, _compute.averageLuminance.setLayout);
 
             // Create layout and write descriptor set for COMPUTE tone mapping step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compSSBO_ro.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(f.compTonemapSet, _compute.toneMapping.setLayout);
         }
@@ -704,12 +667,11 @@ void Engine::initFrame(FrameData& f)
 
     _deletionStack.push([&]() { 
         f.cameraBuffer.destroy(_allocator);
+        f.sceneBuffer.destroy(_allocator);
         f.objectBuffer.destroy(_allocator);
 
-        //f.shadowUB.destroy(_allocator);
-
         f.compSSBO.destroy(_allocator);
-        f.compSSBO_ro.destroy(_allocator);
+        f.compUB.destroy(_allocator);
 
         vkDestroyFence(_device, f.inFlightFence, nullptr);
 

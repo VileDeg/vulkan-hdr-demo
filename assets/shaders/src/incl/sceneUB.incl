@@ -14,8 +14,8 @@ uniform SceneData {
 
     float lightFarPlane;
     float shadowBias;
-    float shadowOpacity; // Unused?
     bool showShadowMap;
+    int _pad3;
 
     bool enableShadows;
     bool enablePCF;

@@ -1,4 +1,4 @@
-readonly buffer RO {
+uniform AdaptationUB {
     float minLogLum;
     float logLumRange;
     float oneOverLogLumRange;

@@ -13,9 +13,9 @@ layout (std430, set = 0, binding = 0)
 #include "incl/luminanceSSBO.incl" 
 ssbo;
 
-layout (std430, set = 0, binding = 1) 
-#include "incl/luminanceSSBO_RO.incl" 
-ssbo_ro;
+layout (set = 0, binding = 1) 
+#include "incl/luminanceUB.incl" 
+ub;
 
 // Shared
 shared uint histogramShared[GROUP_SIZE];
@@ -24,55 +24,37 @@ layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
   // Get the count from the histogram buffer
   uint countForThisBin = ssbo.histogram[localIndex];
-  //float pw = 1.5f;
-  //float lpw = 3.f;
 
-  histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ssbo_ro.weights.x));
-  //histogramShared[localIndex] = uint(countForThisBin * pow(float(localIndex), pw));
-  //histogramShared[localIndex] = uint(countForThisBin * pow(localIndex/255.0, lpw) * 255);
+  histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ub.weights.x));
 
   barrier();
-
-  // Reset the count stored in the buffer in anticipation of the next pass
-  //ssbo.histogram[gl_LocalInvocationIndex] = 0;
-
-  // This loop will perform a weighted count of the luminance range
-  /*for (uint cutoff = (GROUP_SIZE >> 1); cutoff > 0; cutoff >>= 1) {
-    if (uint(localIndex) < cutoff) {
-      //atomicAdd(histogramShared[localIndex], histogramShared[localIndex + cutoff]);
-      histogramShared[localIndex] += histogramShared[localIndex + cutoff];
-    }
-
-    barrier();
-  }*/
 
   // We only need to calculate this once, so only a single thread is needed.
   if (localIndex == 255) {
     uint sum = 0;
-    for (uint i = ssbo_ro.lumLowerIndex; i < ssbo_ro.lumUpperIndex+1; ++i) {
+    for (uint i = ub.lumLowerIndex; i < ub.lumUpperIndex+1; ++i) {
         sum += histogramShared[i];
     }
-    //uint sum = histogramShared[0];
 
     // Here we take our weighted sum and divide it by the number of pixels
     // that had luminance greater than zero (since the index == 0, we can
     // use countForThisBin to find the number of black pixels)
-    float weightedLogAverage = (sum / max(float(ssbo_ro.totalPixelNum), 1.0)) - 1.0; //  - float(countForThisBin)
+    float weightedLogAverage = (sum / max(float(ub.totalPixelNum), 1.0)) - 1.0; //  - float(countForThisBin)
 
     // Map from our histogram space to actual luminance
-    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * ssbo_ro.logLumRange) + ssbo_ro.minLogLum);
+    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * ub.logLumRange) + ub.minLogLum);
 
-    float awaitedLuminance = ssbo_ro.weights.z;
+    float awaitedLuminance = ub.weights.z;
     float howClose = weightedAvgLum - awaitedLuminance;
-    weightedAvgLum = weightedAvgLum * exp2(howClose * ssbo_ro.weights.w);
+    weightedAvgLum = weightedAvgLum * exp2(howClose * ub.weights.w);
     // Set target luminance for display and comparison
     ssbo.targetAverageLuminance = weightedAvgLum;
 
     // The new stored value will be interpolated using the last frames value
     // to prevent sudden shifts in the exposure.
     float lumLastFrame = ssbo.averageLuminance;
-    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ssbo_ro.timeCoeff;
-    //float adaptedLum = weightedAvgLum;
+    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ub.timeCoeff;
+
     ssbo.averageLuminance = adaptedLum;
   }
 }

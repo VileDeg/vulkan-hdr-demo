@@ -69,8 +69,8 @@ struct GPUSceneUB {
 
     float lightFarPlane;
     float shadowBias = 0.15f;
-    float shadowOpacity; // Unused
     GPUBool showShadowMap = false;
+    int _pad3;
 
     GPUBool enableShadows = true;
     GPUBool enablePCF = true;
@@ -107,7 +107,7 @@ struct GPUCompSSBO {
     uint32_t luminance[MAX_LUMINANCE_BINS]{};
 };
 
-struct GPUCompSSBO_ReadOnly {
+struct GPUCompUB {
     float minLogLum = -2.f;
     float logLumRange = 12.f;
     float oneOverLogLumRange;

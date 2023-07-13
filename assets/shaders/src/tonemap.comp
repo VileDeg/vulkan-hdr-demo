@@ -8,11 +8,10 @@ layout (std430, set = 0, binding = 0)
 #include "incl/luminanceSSBO.incl" 
 ssbo;
 
-layout (std430, set = 0, binding = 1) 
-#include "incl/luminanceSSBO_RO.incl" 
-ssbo_ro;
+layout (set = 0, binding = 1) 
+#include "incl/luminanceUB.incl" 
+ub;
 
-#define GROUP_SIZE 1024
 #define THREADS_X 32
 #define THREADS_Y 32
 
@@ -30,12 +29,12 @@ void main() {
         vec3 hdrColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
         // Apply eye adaptation
         vec3 outColor = hdrColor;
-        if (ssbo_ro.enableAdaptation) {
+        if (ub.enableAdaptation) {
             outColor = outColor / (9.6 * ssbo.averageLuminance);
         }
         // Apply tone mapping
-        if (ssbo_ro.enableToneMapping) { // If enable tone mapping
-            switch (ssbo_ro.toneMappingMode) {
+        if (ub.enableToneMapping) { // If enable tone mapping
+            switch (ub.toneMappingMode) {
                 case 0: outColor = ReinhardExtended(outColor, WHITE_POINT); break;
                 case 1: outColor = Reinhard(outColor); break;
                 case 2: outColor = Uncharted2Filmic(outColor); break;
@@ -45,7 +44,7 @@ void main() {
         }
 
         // Gamma correction
-        switch (ssbo_ro.gammaMode) {
+        switch (ub.gammaMode) {
             case 0: outColor = outColor; break;
             case 1: outColor = pow(outColor, vec3(GAMMA)); break;
             case 2: outColor = pow(outColor, vec3(1.f / GAMMA)); break;

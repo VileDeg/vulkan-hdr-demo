@@ -68,12 +68,13 @@ struct FrameData {
     VkCommandBuffer cmd;
 
     AllocatedBuffer cameraBuffer;
+    AllocatedBuffer sceneBuffer;
     AllocatedBuffer objectBuffer;
 
     //AllocatedBuffer shadowUB;
 
     AllocatedBuffer compSSBO;
-    AllocatedBuffer compSSBO_ro;
+    AllocatedBuffer compUB;
 
     VkDescriptorSet globalSet;
     VkDescriptorSet objectSet;
@@ -262,13 +263,14 @@ struct RenderObject {
 
 // Struct with pointers to mapped GPU buffer memory
 struct GPUData {
-    GPUSceneSSBO* ssbo = nullptr;
     GPUCameraUB* camera = nullptr;
+    GPUSceneUB* scene = nullptr;
+    GPUSceneSSBO* ssbo = nullptr;
 
     //GPUShadowUB* shadow = nullptr;
 
     GPUCompSSBO* compSSBO = nullptr;
-    GPUCompSSBO_ReadOnly* compSSBO_ro = nullptr;
+    GPUCompUB* compUB = nullptr;
 
     void Reset(FrameData& fd);
 };
@@ -276,6 +278,7 @@ struct GPUData {
 
 struct RenderContext {
     GPUSceneUB sceneData{};
+    GPUCompUB comp{};
 
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
@@ -287,6 +290,14 @@ struct RenderContext {
 
     //glm::mat4 lightPerspective;
     std::array<glm::mat4, 6> lightView;
+
+    bool showNormals = false;
+
+    float lumPixelLowerBound = 0.2f;
+    float lumPixelUpperBound = 0.95f;
+
+    float maxLogLuminance = 10.f;
+    float eyeAdaptationTimeCoefficient = 1.1f;
 
     void Init();
 

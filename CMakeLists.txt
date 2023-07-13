@@ -55,6 +55,8 @@ set(SPV_DIR "${PROJECT_SOURCE_DIR}/assets/shaders/bin")
 
 set(SHADER_SRC ${SPV_DIR}/*)
 
+#Compile shaders in assets/shaders folder
+
 add_custom_target(glsl_shaders ALL
   DEPENDS ${SHADER_SRC}
   COMMENT "Shaders to compile"
@@ -67,13 +69,3 @@ add_custom_command(
     COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
     COMMENT "Compiling shaders"
 )
-
-
-#Compile shaders in assets/shaders folder
-
-
-#add_custom_command(TARGET ${EXNAME} PRE_BUILD
-#    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
-#)
-
-

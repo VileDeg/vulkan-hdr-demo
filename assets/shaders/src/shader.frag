@@ -33,6 +33,12 @@ layout(set = 1, binding = 2) uniform samplerCubeArray shadowCubeArray;
 
 layout(set = 2, binding = 0) uniform sampler2D diffuse;
 
+/*layout(set = 2, binding = 1) uniform Material {
+    vec3 ambientColor;
+    vec3 diffuseColor;
+    vec3 specularColor; 
+} mat;*/
+
 void main()  
 {
     if (sd.showNormals) {
