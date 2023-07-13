@@ -394,7 +394,8 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		VkWriteDescriptorSet skyboxWrite =
-			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, _frames[i].objectSet, &newTexture.allocImage.descInfo, 1);
+			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+				_frames[i].globalSet, &newTexture.allocImage.descInfo, 3);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
 
@@ -583,11 +584,35 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 
 	// Add default material in case there are none ?
-	materials.push_back(tinyobj::material_t());
+	//materials.push_back(tinyobj::material_t());
 
 	for (size_t i = 0; i < materials.size(); i++) {
 		pr("\tmaterial[" << i << "].diffuse_texname = " << materials[i].diffuse_texname);
 	}
+
+	// Lambda for convenience
+	auto loadModelTexture = [this](std::string baseDir, std::string texName, Texture** dst) {
+		std::string texture_filename = baseDir + texName;
+		Texture* texture = nullptr;
+		// Only load the texture if it is not already loaded
+		if (getTexture(texture_filename) == nullptr) {
+			if (!FileExists(texture_filename)) {
+				PRERR("Unable to find file: " << texture_filename);
+				EXIT(1);
+			}
+
+			if (!(texture = loadTextureFromFile(texture_filename.c_str()))) {
+				PRERR("Unable to load texture: " << texture_filename);
+				EXIT(1);
+			}
+		} else {
+			texture = getTexture(texture_filename);
+		}
+
+		// Assign texture pointer to the mesh that uses it
+		//newModel.meshes[mesh_i]->diffuseTex = texture;
+		*dst = texture;
+	};
 
 	// Only load textures that are used by meshes
 	size_t mesh_i = 0;
@@ -596,26 +621,21 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 		// Texname empty means there's no texture
 		if (mp->diffuse_texname.length() > 0) {
-			std::string texture_filename = baseDir + mp->diffuse_texname;
-			Texture* texture = nullptr;
-			// Only load the texture if it is not already loaded
-			if (getTexture(texture_filename) == nullptr) {
-				if (!FileExists(texture_filename)) {
-					PRERR("Unable to find file: " << texture_filename);
-					EXIT(1);
-				}
-
-				if (!(texture = loadTextureFromFile(texture_filename.c_str()))) {
-					PRERR("Unable to load texture: " << texture_filename);
-					EXIT(1);
-				}
-			} else {
-				texture = getTexture(texture_filename);
-			}
-
-			// Assign texture pointer to the mesh that uses it
-			newModel.meshes[mesh_i]->p_tex = texture;
+			loadModelTexture(baseDir, mp->diffuse_texname, &newModel.meshes[mesh_i]->diffuseTex);
 		}
+
+		// Texname empty means there's no texture
+		if (mp->bump_texname.length() > 0) {
+			loadModelTexture(baseDir, mp->bump_texname, &newModel.meshes[mesh_i]->bumpTex);
+		}
+
+		// Set material lighting colors for use in Phong lighting model
+		newModel.meshes[mesh_i]->gpuMat = {
+			.ambientColor  = glm::make_vec3(mp->ambient),
+			.diffuseColor  = glm::make_vec3(mp->diffuse),
+			.specularColor = glm::make_vec3(mp->specular)
+		};
+
 		++mesh_i;
 	}
 

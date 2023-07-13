@@ -72,7 +72,7 @@ private: /* Secondary methods */
 
     FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
-    void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index);
+    void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, uint32_t index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
 
     void updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
@@ -177,7 +177,7 @@ private:
     vkutil::DescriptorLayoutCache* _descriptorLayoutCache;
 
     VkDescriptorSetLayout _globalSetLayout;
-    VkDescriptorSetLayout _objectSetLayout;
+    //VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _diffuseTextureSetLayout;
     VkDescriptorSetLayout _shadowSetLayout;
 

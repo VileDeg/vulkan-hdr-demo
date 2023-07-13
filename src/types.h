@@ -70,14 +70,13 @@ struct FrameData {
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer sceneBuffer;
     AllocatedBuffer objectBuffer;
-
-    //AllocatedBuffer shadowUB;
+    //AllocatedBuffer matBuffer;
 
     AllocatedBuffer compSSBO;
     AllocatedBuffer compUB;
 
     VkDescriptorSet globalSet;
-    VkDescriptorSet objectSet;
+    //VkDescriptorSet objectSet;
 
     VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
@@ -225,10 +224,14 @@ struct Mesh {
     std::vector<uint32_t> indices;
     AllocatedBuffer indexBuffer;
 
-    Texture* p_tex{ nullptr };
+    Texture* diffuseTex{ nullptr };
+    Texture* bumpTex{ nullptr };
+
     int mat_id = -1;
 
     Material* material{ nullptr };
+
+    GPUMaterial gpuMat{};
 };
 
 struct Model {
@@ -266,8 +269,7 @@ struct GPUData {
     GPUCameraUB* camera = nullptr;
     GPUSceneUB* scene = nullptr;
     GPUSceneSSBO* ssbo = nullptr;
-
-    //GPUShadowUB* shadow = nullptr;
+    //GPUMatUB* mat = nullptr;
 
     GPUCompSSBO* compSSBO = nullptr;
     GPUCompUB* compUB = nullptr;

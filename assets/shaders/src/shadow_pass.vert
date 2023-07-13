@@ -27,11 +27,6 @@ layout(push_constant) uniform PushConsts
     uint lightIndex;
 } pc;
  
-out gl_PerVertex 
-{
-	vec4 gl_Position;
-};
- 
 void main()
 {
 	mat4 modelMat = ssbo.objects[gl_BaseInstance].model;

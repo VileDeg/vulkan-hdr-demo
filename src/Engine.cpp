@@ -29,8 +29,8 @@ void Engine::Init()
     createPipelines();
     createSamplers();
     
-    createScene(Engine::modelPath + "sponza/sponza.obj");
-    //createScene(Engine::modelPath + "sibenik/sibenik.obj");
+    //createScene(Engine::modelPath + "sponza/sponza.obj");
+    createScene(Engine::modelPath + "sibenik/sibenik.obj");
     
     initImgui();
 
@@ -532,17 +532,20 @@ void Engine::initDescriptors()
     _descriptorLayoutCache->init(_device);
 
     { // Diffuse texture descriptor set (push descriptor set)
-        VkDescriptorSetLayoutBinding textureBind =
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {
+            // Diffuse texture
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0), 
+            // Bump map
+            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
+        };
 
         VkDescriptorSetLayoutCreateInfo diffuseSetInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             // This is a push descriptor set !
             .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-            .bindingCount = 1,
-            .pBindings = &textureBind
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings = bindings.data()
         };
-
      
         _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
     }
@@ -604,17 +607,11 @@ void Engine::initFrame(FrameData& f)
     }
 
     {
-        { // Create uniform buffer with camera data
+        { // Camera + scene + mat buffers descriptor set
             f.cameraBuffer = createBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             f.sceneBuffer  = createBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            //f.matBuffer    = createBuffer(sizeof(GPUMatUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-                .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-                .build(f.globalSet, _globalSetLayout);
-        }
-
-        { // Create descriptor set with scene SSBO, skybox, shadow
             f.objectBuffer = createBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Image descriptor for the shadow cube map
@@ -625,10 +622,13 @@ void Engine::initFrame(FrameData& f)
             };
 
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // SSBO
-                .bind_image(1, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap will be passed later
-                .bind_image(2, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap
-                .build(f.objectSet, _objectSetLayout);
+                .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // Camera UB
+                .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Scene UB
+                //.bind_buffer(2, &f.matBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Material UB
+                .bind_buffer(2, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // Objects SSBO
+                .bind_image (3, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap sampler (Skybox will be passed later when loaded)
+                .bind_image (4, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap sampler
+                .build(f.globalSet, _globalSetLayout);
         }
 
         { // Shadow pass descriptor set
@@ -668,6 +668,8 @@ void Engine::initFrame(FrameData& f)
     _deletionStack.push([&]() { 
         f.cameraBuffer.destroy(_allocator);
         f.sceneBuffer.destroy(_allocator);
+        //f.matBuffer.destroy(_allocator);
+
         f.objectBuffer.destroy(_allocator);
 
         f.compSSBO.destroy(_allocator);

@@ -1,6 +1,5 @@
 #pragma once
 
-
 struct GPUBool {
     bool val = {};
     uint8_t _pad[3] = {};
@@ -14,7 +13,6 @@ struct GPUBool {
     bool* operator&() { return &val; }
 };
 
-
 struct GPUCameraUB {
     glm::mat4 view;
     glm::mat4 proj;
@@ -22,10 +20,13 @@ struct GPUCameraUB {
 };
 
 struct GPUScenePC {
-    int hasTexture;
-    int lightAffected;
-    int isCubemap;
-    int _pad0{ 0 };
+    GPUBool lightAffected;
+    GPUBool isCubemap;
+    uint32_t objectIndex;
+    uint32_t meshIndex;
+
+    GPUBool useDiffTex;
+    GPUBool useBumpTex;
 };
 
 struct GPUShadowPC {
@@ -34,17 +35,11 @@ struct GPUShadowPC {
     uint32_t lightIndex;
 };
 
-
 struct GPULight {
     glm::vec3 position{};
     float radius{};
 
     glm::vec3 color{};
-    int _pad0{};
-
-    float ambientFactor{};
-    float diffuseFactor{};
-    float specularFactor{};
     float intensity{};
 
     float constant{};
@@ -55,40 +50,58 @@ struct GPULight {
 
 struct GPUSceneUB {
     glm::vec3 cameraPos{};
-    int _pad0;
+    int _pad0; // 16
 
     glm::vec3 ambientColor{};
-    int _pad1;
+    int _pad1; // 32
 
     GPUBool showNormals = false;
     float exposure{ 1.0f };
     GPUBool enableExposure = true;
     int _pad2;
 
-    glm::mat4 lightProjMat;
+    glm::mat4 lightProjMat; 
 
     float lightFarPlane;
     float shadowBias = 0.15f;
     GPUBool showShadowMap = false;
-    int _pad3;
+    int _pad3; 
 
     GPUBool enableShadows = true;
     GPUBool enablePCF = true;
     float shadowMapDisplayBrightness;
     int shadowMapDisplayIndex = 0;
 
+    GPUBool enableBumpMapping = true;
+    float bumpStrength = 2.5f;
+    float bumpStep = 0.001f;
+    float bumpUVFactor = 0.002f;
+
 #define MAX_LIGHTS 4
     GPULight lights[MAX_LIGHTS];
 };
 
+struct GPUMaterial {
+    glm::vec3 ambientColor;
+    int _pad0;
+
+    glm::vec3 diffuseColor;
+    int _pad1;
+
+    glm::vec3 specularColor;
+    int _pad2;
+};
+
 struct GPUObject {
     glm::mat4 modelMatrix;
-    glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
 
-    int useObjectColor;
-    int _pad0;
-    int _pad1;
-    int _pad2;
+    glm::mat4 normalMatrix;
+    //glm::vec3 _pad0;
+    //glm::vec4 _pad1;
+
+    //glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
+#define MAX_MESHES_PER_OBJECT 50
+    GPUMaterial mat[MAX_MESHES_PER_OBJECT];
 };
 
 struct GPUSceneSSBO {
@@ -96,6 +109,12 @@ struct GPUSceneSSBO {
     GPUObject objects[MAX_OBJECTS]{};
 };
 
+
+
+//struct GPUMatUB {
+//#define MAX_MESHES 500
+//    GPUMaterial mat[MAX_MESHES];
+//};
 
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
@@ -125,7 +144,3 @@ struct GPUCompUB {
     GPUBool enableAdaptation = true;
     int gammaMode{ 1 };
 };
-
-
-
-

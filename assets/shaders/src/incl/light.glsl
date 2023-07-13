@@ -1,6 +1,6 @@
 #include "defs.glsl"
 
-vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
+vec3 pointLight(LightData ld, MatData md, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     vec3 lightColor = vec3(ld.color);
 
     vec3 lightPos   = vec3(ld.pos);
@@ -9,14 +9,15 @@ vec3 pointLight(LightData ld, vec3 fragPos, vec3 normal, vec3 cameraPos) {
     vec3 norm = normalize(normal);
     vec3 lightDir = normalize(lightPos - fragPos);
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
+    vec3 diffuse = diff * lightColor * md.diffuseColor;
 
     // specular
     vec3 viewPos = vec3(cameraPos);
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = ld.specularFactor * spec * lightColor;  
+    //vec3 specular = ld.specularFactor * spec * lightColor;  
+    vec3 specular = spec * lightColor * md.specularColor;  
 
     // attenuation
     float distance    = length(lightPos - fragPos);
@@ -74,7 +75,7 @@ float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 f
     return shadow;
 }
 
-vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos, 
+vec3 calculateLighting(LightData[MAX_LIGHTS] lights, MatData md, vec3 ambientColor, vec3 fragPos, vec3 normal, vec3 cameraPos, 
     bool enableShadows, samplerCubeArray shadowCubeArray, float lightFarPlane, float shadowBias, 
     bool enablePCF) 
 {
@@ -88,7 +89,7 @@ vec3 calculateLighting(LightData[MAX_LIGHTS] lights, vec3 ambientColor, vec3 fra
         if (dist > ld.radius) {
     		continue;
 	    }*/
-        vec3 light = pointLight(ld, fragPos, normal, cameraPos);
+        vec3 light = pointLight(ld, md, fragPos, normal, cameraPos);
         
         // Adjust light intensity for shadow
         if (enableShadows) {

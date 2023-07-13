@@ -22,5 +22,10 @@ uniform SceneData {
     float shadowMapDisplayBrightness;
     int shadowMapDisplayIndex;
 
+    bool enableBumpMapping;
+    float bumpStrength;
+    float bumpStep;
+    float bumpUVFactor;
+
     LightData[MAX_LIGHTS] lights;
 }

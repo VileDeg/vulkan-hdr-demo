@@ -24,40 +24,56 @@ static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h)
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
-void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, int index) {
+void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, uint32_t index) {
 	const RenderObject& obj = *object;
 	Model* model = obj.model;
 
-	for (int m = 0; m < model->meshes.size(); ++m) {
+	for (uint32_t m = 0; m < model->meshes.size(); ++m) {
 		Mesh* mesh = model->meshes[m];
 
 		ASSERT(mesh && mesh->material);
 
 		// Always add the sceneData and SSBO descriptor
-		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalSet, getCurrentFrame().objectSet };
+		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalSet }; //, getCurrentFrame().objectSet 
 
 		{ // Push diffuse texture descriptor set
-			VkImageView imageView = VK_NULL_HANDLE;
-			if (mesh->p_tex != nullptr && !obj.isSkybox) {
-				imageView = mesh->p_tex->view;
+			constexpr int txc = 2;
+			std::array<VkImageView, txc> imageView = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+			if (!obj.isSkybox) {
+				if (mesh->diffuseTex != nullptr) {
+					imageView[0] = mesh->diffuseTex->view;
+				}
+				if (mesh->bumpTex != nullptr) {
+					imageView[1] = mesh->bumpTex->view;
+				}
 			}
-			VkDescriptorImageInfo imageBufferInfo{
-				.sampler = _linearSampler,
-				.imageView = imageView,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-			VkWriteDescriptorSet texture1 =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					VK_NULL_HANDLE, &imageBufferInfo, 0);
+
+			std::array<VkDescriptorImageInfo, txc> imageInfo;
+			std::array<VkWriteDescriptorSet, txc>  descWrites;
+
+			for (int i = 0; i < txc; ++i) {
+				imageInfo[i] = {
+					.sampler = _linearSampler,
+					.imageView = imageView[i],
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+				
+				descWrites[i] = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					VK_NULL_HANDLE, &imageInfo[i], i);
+			}
+
 			vkCmdPushDescriptorSetKHR(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 2, 1, &texture1);
+				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 1, txc, descWrites.data());
 		}
 
 		// Load push constants to GPU
 		GPUScenePC pc = {
-			.hasTexture = (mesh->p_tex != nullptr),
 			.lightAffected = model->lightAffected,
-			.isCubemap = obj.isSkybox
+			.isCubemap = obj.isSkybox,
+			.objectIndex = index,
+			.meshIndex = m,
+			.useDiffTex = (mesh->diffuseTex!= nullptr),
+			.useBumpTex = (mesh->bumpTex != nullptr)
 		};
 
 		vkCmdPushConstants(
@@ -68,24 +84,23 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		// If the material is different, bind the new material
 		if (mesh->material != *lastMaterial) {
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipeline);
-
-			*lastMaterial = mesh->material;
 			// Bind the descriptor sets
 			vkCmdBindDescriptorSets(
 				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 0, sets.size(), sets.data(), 0, nullptr);
+
+			*lastMaterial = mesh->material;
 		}
 
 		if (mesh != *lastMesh) {
 			VkDeviceSize zeroOffset = 0;
 			vkCmdBindVertexBuffers(cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
-
 			vkCmdBindIndexBuffer(cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			*lastMesh = mesh;
 		}
 
 		// Ve send loop index as instance index to use it in shader to access object data in SSBO
-		vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, index);
+		vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, 0); // index
 	}
 }
 
@@ -93,7 +108,7 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 {
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
-	for (int i = 0; i < objects.size(); i++) {
+	for (uint32_t i = 0; i < objects.size(); i++) {
 		drawObject(cmd, objects[i], &lastMaterial, &lastMesh, i);
 	}
 
@@ -173,9 +188,16 @@ void Engine::loadDataToGPU()
 	// Load SSBO to GPU
 	{
 		for (int i = 0; i < objects.size(); i++) {
-			_gpu.ssbo->objects[i].modelMatrix = objects[i]->Transform();
-			_gpu.ssbo->objects[i].color = objects[i]->color;
-			_gpu.ssbo->objects[i].useObjectColor = objects[i]->model->useObjectColor;
+			glm::mat4 modelMat = objects[i]->Transform();
+			_gpu.ssbo->objects[i] = {
+				.modelMatrix = modelMat,
+				.normalMatrix = glm::mat3(glm::transpose(glm::inverse(modelMat)))
+				//.color = objects[i]->color
+			};
+
+			for (int m = 0; m < objects[i]->model->meshes.size(); ++m) {
+				_gpu.ssbo->objects[i].mat[m] = objects[i]->model->meshes[m]->gpuMat;
+			}
 		}
 	}
 
@@ -279,7 +301,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			Material& mat = _materials["shadow"];
 			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
 
-			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
 			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 0, nullptr);
 
 			for (uint32_t face = 0; face < 6; ++face) {

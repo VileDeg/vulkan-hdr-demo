@@ -159,12 +159,17 @@ void Engine::uiUpdateScene()
 
 			ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
 		}
+		ImGui::Separator();
+		ImGui::Checkbox("Enable bump mapping", &_renderContext.sceneData.enableBumpMapping);
+		ImGui::SliderFloat("Bump Strength", &_renderContext.sceneData.bumpStrength, 0.f, 5.f);
+		ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f"); //, ImGuiSliderFlags_NoRoundToFormat
+		ImGui::SliderFloat("Bump UV Factor", &_renderContext.sceneData.bumpUVFactor, 0.0001f, 0.005f, "%.4f");
 
 		ImGui::Separator();
 		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
 
 		ImGui::Separator();
-		ImGui::SliderFloat("Filed of view", &_fovY, 45.f, 90.f);
+		ImGui::SliderFloat("Field of view", &_fovY, 45.f, 120.f);
 
 		if (ImGui::TreeNodeEx("Model loading")) {
 			static std::vector<std::string> models;

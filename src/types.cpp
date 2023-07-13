@@ -33,11 +33,11 @@ void Engine::createScene(const std::string mainModelFullPath)
 		_textures.clear();
 	}
 
-	// Sphere model of the light source
-	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
-
 	// Main model of the scene
 	ASSERT(loadModelFromObj("main", mainModelFullPath));
+
+	// Sphere model of the light source
+	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
 
 	// Set materials
 	for (auto& [key, model] : _models) {
@@ -55,6 +55,10 @@ void Engine::createScene(const std::string mainModelFullPath)
 		// Light source model should not be affected by light
 		sphr->lightAffected = false;
 		sphr->useObjectColor = true;
+
+		sphr->meshes[0]->gpuMat.ambientColor  *= 10.f;
+		sphr->meshes[0]->gpuMat.diffuseColor  *= 10.f;
+		sphr->meshes[0]->gpuMat.specularColor *= 10.f;
 
 		for (int i = 0; i < MAX_LIGHTS; i++) {
 			_renderables.push_back(std::make_shared<RenderObject>(
@@ -103,14 +107,13 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 
 void GPUData::Reset(FrameData& fd)
 {
-	camera		= reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.gpu_ptr);
-	scene		= reinterpret_cast<GPUSceneUB*>(fd.sceneBuffer.gpu_ptr);
-	ssbo		= reinterpret_cast<GPUSceneSSBO*>  (fd.objectBuffer.gpu_ptr);
+	camera	 = reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.gpu_ptr);
+	scene	 = reinterpret_cast<GPUSceneUB*>(fd.sceneBuffer.gpu_ptr);
 
-	//shadow		= reinterpret_cast<GPUShadowUB*>(fd.shadowUB.gpu_ptr);
-
-	compSSBO	= reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
-	compUB = reinterpret_cast<GPUCompUB*>(fd.compUB.gpu_ptr);
+	ssbo	 = reinterpret_cast<GPUSceneSSBO*>(fd.objectBuffer.gpu_ptr);
+			 
+	compSSBO = reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
+	compUB	 = reinterpret_cast<GPUCompUB*>(fd.compUB.gpu_ptr);
 }
 
 
@@ -204,9 +207,9 @@ void RenderContext::Init()
 
 			.color = lightColor[i],
 
-			.ambientFactor = 0.1f,
+			/*.ambientFactor = 0.1f,
 			.diffuseFactor = 1.0f,
-			.specularFactor = 0.5f,
+			.specularFactor = 0.5f,*/
 			.intensity = intensity[i],
 
 			//Attenuation skipped. Will be updated based on radius

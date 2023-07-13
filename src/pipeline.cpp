@@ -96,7 +96,7 @@ void Engine::createPipelines()
         .shaders = loadShaders(_device, "shader.vert.spv", "shader.frag.spv"),
         .pushConstantsStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         .pushConstantsSize = sizeof(GPUScenePC),
-        .setLayouts = { _globalSetLayout, _objectSetLayout, _diffuseTextureSetLayout }
+        .setLayouts = { _globalSetLayout, _diffuseTextureSetLayout }
     };
 
     PipelineData pd_shadow{
