@@ -8,6 +8,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
+#include "json/json.hpp"
+
+
 static std::string GetBaseDir(const std::string& filepath) {
 	//From https://github.com/tinyobjloader/tinyobjloader
 	if (filepath.find_last_of("/\\") != std::string::npos)
@@ -826,4 +829,173 @@ void Engine::uploadMesh(Mesh& mesh)
 	createMeshBuffer(mesh, true);
 	// Create index buffer
 	createMeshBuffer(mesh, false);
+}
+
+void Engine::loadScene(std::string fullScenePath)
+{
+	using namespace nlohmann;
+
+	std::string scene_name = "dobrovic-sponza";
+	std::ifstream in(fullScenePath);
+	ASSERT(in.good());
+
+	json j;
+	j << in;
+
+	CreateSceneData data = {
+		.bumpStrength = j["bump_strength"],
+		.modelPath = j["model_name"],
+	};
+	for (int i = 0; i < MAX_LIGHTS; ++i) {
+		auto l = j["lights"];
+		data.intensity[i] = l[i]["intensity"];
+		auto p = l[i]["position"];
+		data.position[i].x = p[0];
+		data.position[i].y = p[1];
+		data.position[i].z = p[2];
+	}
+
+	createScene(data);
+}
+
+void Engine::saveScene(std::string fullScenePath)
+{
+	using namespace nlohmann;
+
+	auto& rc = _renderContext;
+	auto& sd = rc.sceneData;
+
+	json j;
+	j["model_name"] = rc.modelName;
+	j["bump_strength"] = sd.bumpStrength;
+
+	auto arr = json::array();
+
+	for (int i = 0; i < MAX_LIGHTS; ++i) {
+		auto& l = sd.lights[i];
+		auto& p = l.position;
+
+		auto arr1 = json::object();
+		arr1["position"] = { p.x, p.y, p.z };
+		arr1["intensity"] = l.intensity;
+
+		arr.push_back(arr1);
+
+		//arr.push_back({ {p.x, p.y, p.z}, l.intensity });
+		//arr.push_back(l.intensity);
+	}
+
+	j["lights"] = arr;
+
+	//std::string scene_name = "dobrovic-sponza";
+	//scenePath + 
+	std::ofstream out(fullScenePath);
+	ASSERT(out.good());
+
+	out << std::setw(2) << j;
+}
+
+
+
+void Engine::createSamplers() {
+	// Create samplers for textures
+	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
+
+	VKASSERT(vkCreateSampler(_device, &samplerInfo, nullptr, &_blockySampler));
+	_deletionStack.push([=]() {
+		vkDestroySampler(_device, _blockySampler, nullptr);
+		});
+
+	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
+
+	VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
+	_deletionStack.push([=]() {
+		vkDestroySampler(_device, _linearSampler, nullptr);
+		});
+}
+
+void Engine::createScene(CreateSceneData data)
+{
+	{ // Reset for when we load a scene at runtime
+		vkDeviceWaitIdle(_device);
+
+		_renderables.clear();
+		_renderContext.lightObjects.clear();
+		_models.clear();
+
+		_sceneDisposeStack.flush();
+
+		_meshes.clear();
+		_textures.clear();
+	}
+
+	// Main model of the scene
+	ASSERT(loadModelFromObj("main", Engine::modelPath + data.modelPath));
+
+	// Sphere model of the light source
+	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
+
+	// Set materials
+	for (auto& [key, model] : _models) {
+		for (auto& mesh : model.meshes) {
+			mesh->material = getMaterial("general");
+		}
+	}
+
+	loadCubemap("furry_clouds", true);
+
+	_renderContext.Init(data);
+
+	if (getModel("sphere")) {
+		Model* sphr = getModel("sphere");
+		// Light source model should not be affected by light
+		sphr->lightAffected = false;
+		sphr->useObjectColor = true;
+
+		sphr->meshes[0]->gpuMat.ambientColor *= 10.f;
+		sphr->meshes[0]->gpuMat.diffuseColor *= 10.f;
+		sphr->meshes[0]->gpuMat.specularColor *= 10.f;
+
+		for (int i = 0; i < MAX_LIGHTS; i++) {
+			_renderables.push_back(std::make_shared<RenderObject>(
+				RenderObject{
+					.tag = "light" + std::to_string(i),
+					.color = glm::vec4(10, 10, 10, 1.),
+					.model = sphr,
+					.pos = _renderContext.sceneData.lights[i].position,
+					.scale = glm::vec3(0.1f)
+				}
+			));
+
+			_renderContext.lightObjects.push_back(_renderables.back());
+		}
+	}
+
+	if (getModel("main")) {
+		_renderables.push_back(std::make_shared<RenderObject>(
+			RenderObject{
+				.model = getModel("main"),
+				.pos = glm::vec3(0, -5.f, 0),
+				.rot = glm::vec3(0, 90, 0),
+				.scale = glm::vec3(15.f)
+			}
+		));
+	}
+
+	_deletionStack.push([this]() {
+		_sceneDisposeStack.flush();
+		});
+}
+
+Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
+{
+	auto& mat = _materials[name] = {
+		.tag = name,
+		.pipeline = pipeline,
+		.pipelineLayout = layout
+	};
+
+	_deletionStack.push([&]() { mat.cleanup(_device); });
+
+	return &_materials[name];
 }

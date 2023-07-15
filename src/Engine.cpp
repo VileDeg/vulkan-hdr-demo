@@ -29,9 +29,11 @@ void Engine::Init()
     createPipelines();
     createSamplers();
     
-    createScene(Engine::modelPath + "crytek_sponza/sponza.obj");
-    //createScene(Engine::modelPath + "sponza/sponza.obj");
-    //createScene(Engine::modelPath + "sibenik/sibenik.obj");
+    loadScene(scenePath + "dobrovic-sponza.json");
+    //createScene("crytek_sponza/sponza.obj");
+    //createScene("sponza/sponza.obj");
+
+    //createScene("sibenik/sibenik.obj");
     
     initImgui();
 
@@ -45,7 +47,10 @@ void Engine::Run()
 
         drawFrame();
 
-        _camera.Update(_window);
+        // Block camera movement when cursor is ON and viewport not hovered
+        if (_isViewportHovered || !_cursorEnabled) {
+            _camera.Update(_window, _deltaTime);
+        }
     }
 
     vkDeviceWaitIdle(_device);

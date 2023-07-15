@@ -1,109 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
 
-void Engine::createSamplers() {
-	// Create samplers for textures
-	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
-
-	VKASSERT(vkCreateSampler(_device, &samplerInfo, nullptr, &_blockySampler));
-	_deletionStack.push([=]() {
-		vkDestroySampler(_device, _blockySampler, nullptr);
-		});
-
-	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
-
-	VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
-	_deletionStack.push([=]() {
-		vkDestroySampler(_device, _linearSampler, nullptr);
-		});
-}
-
-void Engine::createScene(const std::string mainModelFullPath)
-{
-	{ // Reset for when we load a scene at runtime
-		vkDeviceWaitIdle(_device);
-
-		_renderables.clear();
-		_renderContext.lightObjects.clear();
-		_models.clear();
-
-		_sceneDisposeStack.flush();
-
-		_meshes.clear();
-		_textures.clear();
-	}
-
-	// Main model of the scene
-	ASSERT(loadModelFromObj("main", mainModelFullPath));
-
-	// Sphere model of the light source
-	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
-
-	// Set materials
-	for (auto& [key, model] : _models) {
-		for (auto& mesh : model.meshes) {
-			mesh->material = getMaterial("general");
-		}
-	}
-
-	loadCubemap("furry_clouds", true);
-
-	_renderContext.Init();
-
-	if (getModel("sphere")) {
-		Model* sphr = getModel("sphere");
-		// Light source model should not be affected by light
-		sphr->lightAffected = false;
-		sphr->useObjectColor = true;
-
-		sphr->meshes[0]->gpuMat.ambientColor  *= 10.f;
-		sphr->meshes[0]->gpuMat.diffuseColor  *= 10.f;
-		sphr->meshes[0]->gpuMat.specularColor *= 10.f;
-
-		for (int i = 0; i < MAX_LIGHTS; i++) {
-			_renderables.push_back(std::make_shared<RenderObject>(
-				RenderObject{
-					.tag = "light" + std::to_string(i),
-					.color = glm::vec4(10, 10, 10, 1.),
-					.model = sphr,
-					.pos = _renderContext.sceneData.lights[i].position,
-					.scale = glm::vec3(0.1f)
-				}
-			));
-
-			_renderContext.lightObjects.push_back(_renderables.back());
-		}
-	}
-
-	if (getModel("main")) {
-		_renderables.push_back(std::make_shared<RenderObject>(
-			RenderObject{
-				.model = getModel("main"),
-				.pos = glm::vec3(0, -5.f, 0),
-				.rot = glm::vec3(0, 90, 0),
-				.scale = glm::vec3(15.f)
-			}
-		));
-	}
-
-	_deletionStack.push([this]() {
-		_sceneDisposeStack.flush();
-	});
-}
-
-Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
-{
-	auto& mat = _materials[name] = {
-		.tag = name,
-		.pipeline = pipeline,
-		.pipelineLayout = layout
-	};
-
-	_deletionStack.push([&]() { mat.cleanup(_device); });
-
-	return &_materials[name];
-}
-
 
 void GPUData::Reset(FrameData& fd)
 {
@@ -123,49 +20,6 @@ void RenderContext::UpdateLightPosition(int lightIndex, glm::vec3 newPos)
 	lightObjects[lightIndex]->pos = newPos;
 }
 
-int RenderContext::GetClosestRadiusIndex(int radius) {
-	int min_diff = std::numeric_limits<int>::max();
-
-	int closest_index = 0;
-	int i = 0;
-	for (auto& [key, value] : atten_map) {
-		int diff = std::abs(key - radius);
-		if (diff < min_diff) {
-			min_diff = diff;
-			closest_index = i;
-		}
-		++i;
-	}
-
-	return closest_index;
-}
-
-//void RenderContext::UpdateLightAttenuation(int lightIndex, int mode)
-//{
-//	GPULight& l = sceneData.lights[lightIndex];
-//
-//	// Set the radius to the closest radius that is present in table
-//	// Find the attenuation values that correspond to the radius
-//	int ind = GetClosestRadiusIndex(l.radius);
-//	if (mode == 1) { // Increase
-//		if (ind != atten_map.size() - 1) {
-//			++ind;
-//		}
-//	} else if (mode == 2) { // Decrease
-//		if (ind > 0) {
-//			--ind;
-//		}
-//	}
-//	l.radius = atten_map[ind].first;
-//	pr("Light radius[" << lightIndex << "] set to: " << l.radius << " units");
-//
-//	glm::vec3 att = atten_map[ind].second;
-//
-//	l.constant = att.x;
-//	l.linear = att.y;
-//	l.quadratic = att.z;
-//}
-
 void RenderContext::UpdateLightRadius(int i)
 {
 	float Kc = sceneData.lights[i].constant;
@@ -180,8 +34,15 @@ void RenderContext::UpdateLightRadius(int i)
 	sceneData.lights[i].radius = -Kl + std::sqrt(rootFrom);
 }
 
-void RenderContext::Init()
+void RenderContext::Init(CreateSceneData data)
 {
+	/*auto dot_pos = mainModelName.find(".");
+	auto slash_pos = mainModelName.find("/");*/
+
+	//modelName = mainModelName.substr(slash_pos, dot_pos - slash_pos);
+	//modelName = "dobrovic-sponza";
+	modelName = data.modelPath;
+
 	float off = 5.f;
 	std::vector<glm::vec3> lightPos = {
 		{ off, 0., off },
@@ -214,9 +75,12 @@ void RenderContext::Init()
 
 	sceneData.enablePCF = true;
 
+	sceneData.bumpStrength = data.bumpStrength;
+
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {
-			.position = lightPos[i],
+			//.position = lightPos[i],
+			.position = data.position[i],
 			//.radius = radius[i],
 
 			.color = lightColor[i],
@@ -224,7 +88,8 @@ void RenderContext::Init()
 			/*.ambientFactor = 0.1f,
 			.diffuseFactor = 1.0f,
 			.specularFactor = 0.5f,*/
-			.intensity = intensity[i],
+			//.intensity = intensity[i],
+			.intensity = data.intensity[i],
 
 			.constant = 1.f,
 			.linear = 0.22f,

@@ -45,6 +45,22 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
             break;
         }
     }
+
+    if (eng._cursorEnabled && 
+        action == GLFW_PRESS &&
+        glfwGetKey(eng._window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) 
+    {
+        switch (key) {
+        case GLFW_KEY_S:
+            eng._saveShortcutPressed = true;
+            eng._loadShortcutPressed = false;
+            break;
+        case GLFW_KEY_D:
+            eng._loadShortcutPressed = true;
+            eng._saveShortcutPressed = false;
+            break;
+        }
+    }
 }
 
 void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)

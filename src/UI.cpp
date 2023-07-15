@@ -171,38 +171,6 @@ void Engine::uiUpdateScene()
 		ImGui::Separator();
 		ImGui::SliderFloat("Field of view", &_fovY, 45.f, 120.f);
 
-		if (ImGui::TreeNodeEx("Model loading")) {
-			static std::vector<std::string> models;
-			static std::vector<const char*> models_cstr;
-
-			if (ImGui::Button("Browse models")) {
-				models.clear();
-				models_cstr.clear();
-
-				for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(modelPath)) {
-					std::string pstr = dirEntry.path().string();
-					if (pstr.find_last_of(".") != std::string::npos &&
-						pstr.substr(pstr.find_last_of(".")) == ".obj")
-					{ // If file is of .obj format
-						models.push_back(pstr);
-						std::cout << dirEntry << std::endl;
-					}
-				}
-
-				for (auto& s : models) {
-					models_cstr.push_back(s.c_str());
-				}
-			}
-
-			static int i = 0;
-			if (ImGui::Combo("Models", &i, models_cstr.data(), models_cstr.size())) {
-				std::cout << "Model " << models_cstr[i] << " selected for loading" << std::endl;
-				createScene(models_cstr[i]);
-			}
-
-			ImGui::TreePop();
-		}
-
 		ImGui::TreePop();
 	}
 }
@@ -281,7 +249,7 @@ void Engine::uiUpdateHDR()
 		}
 	
 		if (ImGui::TreeNodeEx("Plots", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::TreeNodeEx("Exposure Window")) {
+			if (ImGui::TreeNodeEx("Adaptation Window")) {
 				
 				ImGui::Separator();
 
@@ -326,7 +294,11 @@ void Engine::uiUpdateHDR()
 			if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
 				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
 					uint32_t bins = MAX_LUMINANCE_BINS;
-					uint32_t xs[MAX_LUMINANCE_BINS];
+					//uint32_t xs[MAX_LUMINANCE_BINS];
+
+					std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
+					std::iota(xs.begin(), xs.end(), 0);
+					
 
 					for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
 						xs[i] = i;
@@ -339,25 +311,38 @@ void Engine::uiUpdateHDR()
 						}
 					}
 
+					// We have to wait for GPU to finish executing because compute shader 
+					// might have not finished operating on current _gpu.compSSBO buffer
+					// even though the command was already recorded to queue.
+					// This is probably a temporary solution as it is very inefficient.
+					// If we don't use this, histogram will be very laggy most of the time.
+					vkDeviceWaitIdle(_device);
+
+					if (maxBin == 0) {
+						pr("here");
+					}
+
 					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
 
 					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
 					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
 
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+					ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
 
 
-					ImPlot::PlotStems("Luminance", xs, _gpu.compSSBO->luminance, bins);
+					ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
 
 					uint32_t start_i = _renderContext.comp.lumLowerIndex;
 					uint32_t end_i   = _renderContext.comp.lumUpperIndex;
 
-					uint32_t xs1[2] = { start_i, end_i };
-					uint32_t vals1[2] = { _gpu.compSSBO->luminance[start_i], _gpu.compSSBO->luminance[end_i] };
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+					std::vector<uint32_t> xs1(end_i - start_i);
+					std::iota(xs1.begin(), xs1.end(), start_i);
 
-					ImPlot::PlotStems("Bounds", xs1, vals1, 2);
+					std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
+
+					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+					ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
 
 
 					ImPlot::EndPlot();
@@ -486,6 +471,131 @@ void Engine::uiUpdateDebugDisplay()
 	}
 }
 
+
+static const char* get_longest_str(std::vector<const char*>& strs) 
+{
+	if (strs.size() == 0) {
+		return nullptr;
+	}
+	const char* ptr = strs[strs.size()-1];
+	for (size_t i = 0; i < strs.size(); ++i) {
+		if (strlen(strs[i]) > strlen(ptr)) {
+			ptr = strs[i];
+		}
+	}
+	return ptr;
+}
+
+static std::vector<const char*> browse_path(std::string path, std::string format, std::vector<std::string>& strs) 
+{
+	strs.clear();
+
+	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(path)) {
+		std::string pstr = dirEntry.path().string();
+		if (pstr.find_last_of(".") != std::string::npos &&
+			pstr.substr(pstr.find_last_of(".")) == format)
+		{
+			strs.push_back(pstr);
+		}
+	}
+
+	std::vector<const char*> cstrs(strs.size());
+	for (size_t i = 0; i < strs.size(); ++i) {
+		cstrs[i] = strs[i].c_str();
+	}
+
+	return cstrs;
+}
+
+bool Engine::uiSaveScene()
+{
+	bool saved = false;
+
+	std::vector<std::string> scenes;
+	std::vector<const char*> scenes_cstr;
+
+	scenes_cstr = browse_path(scenePath, ".json", scenes);
+	scenes_cstr.push_back("* New");
+
+	float width = 0;
+	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	ImGui::PushItemWidth(width);
+
+	static int i = 0;
+	if (ImGui::ListBox("##Scenes", &i, scenes_cstr.data(), scenes_cstr.size())) {
+		if (i != scenes_cstr.size() - 1) {
+			saveScene(scenes_cstr[i]);
+			saved = true;
+		}
+	}
+
+	// Corresponds to "* New" entry. Let user enter the saved file name
+	if (i == scenes_cstr.size() - 1) {
+		char buf[256] = { 0 };
+		if (ImGui::InputText("##Scene name", buf, 256, ImGuiInputTextFlags_EnterReturnsTrue)) {
+			saveScene(scenePath + buf);
+			saved = true;
+		}
+	}
+
+	ImGui::PopItemWidth();
+
+	return saved;
+}
+bool Engine::uiLoadScene()
+{
+	bool loaded = false;
+
+	std::vector<std::string> scenes;
+	std::vector<const char*> scenes_cstr;
+
+	scenes_cstr = browse_path(scenePath, ".json", scenes);
+
+	float width = 0;
+	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	ImGui::PushItemWidth(width);
+
+	static int i = 0;
+	if (ImGui::ListBox("##Scenes", &i, scenes_cstr.data(), scenes_cstr.size())) {
+		loadScene(scenes_cstr[i]);
+		loaded = true;
+	}
+
+	ImGui::PopItemWidth();
+
+	return loaded;
+}
+
+void Engine::uiUpdateMenuBar()
+{
+	if (ImGui::BeginMenuBar()) {
+		ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+		
+		if (ImGui::BeginMenu("Save")) {
+			uiSaveScene();
+
+			ImGui::EndMenu();
+		} else if (_saveShortcutPressed) {
+			ImGui::Begin("Save", 0, flags); {
+				_saveShortcutPressed = !uiSaveScene();
+			} ImGui::End();
+		}
+
+		if (ImGui::BeginMenu("Load")) {
+			uiLoadScene();
+
+			ImGui::EndMenu();
+		} else if (_loadShortcutPressed) {
+			ImGui::Begin("Load", 0, flags); {
+				_loadShortcutPressed = !uiLoadScene();
+			} ImGui::End();
+		}
+
+		ImGui::EndMenuBar();
+	}
+}
+
+
 void Engine::imguiUpdate()
 {
 	// Start the Dear ImGui frame
@@ -501,8 +611,7 @@ void Engine::imguiUpdate()
 	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
 
 	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-	if (opt_fullscreen)
-	{
+	if (opt_fullscreen) {
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos);
 		ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -512,51 +621,37 @@ void Engine::imguiUpdate()
 		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
 			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
 			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-	} else
-	{
+	} else {
 		dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
 	}
 
-	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
+	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
 		window_flags |= ImGuiWindowFlags_NoBackground;
+	}
 
-	if (!opt_padding)
+	if (!opt_padding) {
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	}
 	static bool p_open = true;
 
 	ImGui::Begin("DockSpace", &p_open, window_flags);
 	{
+		uiUpdateMenuBar();
 
-		if (!opt_padding)
+		if (!opt_padding) {
 			ImGui::PopStyleVar();
+		}
 
-		if (opt_fullscreen)
+		if (opt_fullscreen) {
 			ImGui::PopStyleVar(2);
-
+		}
 
 		ImGuiIO& io = ImGui::GetIO();
-		//ImGuiStyle& style = ImGui::GetStyle();
-		////Set min panel width
-		//float minWinSizeX = style.WindowMinSize.x;
 
-		//const float DOCKSPACE_MIN_PANEL_WIDTH = 340.f;
-		//style.WindowMinSize.x = DOCKSPACE_MIN_PANEL_WIDTH;
-
-		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-		{
+		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
 			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
 			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 		}
-
-		//style.WindowMinSize.x = minWinSizeX;
-
-		//Prevent camera movement if viewport is not hovered.
-		//Window::SetViewportHovered(m_ViewportHovered);
-
-		//UIDrawViewport();
-
-		/*if (m_DisplayControls)
-			Input::UIDisplayControlsConfig(&m_DisplayControls, m_PanelFlags);*/
 
 		ImGui::Begin("Config");
 		{
@@ -570,14 +665,6 @@ void Engine::imguiUpdate()
 			uiUpdateRenderContext();
 			uiUpdateDebugDisplay();
 
-		
-
-			
-
-		
-
-		
-
 			ImGui::Separator();
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
@@ -585,33 +672,22 @@ void Engine::imguiUpdate()
 			_deltaTime = io.DeltaTime;
 		}
 		ImGui::End();
-
+	
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-
-
 		ImGui::Begin("Viewport", (bool*)0, ImGuiWindowFlags_None);
 		{
-
-			/*auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
-			auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
-			auto viewportOffset = ImGui::GetWindowPos();
-			m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
-			m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
-			glm::vec2 viewportSize = m_ViewportBounds[1] - m_ViewportBounds[0];
-			m_ViewportFocused = ImGui::IsWindowFocused();
-			m_ViewportHovered = ImGui::IsWindowHovered();*/
-
+			_isViewportHovered = ImGui::IsWindowHovered();
 
 			ImVec2 vSize = ImGui::GetContentRegionAvail();
 			uint32_t usX = (uint32_t)vSize.x;
 			uint32_t usY = (uint32_t)vSize.y;
 
 			if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
-				vkDeviceWaitIdle(_device);
+				//vkDeviceWaitIdle(_device);
 
 				imgui_UnregisterViewportImageViews();
-				vkDeviceWaitIdle(_device);
+				//vkDeviceWaitIdle(_device);
 
 				// Create viewport images and etc. with new extent
 				recreateViewport(usX, usY);
@@ -619,11 +695,12 @@ void Engine::imguiUpdate()
 				imgui_RegisterViewportImageViews();
 			}
 
-
 			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));
 		}
 		ImGui::End();
 		ImGui::PopStyleVar();
+
+		
 	}
 	ImGui::End();
 }

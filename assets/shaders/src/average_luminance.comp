@@ -26,20 +26,26 @@ void main() {
   uint countForThisBin = ssbo.histogram[localIndex];
 
   histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ub.weights.x));
+  //histogramShared[localIndex] = uint(countForThisBin);
 
   barrier();
 
   // We only need to calculate this once, so only a single thread is needed.
-  if (localIndex == 255) {
+  if (localIndex == 0) {
     uint sum = 0;
+    //uint total_pixels = 0;
     for (uint i = ub.lumLowerIndex; i < ub.lumUpperIndex+1; ++i) {
+    //for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
         sum += histogramShared[i];
+        //total_pixels += histogramShared[i];
     }
+    //total_pixels -= histogramShared[0];
 
     // Here we take our weighted sum and divide it by the number of pixels
     // that had luminance greater than zero (since the index == 0, we can
     // use countForThisBin to find the number of black pixels)
     float weightedLogAverage = (sum / max(float(ub.totalPixelNum), 1.0)) - 1.0; //  - float(countForThisBin)
+    //float weightedLogAverage = (sum / max(float(total_pixels), 1.0)) - 1.0;
 
     // Map from our histogram space to actual luminance
     float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * ub.logLumRange) + ub.minLogLum);
@@ -47,6 +53,7 @@ void main() {
     float awaitedLuminance = ub.weights.z;
     float howClose = weightedAvgLum - awaitedLuminance;
     weightedAvgLum = weightedAvgLum * exp2(howClose * ub.weights.w);
+
     // Set target luminance for display and comparison
     ssbo.targetAverageLuminance = weightedAvgLum;
 

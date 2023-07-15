@@ -1,31 +1,25 @@
 #include "defs.glsl"
 
 vec3 pointLight(LightData ld, MatData md, vec3 fragPos, vec3 normal, vec3 viewDir) {
-    //vec3 lightColor = vec3(ld.color);
-    //vec3 lightPos   = vec3(ld.pos);
-    
+    vec3 fragToLight = ld.pos - fragPos;
+
     // diffuse 
-    //vec3 norm = normalize(normal);
-    vec3 lightDir = normalize(ld.pos - fragPos);
+    vec3 lightDir = normalize(fragToLight);
     float diff = max(dot(normal, lightDir), 0.0);
     vec3 diffuse = diff * ld.color * md.diffuseColor;
 
     // specular
-    
-    //vec3 viewDir = normalize(cameraPos - fragPos);
     vec3 reflectDir = reflect(-lightDir, normal);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    //vec3 specular = ld.specularFactor * spec * ld.color;  
     vec3 specular = spec * ld.color * md.specularColor;  
 
     // attenuation
-    float dist = length(ld.pos - fragPos);
+    float dist = length(fragToLight);
     float attenuation = 1.0 / (ld.constant + ld.linear * dist + 
         ld.quadratic * (dist * dist));    
 
     vec3 lightVal = diffuse + specular;
     lightVal *= attenuation;
-    //lightVal += ambient;
     lightVal *= ld.intensity;
 
     return lightVal;
@@ -41,21 +35,17 @@ const vec3 gridSamplingDisk[20] = vec3[]
    vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
 );
 
-float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 fragPos, vec3 lightPos, float viewDistance, float farPlane, float shadowBias, bool enablePCF)
+float shadowCalculation(samplerCubeArray shadowCubeArray, int lightIndex, vec3 fragPos, vec3 lightPos, float diskRadius, float shadowBias, bool enablePCF)
 {
     // Sample shadow cube map
     vec3 lightToFrag = fragPos - lightPos;
-
-	// Check if fragment is in shadow
     float currentDepth = length(lightToFrag);
 
     float shadow = 0.0;
     
     if (enablePCF) {
         const int PCF_samples = 20;
-
-        //float viewDistance = length(cameraPos - fragPos);
-        float diskRadius = (1.0 + (viewDistance / farPlane)) / 25.0;
+        
         for(int i = 0; i < PCF_samples; ++i)
         {
             float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag + gridSamplingDisk[i] * diskRadius, lightIndex)).r;
@@ -78,29 +68,32 @@ vec3 calculateLighting(LightData[MAX_LIGHTS] lights, MatData md, vec3 ambientCol
     bool enableShadows, samplerCubeArray shadowCubeArray, float lightFarPlane, float shadowBias, 
     bool enablePCF) 
 {
+    // Ambient part contributes only once across any number of lights
     vec3 lightVal = ambientColor;
 
     vec3 viewDir = normalize(cameraPos - fragPos);
     float viewDistance = length(cameraPos - fragPos);
+    // Radius for PCF sampling
+    float diskRadius = (1.0 + (viewDistance / lightFarPlane)) / 25.0;
     for (int i = 0; i < MAX_LIGHTS; i++) {
         LightData ld = lights[i];
         if (!ld.enabled) {
             continue;
         }
+        // Skip calculation for light if it almost doesn't reach the fragment
         float dist = distance(ld.pos.xyz, fragPos);
         if (dist > ld.radius) {
     		continue;
 	    }
 
         vec3 light = pointLight(ld, md, fragPos, normal, viewDir);
-        
-        // Adjust light intensity for shadow
+        // Shadow calculation
         if (enableShadows) {
             float shadow = 0.0;
-            shadow = shadowCalculation(shadowCubeArray, i, fragPos, ld.pos, viewDistance, lightFarPlane, shadowBias, enablePCF);
+            shadow = shadowCalculation(shadowCubeArray, i, fragPos, ld.pos, diskRadius, shadowBias, enablePCF);
             light *= 1.0 - shadow;
         }
-        
+        // Add current light's value to the total value of the fragment
         lightVal += light;
     }
     return lightVal;

@@ -38,12 +38,9 @@ uint colorToBin(vec3 hdrColor, float minLogLum, float inverseLogLumRange) {
   // Calculate the log_2 luminance and express it as a value in [0.0, 1.0]
   // where 0.0 represents the minimum luminance, and 1.0 represents the max.
   float logLum = clamp((log2(lum) - minLogLum) * inverseLogLumRange, 0.0, 1.0);
-  //float eps = 0.9;
-  //float logLum = clamp(pow(lum / 256, 1-eps), 0.f, 1.f);
 
   // Map [0, 1] to [1, 255]. The zeroth bin is handled by the epsilon check above.
   return uint(logLum * 254.0 + 1.0);
-  //return uint(clamp(lum, 0.f, 255.f));
 }
 
 // 16 * 16 * 1 threads per group

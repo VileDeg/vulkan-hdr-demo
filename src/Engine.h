@@ -6,6 +6,10 @@
 #include "camera.h"
 #include "vk_descriptors.h"
 
+struct ImGuiInputTextCallbackData;
+
+
+
 class Engine {
 public:
     void Init();
@@ -34,7 +38,7 @@ private: /* Methods used from Init directly */
     void createFrameData();
     void createSamplers();
 
-    void createScene(const std::string mainModelFullPath);
+    void createScene(CreateSceneData data);
 
 private: /* Secondary methods */
 
@@ -87,6 +91,10 @@ private: /* Secondary methods */
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
+private:
+    void saveScene(std::string fullScenePath);
+    void loadScene(std::string fullScenePath);
+
 private:  // UI
     void initImgui();
 
@@ -102,7 +110,16 @@ private:  // UI
     void uiUpdateHDR();
     void uiUpdateRenderContext();
     void uiUpdateDebugDisplay();
+    void uiUpdateMenuBar();
 
+    bool uiSaveScene();
+    bool uiLoadScene();
+
+    bool _saveShortcutPressed = false;
+    bool _loadShortcutPressed = false;
+    bool _isViewportHovered = true;
+
+    //static int imgui_inputTextCallback(ImGuiInputTextCallbackData* data);
 
     std::vector<bool*> _imguiFlags;
     void flag(bool& b) {
@@ -154,7 +171,6 @@ private:
 
     float _frameRate = 60.f; // Updated from ImGui io.framerate
     float _deltaTime = 0.016f;
-    //bool _framebufferResized = false;
 
     bool _isInitialized = false;
     DeletionStack _deletionStack{}; // Disposing resources created during initialization
@@ -219,10 +235,11 @@ public:
     inline static std::string shaderPath = _assetPath + "shaders/bin/";
     inline static std::string imagePath  = _assetPath + "images/";
     inline static std::string modelPath  = _assetPath + "models/";
+    inline static std::string scenePath  = _assetPath + "scenes/";
 
 private:
-    static constexpr uint32_t WIDTH  = 1280;
-    static constexpr uint32_t HEIGHT = 800;
+    static constexpr uint32_t WIDTH  = 1600;
+    static constexpr uint32_t HEIGHT = 900;
 
     static constexpr uint32_t FS_WIDTH  = 1920;
     static constexpr uint32_t FS_HEIGHT = 1080;

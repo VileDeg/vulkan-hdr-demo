@@ -12,15 +12,15 @@ void bumpMapping(sampler2D bumpMap, float bumpStep, mat3 normalMatrix, float bum
     float pxru = texture(bumpMap, vec2(uv.x+stp, uv.y+stp)).r;
 
     vec2 dl = vec2(pxr - pxl, pxu - pxd);
-    vec2 dld = vec2(pxru - pxld, pxlu - pxrd);
+    //vec2 dld = vec2(pxru - pxld, pxlu - pxrd);
 
-    const float halfisqrt2 = 0.353553390;
+    //const float halfisqrt2 = 0.353553390;
 
-    dl.x += dld.x * halfisqrt2;
-    dl.y += dld.x * halfisqrt2;
+    //dl.x += dld.x * halfisqrt2;
+    //dl.y += dld.x * halfisqrt2;
 
-    dl.x -= dld.y * halfisqrt2;
-    dl.y += dld.y * halfisqrt2;
+    //dl.x -= dld.y * halfisqrt2;
+    //dl.y += dld.y * halfisqrt2;
 
     vec3 normalShift = normalMatrix * vec3(dl.x, dl.y, 0);
     normalShift *= bumpStrength;

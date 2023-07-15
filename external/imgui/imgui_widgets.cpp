@@ -6953,7 +6953,7 @@ float ImGuiMenuColumns::DeclColumns(float w_icon, float w_label, float w_shortcu
     Widths[1] = ImMax(Widths[1], (ImU16)w_label);
     Widths[2] = ImMax(Widths[2], (ImU16)w_shortcut);
     Widths[3] = ImMax(Widths[3], (ImU16)w_mark);
-    CalcNextTotalWidth(false);
+    CalcNextTotalWidth(false);  
     return (float)ImMax(TotalWidth, NextTotalWidth);
 }
 
