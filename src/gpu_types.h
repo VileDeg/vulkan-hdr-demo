@@ -56,7 +56,7 @@ struct GPUSceneUB {
     int _pad1; // 32
 
     GPUBool showNormals = false;
-    float exposure{ 1.0f };
+    float exposure{ 0.0f };
     GPUBool enableExposure = true;
     int _pad2;
 
@@ -109,13 +109,6 @@ struct GPUSceneSSBO {
     GPUObject objects[MAX_OBJECTS]{};
 };
 
-
-
-//struct GPUMatUB {
-//#define MAX_MESHES 500
-//    GPUMaterial mat[MAX_MESHES];
-//};
-
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
     float targetAverageLuminance = 1.f;
@@ -127,8 +120,8 @@ struct GPUCompSSBO {
 };
 
 struct GPUCompUB {
-    float minLogLum = -2.f;
-    float logLumRange = 12.f;
+    float minLogLum = -4.f;
+    float logLumRange = 6.7f;
     float oneOverLogLumRange;
     uint32_t totalPixelNum;
 
@@ -137,7 +130,7 @@ struct GPUCompUB {
     uint32_t lumUpperIndex;
     int _pad0;
 
-    glm::vec4 weights = { 1.f, 128.f, 1.f, 1.f };
+    glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
 
     GPUBool enableToneMapping = true;
     int toneMappingMode{ 3 };

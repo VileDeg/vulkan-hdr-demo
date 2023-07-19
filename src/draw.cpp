@@ -3,7 +3,24 @@
 
 #include "imgui/imgui.h"
 
-//#define ENABLE_SYNC
+static constexpr int ACCESS_MASK_ALL =
+	VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+	VK_ACCESS_INDEX_READ_BIT |
+	VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+	VK_ACCESS_UNIFORM_READ_BIT |
+	VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+	VK_ACCESS_SHADER_READ_BIT |
+	VK_ACCESS_SHADER_WRITE_BIT |
+	VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+	VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+	VK_ACCESS_TRANSFER_READ_BIT |
+	VK_ACCESS_TRANSFER_WRITE_BIT |
+	VK_ACCESS_HOST_READ_BIT |
+	VK_ACCESS_HOST_WRITE_BIT;
+
+#define ENABLE_SYNC 1
 
 static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h) 
 {
@@ -134,8 +151,6 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 	// Render scene from cube face's point of view
 	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	
-
 	GPUShadowPC pc = {
 		.view = _renderContext.lightView[faceIndex],
 		.far_plane = _renderContext.zFar,
@@ -182,6 +197,39 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 	}
 
 	vkCmdEndRenderPass(f.cmd);
+	
+//#if ENABLE_SYNC == 1
+//	{
+//		VkImageMemoryBarrier imageMemoryBarrier = {
+//			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+//			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+//			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+//			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, //VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+//			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//			.srcQueueFamilyIndex = _graphicsQueueFamily,
+//			.dstQueueFamilyIndex = _graphicsQueueFamily,
+//			/* .image and .subresourceRange should identify image subresource accessed */
+//			.image = _shadow.cubemapArray.allocImage.image,
+//			.subresourceRange = {
+//				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//				.baseMipLevel = 0,
+//				.levelCount = 1,
+//				.baseArrayLayer = lightIndex * 6, // synchronize only for current light's portion of cube array
+//				.layerCount = 6, // 6 faces of cube
+//			}
+//		};
+//
+//		vkCmdPipelineBarrier(
+//			f.cmd,
+//			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+//			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,         // dstStageMask
+//			0,
+//			0, nullptr, // memoryBarrier
+//			0, nullptr, // bufferMemoryBarrier
+//			1, &imageMemoryBarrier // imageMemoryBarriers
+//		);
+//	}
+//#endif
 }
 
 void Engine::loadDataToGPU()
@@ -275,10 +323,32 @@ void Engine::loadDataToGPU()
 	}
 }
 
+
+static void s_fullBarrier(VkCommandBuffer& cmd) {
+	VkMemoryBarrier memoryBarrier = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+		.srcAccessMask = ACCESS_MASK_ALL,
+		.dstAccessMask = ACCESS_MASK_ALL
+	};
+
+	vkCmdPipelineBarrier(
+		cmd,
+		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // srcStageMask
+		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // dstStageMask
+		0,
+		1,                                  // memoryBarrierCount
+		&memoryBarrier,                     // pMemoryBarriers
+		0, 0, 0, 0
+	);
+}
+
+
+
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
 	loadDataToGPU();
 
+#if 1
 	{ // Shadow pass
 		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
@@ -311,6 +381,59 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		}
 	}
 
+
+#if ENABLE_SYNC == 1
+	{
+		VkImageMemoryBarrier imageMemoryBarrier = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, //VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			/*.srcQueueFamilyIndex = _graphicsQueueFamily,
+			.dstQueueFamilyIndex = _graphicsQueueFamily,*/
+			/* .image and .subresourceRange should identify image subresource accessed */
+			.image = _shadow.cubemapArray.allocImage.image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0, 
+				.layerCount = MAX_LIGHTS * 6, 
+			}
+		};
+
+		vkCmdPipelineBarrier(
+			f.cmd,
+#if 1
+			VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+#else
+			VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+			VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
+			VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+			VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT |
+			VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT |
+			VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT |
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+#endif
+
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,         // dstStageMask
+			0,
+			0, nullptr, // memoryBarrier
+			0, nullptr, // bufferMemoryBarrier
+			1, &imageMemoryBarrier // imageMemoryBarriers
+		);
+	}
+#elif ENABLE_SYNC == 2
+	s_fullBarrier(f.cmd);
+#endif
+
+#endif
+
 	VkClearValue clearValues[] = { {.color = { 0.1f, 0.0f, 0.1f, 1.0f } }, {.depthStencil = { 1.0f, 0 } } };
 
 	VkRenderPassBeginInfo renderPassBeginInfo =
@@ -327,8 +450,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		drawObjects(f.cmd, _renderables);
 	}
 	vkCmdEndRenderPass(f.cmd);
-
-#ifdef ENABLE_SYNC
+#if 1
+#if ENABLE_SYNC == 1
 	{ // Sync graphics to compute
 		VkImageMemoryBarrier imageMemoryBarrier = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -349,7 +472,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 		vkCmdPipelineBarrier(
 			f.cmd,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+			VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // dstStageMask
 			0,
 			0, nullptr,
@@ -358,33 +482,12 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			&imageMemoryBarrier
 		);
 	}
+#elif ENABLE_SYNC == 2
+	s_fullBarrier(f.cmd);
 #endif
-
 
 	{ // Compute step
-
-
 		if (_renderContext.comp.enableAdaptation) {
-#ifdef ENABLE_SYNC
-			{
-				VkMemoryBarrier memoryBarrier = {
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-					.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-				};
-
-				vkCmdPipelineBarrier(
-					f.cmd,
-					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-					0,
-					1, &memoryBarrier,
-					0, nullptr,
-					0, nullptr
-				);
-			}
-#endif
-
 			// Compute luminance histogram
 			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
 			{
@@ -406,7 +509,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 			}
 
-#ifdef ENABLE_SYNC
+#if ENABLE_SYNC == 1
 			{
 				VkMemoryBarrier memoryBarrier = {
 					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
@@ -424,6 +527,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 					0, nullptr
 				);
 			}
+#elif ENABLE_SYNC == 2
+			s_fullBarrier(f.cmd);
 #endif
 
 			// Compute average luminance
@@ -436,11 +541,11 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			}
 		}
 
-#ifdef ENABLE_SYNC
+#if ENABLE_SYNC == 1
 		VkMemoryBarrier memoryBarrier = {
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-					.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+			.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
 		};
 
 		vkCmdPipelineBarrier(
@@ -452,6 +557,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			0, nullptr,
 			0, nullptr
 		);
+#elif ENABLE_SYNC == 2
+		s_fullBarrier(f.cmd);
 #endif
 
 		// Compute tone mapping
@@ -474,13 +581,15 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 	}
-
-#ifdef ENABLE_SYNC
+#if ENABLE_SYNC == 1
 	{ // Sync compute to graphics
 		VkImageMemoryBarrier imageMemoryBarrier = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			//.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			//.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+
 			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
 			/* .image and .subresourceRange should identify image subresource accessed */
@@ -497,7 +606,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		vkCmdPipelineBarrier(
 			f.cmd,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // srcStageMask
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // dstStageMask
+			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // dstStageMask
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			0,
 			0, nullptr,
 			0, nullptr,
@@ -505,7 +615,12 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			&imageMemoryBarrier
 		);
 	}
+#elif ENABLE_SYNC == 2
+	s_fullBarrier(f.cmd);
 #endif
+#endif
+
+
 
 	renderPassBeginInfo.renderPass = _swapchain.renderpass;
 	renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];
@@ -518,6 +633,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		imguiOnRenderPassEnd(f.cmd);
 	}
 	vkCmdEndRenderPass(f.cmd);
+
+
 }
 
 void Engine::drawFrame()

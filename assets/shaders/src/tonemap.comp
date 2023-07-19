@@ -26,11 +26,12 @@ void main() {
  
     // Ignore threads that map to areas beyond the bounds of our HDR image
     if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-        vec3 hdrColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
+        vec3 hdrColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
         // Apply eye adaptation
         vec3 outColor = hdrColor;
         if (ub.enableAdaptation) {
             outColor = outColor / (9.6 * ssbo.averageLuminance + 0.0001);
+            //outColor = outColor * ssbo.averageLuminance;
         }
         // Apply tone mapping
         if (ub.enableToneMapping) { // If enable tone mapping

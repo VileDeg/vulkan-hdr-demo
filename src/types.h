@@ -283,6 +283,7 @@ struct CreateSceneData {
 
     float bumpStrength;
     std::string modelPath;
+    std::string skyboxPath;
 };
 
 struct RenderContext {
@@ -293,6 +294,7 @@ struct RenderContext {
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     bool enableSkybox = true;
+    bool displayLightSourceObjects = true;
 
     float zNear = 0.1f;
     float zFar = 64.0f;
@@ -304,13 +306,14 @@ struct RenderContext {
     float lumPixelLowerBound = 0.2f;
     float lumPixelUpperBound = 0.95f;
 
-    float maxLogLuminance = 10.f;
-    float eyeAdaptationTimeCoefficient = 1.1f;
+    float maxLogLuminance = 4.7f;
+    float eyeAdaptationTimeCoefficient = 2.2f;
 
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold = 1.f / 255.f;
 
     std::string modelName;
+    std::string skyboxName;
 
     void Init(CreateSceneData data);
 
@@ -318,4 +321,6 @@ struct RenderContext {
     void UpdateLightRadius(int lightIndex);
 
     int GetClosestRadiusIndex(int radius);
+
+ 
 };

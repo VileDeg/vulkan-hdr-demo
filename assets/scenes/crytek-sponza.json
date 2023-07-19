@@ -34,5 +34,6 @@
       ]
     }
   ],
-  "model_name": "crytek_sponza/sponza.obj"
+  "model_name": "crytek_sponza/sponza.obj",
+  "skybox":  "furry_clouds"
 }

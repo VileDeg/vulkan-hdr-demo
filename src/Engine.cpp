@@ -5,7 +5,7 @@ void Engine::Init()
 {
     createWindow();
     createInstance();
-    createDebugMessenger();
+    //createDebugMessenger();
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
@@ -30,10 +30,7 @@ void Engine::Init()
     createSamplers();
     
     loadScene(scenePath + "dobrovic-sponza.json");
-    //createScene("crytek_sponza/sponza.obj");
-    //createScene("sponza/sponza.obj");
-
-    //createScene("sibenik/sibenik.obj");
+    //loadScene(scenePath + "crytek-sponza.json");
     
     initImgui();
 

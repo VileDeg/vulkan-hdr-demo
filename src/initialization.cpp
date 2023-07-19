@@ -9,35 +9,10 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     void* pUserData)
 {
-    std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl;
+    std::cerr << "VALIDATION: " << pCallbackData->pMessage << std::endl << std::endl;
 
     return VK_FALSE;
 }
-
-void Engine::createDebugMessenger()
-{
-    if (ENABLE_VALIDATION_LAYERS) {
-        VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo{
-            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
-            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-            .pfnUserCallback = debug_callback
-        };
-
-        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
-        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
-
-        VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
-
-        _deletionStack.push([&]() {
-            vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
-            });
-    }
-}
-
 
 static bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) {
     uint32_t propertyCount = 0;
@@ -108,20 +83,19 @@ static std::vector<const char*> get_required_extensions() {
         requiredExtensions.emplace_back(glfwExtensions[i]);
     }
 
-    if (ENABLE_VALIDATION_LAYERS) {
-        requiredExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-
-    if (!checkInstanceExtensionSupport(requiredExtensions)) {
-        throw std::runtime_error("No instance extensions properties are available.");
-    }
-
     return requiredExtensions;
 }
 
 void Engine::createInstance()
 {
-    _instanceExtensions = get_required_extensions();
+    auto extensions = get_required_extensions();
+    for (auto& ext : extensions) {
+        _instanceExtensions.push_back(ext);
+    }
+
+    if (!checkInstanceExtensionSupport(_instanceExtensions)) {
+        throw std::runtime_error("No instance extensions properties are available.");
+    }
 
     ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
@@ -133,8 +107,23 @@ void Engine::createInstance()
         .apiVersion = VK_API_VERSION_1_1
     };
 
+    VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo;
+    if (ENABLE_VALIDATION_LAYERS) {
+        dbgMessengerInfo = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+            .pfnUserCallback = debug_callback
+        };
+    }
+
     VkInstanceCreateInfo instanceInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        // Pass debug messenger info to instance info to enable validation for instance creation and destruction
+        .pNext = ENABLE_VALIDATION_LAYERS ? &dbgMessengerInfo : nullptr,
         .pApplicationInfo = &appInfo,
         .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
         .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
@@ -143,11 +132,19 @@ void Engine::createInstance()
     };
 
     VKASSERT(vkCreateInstance(&instanceInfo, nullptr, &_instance));
-    {
-        _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
+    _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
+
+
+    if (ENABLE_VALIDATION_LAYERS) {
+        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
+        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
+
+        VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
+
+        _deletionStack.push([&]() {
+            vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
+            });
     }
-
-
 }
 
 void Engine::createSurface()

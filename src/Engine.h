@@ -8,8 +8,6 @@
 
 struct ImGuiInputTextCallbackData;
 
-
-
 class Engine {
 public:
     void Init();
@@ -19,7 +17,6 @@ public:
 private: /* Methods used from Init directly */
     void createWindow(); 
     void createInstance();
-    void createDebugMessenger();
     void createSurface();
 
     void pickPhysicalDevice();
@@ -92,6 +89,9 @@ private: /* Secondary methods */
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 private:
+    void setDisplayLightSourceObjects(bool display);
+
+private:
     void saveScene(std::string fullScenePath);
     void loadScene(std::string fullScenePath);
 
@@ -121,12 +121,12 @@ private:  // UI
 
     //static int imgui_inputTextCallback(ImGuiInputTextCallbackData* data);
 
-    std::vector<bool*> _imguiFlags;
+    /*std::vector<bool*> _imguiFlags;
     void flag(bool& b) {
         if (std::find(_imguiFlags.begin(), _imguiFlags.end(), &b) == _imguiFlags.end()) {
             _imguiFlags.push_back(&b);
         }
-    }
+    }*/
 
     std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
 
@@ -222,7 +222,11 @@ private:
         "VK_LAYER_KHRONOS_validation"
     };
 
-    std::vector<const char*> _instanceExtensions{};
+    std::vector<const char*> _instanceExtensions{
+#if ENABLE_VALIDATION_LAYERS == 1
+        "VK_EXT_debug_utils"
+#endif
+    };
     std::vector<const char*> _deviceExtensions{ 
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
         "VK_KHR_maintenance4", "VK_KHR_push_descriptor",

@@ -1,6 +1,29 @@
 #include "stdafx.h"
 #include "engine.h"
 
+void Engine::setDisplayLightSourceObjects(bool display)
+{
+	if (!display) {
+		for (uint32_t i = 0; i < _renderables.size(); ++i) {
+			for (auto& l : _renderContext.lightObjects) {
+				if (_renderables[i]->tag == l->tag) {
+					_renderables.erase(_renderables.begin() + i);
+				}
+			}
+		}
+	} else {
+		for (auto& l : _renderContext.lightObjects) {
+			if (std::find_if(_renderables.begin(), _renderables.end(), [&l](std::shared_ptr<RenderObject> ptr)
+				{
+					return ptr->tag == l->tag;
+				}) == _renderables.end()) 
+			{
+				_renderables.push_back(l);
+			}
+		}
+	}
+}
+
 
 void GPUData::Reset(FrameData& fd)
 {
@@ -41,7 +64,8 @@ void RenderContext::Init(CreateSceneData data)
 
 	//modelName = mainModelName.substr(slash_pos, dot_pos - slash_pos);
 	//modelName = "dobrovic-sponza";
-	modelName = data.modelPath;
+	modelName  = data.modelPath;
+	skyboxName = data.skyboxPath;
 
 	float off = 5.f;
 	std::vector<glm::vec3> lightPos = {

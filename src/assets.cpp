@@ -360,6 +360,8 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 		}
 	);
 
+	vkDeviceWaitIdle(_device);
+
 	// Create image view
 	VkImageViewCreateInfo imageinfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -386,9 +388,25 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
 
+	/*VkSampler cubemapSampler;
+	{
+		VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
+		VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+		samplerInfo1.addressModeU = mode;
+		samplerInfo1.addressModeV = mode;
+		samplerInfo1.addressModeW = mode;
+
+		VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &cubemapSampler));
+		_deletionStack.push([=]() {
+			vkDestroySampler(_device, cubemapSampler, nullptr);
+			});
+	}*/
+
+
 	// write skybox to descriptor set
 	newTexture.allocImage.descInfo = {
-		.sampler = _linearSampler,
+		.sampler = _linearSampler,//cubemapSampler,
 		.imageView = newTexture.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
@@ -845,7 +863,9 @@ void Engine::loadScene(std::string fullScenePath)
 	CreateSceneData data = {
 		.bumpStrength = j["bump_strength"],
 		.modelPath = j["model_name"],
+		.skyboxPath = j["skybox"]
 	};
+
 	for (int i = 0; i < MAX_LIGHTS; ++i) {
 		auto l = j["lights"];
 		data.intensity[i] = l[i]["intensity"];
@@ -880,15 +900,11 @@ void Engine::saveScene(std::string fullScenePath)
 		arr1["intensity"] = l.intensity;
 
 		arr.push_back(arr1);
-
-		//arr.push_back({ {p.x, p.y, p.z}, l.intensity });
-		//arr.push_back(l.intensity);
 	}
 
 	j["lights"] = arr;
+	j["skybox"] = rc.skyboxName;
 
-	//std::string scene_name = "dobrovic-sponza";
-	//scenePath + 
 	std::ofstream out(fullScenePath);
 	ASSERT(out.good());
 
@@ -942,7 +958,7 @@ void Engine::createScene(CreateSceneData data)
 		}
 	}
 
-	loadCubemap("furry_clouds", true);
+	loadCubemap(data.skyboxPath.c_str(), true);
 
 	_renderContext.Init(data);
 
@@ -957,7 +973,7 @@ void Engine::createScene(CreateSceneData data)
 		sphr->meshes[0]->gpuMat.specularColor *= 10.f;
 
 		for (int i = 0; i < MAX_LIGHTS; i++) {
-			_renderables.push_back(std::make_shared<RenderObject>(
+			auto ptr = std::make_shared<RenderObject>(
 				RenderObject{
 					.tag = "light" + std::to_string(i),
 					.color = glm::vec4(10, 10, 10, 1.),
@@ -965,9 +981,11 @@ void Engine::createScene(CreateSceneData data)
 					.pos = _renderContext.sceneData.lights[i].position,
 					.scale = glm::vec3(0.1f)
 				}
-			));
+			);
 
-			_renderContext.lightObjects.push_back(_renderables.back());
+			_renderables.push_back(ptr);
+
+			_renderContext.lightObjects.push_back(ptr);
 		}
 	}
 

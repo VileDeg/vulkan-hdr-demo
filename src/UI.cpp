@@ -162,11 +162,14 @@ void Engine::uiUpdateScene()
 		ImGui::Separator();
 		ImGui::Checkbox("Enable bump mapping", &_renderContext.sceneData.enableBumpMapping);
 		ImGui::SliderFloat("Bump Strength", &_renderContext.sceneData.bumpStrength, 0.f, 5.f);
-		ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f"); //, ImGuiSliderFlags_NoRoundToFormat
+		ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f");
 		ImGui::SliderFloat("Bump UV Factor", &_renderContext.sceneData.bumpUVFactor, 0.0001f, 0.005f, "%.4f");
 
 		ImGui::Separator();
 		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
+		if (ImGui::Checkbox("Display light sources", &_renderContext.displayLightSourceObjects)) {
+			setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
+		}
 
 		ImGui::Separator();
 		ImGui::SliderFloat("Field of view", &_fovY, 45.f, 120.f);
@@ -316,11 +319,11 @@ void Engine::uiUpdateHDR()
 					// even though the command was already recorded to queue.
 					// This is probably a temporary solution as it is very inefficient.
 					// If we don't use this, histogram will be very laggy most of the time.
-					vkDeviceWaitIdle(_device);
+					//vkDeviceWaitIdle(_device);
 
-					if (maxBin == 0) {
+					/*if (maxBin == 0) {
 						pr("here");
-					}
+					}*/
 
 					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
@@ -655,10 +658,10 @@ void Engine::imguiUpdate()
 
 		ImGui::Begin("Config");
 		{
-			for (int i = 0; i < _imguiFlags.size(); ++i) {
+			/*for (int i = 0; i < _imguiFlags.size(); ++i) {
 				auto s = std::string("Flag ") + std::to_string(i);
 				ImGui::Checkbox(s.c_str(), _imguiFlags[i]);
-			}
+			}*/
 
 			uiUpdateScene();
 			uiUpdateHDR();

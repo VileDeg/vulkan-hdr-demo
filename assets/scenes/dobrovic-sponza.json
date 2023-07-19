@@ -34,5 +34,6 @@
       ]
     }
   ],
-  "model_name": "sponza/sponza.obj"
+  "model_name": "sponza/sponza.obj",
+  "skybox": "furry_clouds"
 }

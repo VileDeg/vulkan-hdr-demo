@@ -54,7 +54,7 @@ void main() {
   uvec2 dim = imageSize(inHDRImage).xy;
   // Ignore threads that map to areas beyond the bounds of our HDR image
   if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-    vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).xyz;
+    vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
     uint binIndex = colorToBin(hdrColor, ub.minLogLum, ub.oneOverLogLumRange);
     // We use an atomic add to ensure we don't write to the same bin in our
     // histogram from two different threads at the same time.
