@@ -388,7 +388,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, //VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+			//.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			/*.srcQueueFamilyIndex = _graphicsQueueFamily,
 			.dstQueueFamilyIndex = _graphicsQueueFamily,*/
@@ -406,8 +407,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		vkCmdPipelineBarrier(
 			f.cmd,
 #if 1
-			VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			//VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 #else
 			VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
 			VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
@@ -472,8 +473,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 		vkCmdPipelineBarrier(
 			f.cmd,
-			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
-			VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+			//VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // dstStageMask
 			0,
 			0, nullptr,
@@ -611,16 +612,13 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			0,
 			0, nullptr,
 			0, nullptr,
-			1,                                             // imageMemoryBarrierCount
-			&imageMemoryBarrier
+			1, &imageMemoryBarrier // imageMemoryBarrierCount
 		);
 	}
 #elif ENABLE_SYNC == 2
 	s_fullBarrier(f.cmd);
 #endif
 #endif
-
-
 
 	renderPassBeginInfo.renderPass = _swapchain.renderpass;
 	renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];
@@ -633,8 +631,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		imguiOnRenderPassEnd(f.cmd);
 	}
 	vkCmdEndRenderPass(f.cmd);
-
-
 }
 
 void Engine::drawFrame()

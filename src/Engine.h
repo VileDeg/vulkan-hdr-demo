@@ -43,6 +43,7 @@ private: /* Secondary methods */
     static void cursorCallback(GLFWwindow* window, double xpos, double ypos);
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
+    void loadInstanceExtensionFunctions();
     void loadDeviceExtensionFunctions();
 
     void recreateSwapchain();
@@ -119,20 +120,14 @@ private:  // UI
     bool _loadShortcutPressed = false;
     bool _isViewportHovered = true;
 
-    //static int imgui_inputTextCallback(ImGuiInputTextCallbackData* data);
-
-    /*std::vector<bool*> _imguiFlags;
-    void flag(bool& b) {
-        if (std::find(_imguiFlags.begin(), _imguiFlags.end(), &b) == _imguiFlags.end()) {
-            _imguiFlags.push_back(&b);
-        }
-    }*/
-
     std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
 
 private:
     float _fovY = 90.f; // degrees
-    
+
+private:
+    void setDebugName(VkObjectType type, void* handle, const std::string name);
+
 private: 
     GLFWwindow* _window;
 
@@ -216,6 +211,8 @@ private:
 
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
     PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
+
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 
 private:
     const std::vector<const char*> _enabledValidationLayers{

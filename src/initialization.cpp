@@ -86,6 +86,16 @@ static std::vector<const char*> get_required_extensions() {
     return requiredExtensions;
 }
 
+void Engine::loadInstanceExtensionFunctions()
+{
+    DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
+
+    if (ENABLE_VALIDATION_LAYERS) {
+        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
+        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
+    }
+}
+
 void Engine::createInstance()
 {
     auto extensions = get_required_extensions();
@@ -134,11 +144,9 @@ void Engine::createInstance()
     VKASSERT(vkCreateInstance(&instanceInfo, nullptr, &_instance));
     _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
 
+    loadInstanceExtensionFunctions();
 
     if (ENABLE_VALIDATION_LAYERS) {
-        DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
-        DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
-
         VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
 
         _deletionStack.push([&]() {
@@ -390,6 +398,8 @@ void Engine::createLogicalDevice()
 
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);
+
+    setDebugName(VK_OBJECT_TYPE_QUEUE, _graphicsQueue, "Main and only queue");
 
     loadDeviceExtensionFunctions();
 }
