@@ -179,8 +179,9 @@ static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<c
                 break;
             }
         }
-        if (!found)
+        if (!found) {
             allSupported = false;
+        }
     }
 
     return allSupported;

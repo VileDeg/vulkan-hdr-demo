@@ -221,13 +221,15 @@ private:
 
     std::vector<const char*> _instanceExtensions{
 #if ENABLE_VALIDATION_LAYERS == 1
-        "VK_EXT_debug_utils"
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 #endif
     };
     std::vector<const char*> _deviceExtensions{ 
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-        "VK_KHR_maintenance4", "VK_KHR_push_descriptor",
-        "VK_EXT_robustness2"
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, // Swapchain to present images on screen
+        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, // Push descriptor to load diffuse texture per each mesh
+        VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
+        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME // To get rid of renderpasses and framebuffers
         //, "VK_KHR_synchronization2"
     };
 
