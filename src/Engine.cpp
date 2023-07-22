@@ -16,7 +16,7 @@ void Engine::Init()
     
     createSwapchain();
 
-    createRenderpass();
+    //createRenderpass();
 
     prepareMainPass();
     prepareViewportPass(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
@@ -135,155 +135,157 @@ static VkRenderPass s_createRenderpass(VkDevice device, VkFormat colorAttFormat,
     return renderpass;
 }
 
-void Engine::createRenderpass() {
-    std::vector<VkSubpassDependency> dependencies = {
-
-        { // Dependency for upcoming compute shader
-            .srcSubpass = 0,
-            .dstSubpass = VK_SUBPASS_EXTERNAL,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-        },
-        //{ // Dependency for presenting frame to screen
-        //    .srcSubpass = VK_SUBPASS_EXTERNAL,
-        //    .dstSubpass = 0,
-        //    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        //    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        //    .srcAccessMask = 0,
-        //    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-        //},
-        // Depth attachment dependency
-        /*{ 
-            .srcSubpass = 0,
-            .dstSubpass = VK_SUBPASS_EXTERNAL,
-            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-        },
-        {
-            .srcSubpass = VK_SUBPASS_EXTERNAL,
-            .dstSubpass = 0,
-            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-        }*/
-
-    };
-
-    _viewport.renderpass = s_createRenderpass(_device, _viewport.imageFormat, VK_IMAGE_LAYOUT_GENERAL, _viewport.depthFormat, dependencies);
-    
-    
-    std::vector<VkSubpassDependency> dependencies1 = {
-        // Color attachment dependency
-        { // Dependency for presenting frame to screen
-            .srcSubpass = VK_SUBPASS_EXTERNAL,
-            .dstSubpass = 0,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = 0,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-        },
-     
-        // Depth attachment dependency
-        { // Dependency for presenting frame to screen
-            .srcSubpass = VK_SUBPASS_EXTERNAL,
-            .dstSubpass = 0,
-            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .srcAccessMask = 0,
-            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-        }
-    };
-
-    _swapchain.renderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat, dependencies1);
- 
-    
-    { // Shadow renderpass
-        VkAttachmentDescription osAttachments[2] = {};
-
-        // Find a suitable depth format
-        VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.fbDepthFormat);
-        assert(validDepthFormat);
-
-        osAttachments[0].format = ShadowPass::FB_COLOR_FORMAT;
-        osAttachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        osAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        osAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        osAttachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        osAttachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        osAttachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        osAttachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        // Depth attachment
-        osAttachments[1].format = _shadow.fbDepthFormat;
-        osAttachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-        osAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        osAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        osAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        osAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        osAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        osAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference colorReference = {};
-        colorReference.attachment = 0;
-        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthReference = {};
-        depthReference.attachment = 1;
-        depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-
-        VkSubpassDescription subpass = {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorReference;
-        subpass.pDepthStencilAttachment = &depthReference;
-
-        VkSubpassDependency dependency{
-            .srcSubpass = 0,
-            .dstSubpass = VK_SUBPASS_EXTERNAL,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-        };
-
-
-        std::vector<VkSubpassDependency> dependencies = { dependency/*, depthDependency*/ };
-
-        
-
-        VkRenderPassCreateInfo renderPassCreateInfo = {};
-        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassCreateInfo.attachmentCount = 2;
-        renderPassCreateInfo.pAttachments = osAttachments;
-        renderPassCreateInfo.subpassCount = 1;
-        renderPassCreateInfo.pSubpasses = &subpass;
-        renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(dependencies.size()),
-        renderPassCreateInfo.pDependencies = dependencies.data();
-
-
-        VKASSERT(vkCreateRenderPass(_device, &renderPassCreateInfo, nullptr, &_shadow.renderpass));
-    }
-
-    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _swapchain.renderpass, "Swapchain Renderpass");
-    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _viewport.renderpass, "Viewport Renderpass");
-    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _shadow.renderpass, "Shadow Renderpass");
-
-    _deletionStack.push([&]() { 
-        vkDestroyRenderPass(_device, _shadow.renderpass, nullptr);
-        vkDestroyRenderPass(_device, _viewport.renderpass, nullptr);
-        vkDestroyRenderPass(_device, _swapchain.renderpass, nullptr); 
-    });
-}
+//void Engine::createRenderpass() {
+//    std::vector<VkSubpassDependency> dependencies = {
+//
+//        { // Dependency for upcoming compute shader
+//            .srcSubpass = 0,
+//            .dstSubpass = VK_SUBPASS_EXTERNAL,
+//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+//            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+//            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+//        },
+//        //{ // Dependency for presenting frame to screen
+//        //    .srcSubpass = VK_SUBPASS_EXTERNAL,
+//        //    .dstSubpass = 0,
+//        //    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//        //    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//        //    .srcAccessMask = 0,
+//        //    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+//        //},
+//        // Depth attachment dependency
+//        /*{ 
+//            .srcSubpass = 0,
+//            .dstSubpass = VK_SUBPASS_EXTERNAL,
+//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+//        },
+//        {
+//            .srcSubpass = VK_SUBPASS_EXTERNAL,
+//            .dstSubpass = 0,
+//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+//        }*/
+//
+//    };
+//
+//    _viewport.renderpass = s_createRenderpass(_device, _viewport.imageFormat, VK_IMAGE_LAYOUT_GENERAL, _viewport.depthFormat, dependencies);
+//    
+//    
+//    std::vector<VkSubpassDependency> dependencies1 = {
+//        // Color attachment dependency
+//        { // Dependency for presenting frame to screen
+//            .srcSubpass = VK_SUBPASS_EXTERNAL,
+//            .dstSubpass = 0,
+//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//            .srcAccessMask = 0,
+//            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+//        },
+//     
+//        // Depth attachment dependency
+//        { // Dependency for presenting frame to screen
+//            .srcSubpass = VK_SUBPASS_EXTERNAL,
+//            .dstSubpass = 0,
+//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+//            .srcAccessMask = 0,
+//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+//        }
+//    };
+//
+//    _swapchain.renderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat, dependencies1);
+// 
+//    
+//    { // Shadow renderpass
+//        VkAttachmentDescription osAttachments[2] = {};
+//
+//        // Find a suitable depth format
+//        VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.fbDepthFormat);
+//        assert(validDepthFormat);
+//
+//        osAttachments[0].format = ShadowPass::FB_COLOR_FORMAT;
+//        osAttachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+//        osAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+//        osAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+//        osAttachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+//        osAttachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+//        osAttachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+//        osAttachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+//
+//        // Depth attachment
+//        osAttachments[1].format = _shadow.fbDepthFormat;
+//        osAttachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+//        osAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+//        osAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+//        osAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+//        osAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+//        osAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+//        osAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+//
+//        VkAttachmentReference colorReference = {};
+//        colorReference.attachment = 0;
+//        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+//
+//        VkAttachmentReference depthReference = {};
+//        depthReference.attachment = 1;
+//        depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+//
+//
+//        VkSubpassDescription subpass = {};
+//        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+//        subpass.colorAttachmentCount = 1;
+//        subpass.pColorAttachments = &colorReference;
+//        subpass.pDepthStencilAttachment = &depthReference;
+//
+//        VkSubpassDependency dependency{
+//            .srcSubpass = 0,
+//            .dstSubpass = VK_SUBPASS_EXTERNAL,
+//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+//            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+//            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+//            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+//        };
+//
+//
+//        std::vector<VkSubpassDependency> dependencies = { dependency/*, depthDependency*/ };
+//
+//        
+//
+//        VkRenderPassCreateInfo renderPassCreateInfo = {};
+//        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+//        renderPassCreateInfo.attachmentCount = 2;
+//        renderPassCreateInfo.pAttachments = osAttachments;
+//        renderPassCreateInfo.subpassCount = 1;
+//        renderPassCreateInfo.pSubpasses = &subpass;
+//        renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(dependencies.size()),
+//        renderPassCreateInfo.pDependencies = dependencies.data();
+//
+//
+//        VKASSERT(vkCreateRenderPass(_device, &renderPassCreateInfo, nullptr, &_shadow.renderpass));
+//    }
+//
+//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _swapchain.renderpass, "Swapchain Renderpass");
+//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _viewport.renderpass, "Viewport Renderpass");
+//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _shadow.renderpass, "Shadow Renderpass");
+//
+//    _deletionStack.push([&]() { 
+//        vkDestroyRenderPass(_device, _shadow.renderpass, nullptr);
+//        vkDestroyRenderPass(_device, _viewport.renderpass, nullptr);
+//        vkDestroyRenderPass(_device, _swapchain.renderpass, nullptr); 
+//    });
+//}
 
 
 void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     _viewport.imageExtent = { extentX, extentY };
+    bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
+    ASSERTMSG(anyFormats, "Physical device has no supported depth formats");
     
     VkExtent3D extent3D = {
         extentX,
@@ -305,24 +307,26 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.depthFormat, _viewport.depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.depthImageView));
+
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.depthImage.image, "Viewport Depth Image");
     }
 
 
     // 32-bit float HDR format
-    size_t imgCount = _swapchain.images.size();
+    size_t imgCount = _swapchainImages.size();
     _viewportImages.resize(imgCount);
 
     _viewport.imageViews.resize(imgCount);
-    _viewport.framebuffers.resize(imgCount);
+    //_viewport.framebuffers.resize(imgCount);
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewport.renderpass, { extentX, extentY });
+    //VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewport.renderpass, { extentX, extentY });
 
     for (uint32_t i = 0; i < imgCount; i++)
     {
         VkImageCreateInfo dimg_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
-            .format = _viewport.imageFormat,
+            .format = _viewport.colorFormat,
             .extent = extent3D, // Extent to whole window
             .mipLevels = 1,
             .arrayLayers = 1,
@@ -338,20 +342,22 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
         //allocate and create the image
         VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewportImages[i].image, &_viewportImages[i].allocation, nullptr));
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewportImages[i].image, "Viewport Image " + std::to_string(i));
 
-        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.imageFormat, _viewportImages[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
+        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewportImages[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
 
-        std::vector<VkImageView> attachments = {
+        /*std::vector<VkImageView> attachments = {
             _viewport.imageViews[i],
             _viewport.depthImageView
-        };
+        };*/
 
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
+        //framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        //framebufferInfo.pAttachments = attachments.data();
 
-        VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_viewport.framebuffers[i]));
+        //VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_viewport.framebuffers[i]));
     }
 }
 
@@ -367,11 +373,11 @@ void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
 
 void Engine::cleanupViewportResources()
 {
-    for (auto& framebuffer : _viewport.framebuffers) {
+    /*for (auto& framebuffer : _viewport.framebuffers) {
         vkDestroyFramebuffer(_device, framebuffer, nullptr);
-    }
+    }*/
 
-    _viewport.framebuffers.clear();
+    //_viewport.framebuffers.clear();
 
     //Destroy depth image
     vkDestroyImageView(_device, _viewport.depthImageView, nullptr);
@@ -393,13 +399,14 @@ void Engine::cleanupViewportResources()
 
 void Engine::prepareShadowPass()
 {
-    _shadow.width = ShadowPass::FB_DIM;
-    _shadow.height = ShadowPass::FB_DIM;
+    _shadow.width = ShadowPass::TEX_DIM;
+    _shadow.height = ShadowPass::TEX_DIM;
+
+    VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
+    ASSERTMSG(validDepthFormat, "Physical device has no supported depth formats");
 
     Texture& cubemap = _shadow.cubemapArray;
     // 32 bit float format for higher precision
-    VkFormat format = ShadowPass::FB_COLOR_FORMAT;
-
     const uint32_t cubeArrayLayerCount = 6 * MAX_LIGHTS;
 
     // Cube map image description
@@ -407,7 +414,7 @@ void Engine::prepareShadowPass()
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = format,
+        .format = _shadow.colorFormat,
         .extent = { ShadowPass::TEX_DIM, ShadowPass::TEX_DIM, 1 },
         .mipLevels = 1,
         .arrayLayers = cubeArrayLayerCount,
@@ -449,7 +456,7 @@ void Engine::prepareShadowPass()
     VkImageViewCreateInfo arrayView = {};
     arrayView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     arrayView.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-    arrayView.format = format;
+    arrayView.format = _shadow.colorFormat;
     arrayView.components = { VK_COMPONENT_SWIZZLE_R };
     arrayView.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
     arrayView.subresourceRange.layerCount = cubeArrayLayerCount;
@@ -492,7 +499,7 @@ void Engine::prepareShadowPass()
         imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        imageCreateInfo.format = _shadow.fbDepthFormat;
+        imageCreateInfo.format = _shadow.depthFormat;
         imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
         VmaAllocationCreateInfo imgAllocinfo = {
@@ -503,24 +510,27 @@ void Engine::prepareShadowPass()
         VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
             &depth.allocImage.image, &depth.allocImage.allocation, nullptr));
 
+        VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (utils::formatHasStencil(_shadow.depthFormat)) {
+            aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+
         immediate_submit([&](VkCommandBuffer cmd) {
             utils::setImageLayout(
                 cmd,
                 depth.allocImage.image,
-                VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                aspectMask,
                 VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-            });
+        });
 
         VkImageViewCreateInfo depthStencilView = {};
         depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        depthStencilView.format = _shadow.fbDepthFormat;
+        depthStencilView.format = _shadow.depthFormat;
         depthStencilView.flags = 0;
         depthStencilView.subresourceRange = {};
-        depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (_shadow.fbDepthFormat >= VK_FORMAT_D16_UNORM_S8_UINT)
-            depthStencilView.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        depthStencilView.subresourceRange.aspectMask = aspectMask;
         depthStencilView.subresourceRange.baseMipLevel = 0;
         depthStencilView.subresourceRange.levelCount = 1;
         depthStencilView.subresourceRange.baseArrayLayer = 0;
@@ -532,25 +542,25 @@ void Engine::prepareShadowPass()
     VkImageView attachments[2];
     attachments[1] = depth.view;
 
-    VkFramebufferCreateInfo fbufCreateInfo = {};
+    /*VkFramebufferCreateInfo fbufCreateInfo = {};
     fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fbufCreateInfo.renderPass = _shadow.renderpass;
     fbufCreateInfo.attachmentCount = 2;
     fbufCreateInfo.pAttachments = attachments;
     fbufCreateInfo.width = _shadow.width;
     fbufCreateInfo.height = _shadow.height;
-    fbufCreateInfo.layers = 1;
+    fbufCreateInfo.layers = 1;*/
 
     for (int i = 0; i < MAX_LIGHTS; ++i) {
         
         //Texture& depth = _shadow.depth[i];
         auto& faceViews = _shadow.faceViews[i];
-        auto& faceFramebuffers = _shadow.faceFramebuffers[i];
+        //auto& faceFramebuffers = _shadow.faceFramebuffers[i];
 
         VkImageViewCreateInfo view = {};
         view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view.format = format;
+        view.format = _shadow.colorFormat;
         view.components = { VK_COMPONENT_SWIZZLE_R };
         view.image = cubemap.allocImage.image;
         view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
@@ -561,15 +571,15 @@ void Engine::prepareShadowPass()
             view.subresourceRange.baseArrayLayer = i * 6 + face;
             VKASSERT(vkCreateImageView(_device, &view, nullptr, &faceViews[face]));
 
-            attachments[0] = faceViews[face];
-            VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[face]));
+            //attachments[0] = faceViews[face];
+            //VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[face]));
         }
 
         // Cleanup all shadow pass resources for current light
         _deletionStack.push([=]() mutable {
-            for (auto& fb : faceFramebuffers) {
+            /*for (auto& fb : faceFramebuffers) {
                 vkDestroyFramebuffer(_device, fb, nullptr);
-            }
+            }*/
 
             for (auto& view : faceViews) {
                 vkDestroyImageView(_device, view, nullptr);

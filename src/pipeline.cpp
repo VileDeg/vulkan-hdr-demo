@@ -115,29 +115,43 @@ void Engine::createPipelines()
         createMaterial(pipeline.pipeline, pipeline.layout, matName);
     };*/
 
+
+    VkPipelineRenderingCreateInfo renderingInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &_viewport.colorFormat,
+        .depthAttachmentFormat = _viewport.depthFormat
+    };
+
     { // General
         Pipeline pipeline(pd_general);
-        pipeline.Build(_device, _viewport.renderpass);
+        pipeline.Build(_device, renderingInfo);
 
         createMaterial(pipeline.pipeline, pipeline.layout, "general");
-
-        //newMaterial("general", pd_general);
-        //_mainPipeline = _materials["general"].pipeline;
     }
     { // Skybox
         Pipeline pipeline_skybox(pd_general);
         pipeline_skybox.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
 
-        pipeline_skybox.Build(_device, _viewport.renderpass);
+        pipeline_skybox.Build(_device, renderingInfo);
 
         createMaterial(pipeline_skybox.pipeline, pipeline_skybox.layout, "skybox");
     }
+
+    // Find a suitable depth format
+    VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
+    assert(validDepthFormat);
+
+    renderingInfo.pColorAttachmentFormats = &_shadow.colorFormat;
+    renderingInfo.depthAttachmentFormat = _shadow.depthFormat;
+
     { // Shadow
         Pipeline pipeline_shadow(pd_shadow);
+
         // Changing culling mode to front mostly fixes Peter Panning 
         // and also for some reason fixes the bug when some objects get drawn on top although they shouldn't
         pipeline_shadow.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-        pipeline_shadow.Build(_device, _shadow.renderpass);
+        pipeline_shadow.Build(_device, renderingInfo);
 
         createMaterial(pipeline_shadow.pipeline, pipeline_shadow.layout, "shadow");
     }
@@ -233,12 +247,14 @@ void Pipeline::Init()
     };
 }
 
-void Pipeline::Build(VkDevice device, VkRenderPass renderPass)
+void Pipeline::Build(VkDevice device, VkPipelineRenderingCreateInfoKHR renderingInfo)
 {
     VKASSERT(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout));
 
+
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &renderingInfo,
         .stageCount = static_cast<uint32_t>(shaderStages.size()),
         .pStages = shaderStages.data(),
         .pVertexInputState = &vertexInputInfo,
@@ -250,7 +266,6 @@ void Pipeline::Build(VkDevice device, VkRenderPass renderPass)
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = layout,
-        .renderPass = renderPass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE
     };

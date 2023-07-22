@@ -110,6 +110,8 @@ void Engine::createSwapchain()
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     auto surfaceFormat = pickSurfaceFormat(_physicalDevice, _surface, requestSurfaceImageFormat, (size_t)ARRAY_SIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
 
+    _swapchain.colorFormat = surfaceFormat.format;
+
     auto presentMode = pickPresentMode(support.presentModes);
     _swapchain.imageExtent = pickExtent(support.capabilities, _window);
 
@@ -155,13 +157,19 @@ void Engine::createSwapchain()
     _swapchainHandle = newSwapchain;
 
     vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, nullptr);
-    _swapchain.images.resize(imageCount);
-    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, _swapchain.images.data());
+    _swapchainImages.resize(imageCount);
+    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, _swapchainImages.data());
 
-    _swapchain.imageFormat = surfaceFormat.format;
+    for (int i = 0; i < _swapchainImages.size(); ++i) {
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchainImages[i], "Swapchain Image " + std::to_string(i));
+        
+    }
 }
 
 void Engine::prepareMainPass() {
+    bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_swapchain.depthFormat);
+    ASSERTMSG(anyFormats, "Physical device has no supported depth formats");
+
     VkExtent3D imageExtent3D = {
         _swapchain.imageExtent.width,
         _swapchain.imageExtent.height,
@@ -182,20 +190,22 @@ void Engine::prepareMainPass() {
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_swapchain.depthFormat, _swapchain.depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_swapchain.depthImageView));
+
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.depthImage.image, "Swapchain Depth Image");
     }
 
-    _swapchain.imageViews.resize(_swapchain.images.size());
-    _swapchain.framebuffers.resize(_swapchain.images.size());
+    _swapchain.imageViews.resize(_swapchainImages.size());
+    //_swapchain.framebuffers.resize(_swapchain.images.size());
 
-    VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_swapchain.renderpass, _swapchain.imageExtent);
+    //VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_swapchain.renderpass, _swapchain.imageExtent);
 
-    for (size_t i = 0; i < _swapchain.images.size(); ++i) {
+    for (size_t i = 0; i < _swapchainImages.size(); ++i) {
         //Image view
         VkImageViewCreateInfo createInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = _swapchain.images[i],
+            .image = _swapchainImages[i],
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = _swapchain.imageFormat,
+            .format = _swapchain.colorFormat,
             .components = {
                 .r = VK_COMPONENT_SWIZZLE_IDENTITY,
                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -212,17 +222,17 @@ void Engine::prepareMainPass() {
         };
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
-
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
         // Framebuffer
-        std::vector<VkImageView> attachments = {
+        /*std::vector<VkImageView> attachments = {
             _swapchain.imageViews[i],
             _swapchain.depthImageView
-        };
+        };*/
 
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
+        /*framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        framebufferInfo.pAttachments = attachments.data();*/
 
-        VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_swapchain.framebuffers[i]));
+        //VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_swapchain.framebuffers[i]));
     }
 }
 
@@ -246,9 +256,9 @@ void Engine::recreateSwapchain()
 
 void Engine::cleanupSwapchainResources()
 {
-    for (auto& framebuffer : _swapchain.framebuffers) {
+    /*for (auto& framebuffer : _swapchain.framebuffers) {
         vkDestroyFramebuffer(_device, framebuffer, nullptr);
-    }
+    }*/
 
     //Destroy depth image
     vkDestroyImageView(_device, _swapchain.depthImageView, nullptr);

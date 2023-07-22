@@ -64,8 +64,10 @@ struct ImGui_ImplVulkan_InitInfo
     void                            (*CheckVkResultFn)(VkResult err);
 };
 
+
 // Called by user code
 IMGUI_IMPL_API bool         ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass render_pass);
+IMGUI_IMPL_API bool         ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkPipelineRenderingCreateInfoKHR pipeline_rendering_create_info);
 IMGUI_IMPL_API void         ImGui_ImplVulkan_Shutdown();
 IMGUI_IMPL_API void         ImGui_ImplVulkan_NewFrame();
 IMGUI_IMPL_API void         ImGui_ImplVulkan_RenderDrawData(ImDrawData* draw_data, VkCommandBuffer command_buffer, VkPipeline pipeline = VK_NULL_HANDLE);

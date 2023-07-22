@@ -104,7 +104,7 @@ void Engine::createInstance()
     }
 
     if (!checkInstanceExtensionSupport(_instanceExtensions)) {
-        throw std::runtime_error("No instance extensions properties are available.");
+        throw std::runtime_error("There are unsupported instance extensions.");
     }
 
     ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
@@ -114,7 +114,7 @@ void Engine::createInstance()
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "Vulkan HDR Demo",
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_API_VERSION_1_1
+        .apiVersion = VK_API_VERSION_1_3
     };
 
     VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo;
@@ -122,10 +122,10 @@ void Engine::createInstance()
         dbgMessengerInfo = {
             .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
             .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
             .pfnUserCallback = debug_callback
         };
     }
@@ -322,19 +322,22 @@ static bool checkRequiredFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhys
 {
     // Check if the device supports the shaderDrawParameters feature
     vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
-    //auto sync2features = *reinterpret_cast<VkPhysicalDeviceSynchronization2Features*>(deviceFeatures.pNext);
-    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(deviceFeatures.pNext);
 
-    bool supported = //sync2features.synchronization2 &&
+    auto drFeatures = *reinterpret_cast<VkPhysicalDeviceDynamicRenderingFeatures*>(deviceFeatures.pNext);
+    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(drFeatures.pNext);
+
+    bool supported = drFeatures.dynamicRendering &&
         shaderDrawParametersFeatures.shaderDrawParameters;
     return supported;
 }
 
 void Engine::loadDeviceExtensionFunctions()
 {
-    // Load push descriptor command for future use
     DYNAMIC_LOAD(vkCmdPushDescriptorSetKHR, _instance);
-    DYNAMIC_LOAD(vkCmdPipelineBarrier2, _instance);
+    /*DYNAMIC_LOAD(vkCmdPipelineBarrier2, _instance);
+
+    DYNAMIC_LOAD(vkCmdBeginRenderingKHR, _instance);
+    DYNAMIC_LOAD(vkCmdEndRenderingKHR, _instance);*/
 }
 
 void Engine::createLogicalDevice()
@@ -367,15 +370,15 @@ void Engine::createLogicalDevice()
         .nullDescriptor = VK_TRUE
     };
 
-    /*VkPhysicalDeviceSynchronization2Features sync2features = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+    VkPhysicalDeviceDynamicRenderingFeatures drFeatures = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
         .pNext = &robust2features,
-        .synchronization2 = VK_TRUE
-    };*/
+        .dynamicRendering = VK_TRUE
+    };
 
     VkPhysicalDeviceFeatures2 deviceFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &robust2features
+        .pNext = &drFeatures
     };
 
     if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {

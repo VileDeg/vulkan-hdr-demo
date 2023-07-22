@@ -25,7 +25,7 @@ private: /* Methods used from Init directly */
     void createVmaAllocator();
     void createSwapchain();
 
-    void createRenderpass();
+    //void createRenderpass();
 
     void prepareMainPass();
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
@@ -152,6 +152,7 @@ private:
     UploadContext _uploadContext;
 
     GraphicsPass _swapchain{};
+    std::vector<VkImage> _swapchainImages;
     VkSwapchainKHR _swapchainHandle{ VK_NULL_HANDLE };
 
     // 32-bit float HDR format for viewport
@@ -205,7 +206,10 @@ private:
     GPUData _gpu;
 
 private:
-    PFN_vkCmdPipelineBarrier2 vkCmdPipelineBarrier2;
+    /*PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
+    PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;*/
+
+    //PFN_vkCmdPipelineBarrier2 vkCmdPipelineBarrier2;
 
     PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
@@ -221,14 +225,22 @@ private:
 
     std::vector<const char*> _instanceExtensions{
 #if ENABLE_VALIDATION_LAYERS == 1
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, // Required by dynamic rendering
     };
     std::vector<const char*> _deviceExtensions{ 
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, // Swapchain to present images on screen
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, // Push descriptor to load diffuse texture per each mesh
         VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+
+        VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME, // Required by dynamic rendering
+
+        VK_KHR_MAINTENANCE_2_EXTENSION_NAME, // Required by Renderpass2
+        VK_KHR_MULTIVIEW_EXTENSION_NAME, // Required by Renderpass2
+        VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, // Required by dynamic rendering
+        
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME // To get rid of renderpasses and framebuffers
         //, "VK_KHR_synchronization2"
     };

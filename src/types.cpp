@@ -1,6 +1,16 @@
 #include "stdafx.h"
 #include "engine.h"
 
+VkPipelineRenderingCreateInfoKHR GraphicsPass::PipelineRenderingInfo()
+{
+	return {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &colorFormat,
+		.depthAttachmentFormat = depthFormat
+	};
+}
+
 void Engine::setDisplayLightSourceObjects(bool display)
 {
 	if (!display) {

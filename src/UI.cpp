@@ -103,7 +103,8 @@ void Engine::initImgui()
 		.MSAASamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	ImGui_ImplVulkan_Init(&init_info, _swapchain.renderpass);
+	//ImGui_ImplVulkan_Init(&init_info, _swapchain.renderpass);
+	ImGui_ImplVulkan_Init(&init_info, _swapchain.PipelineRenderingInfo());
 
 	//execute a gpu command to upload imgui font textures
 	immediate_submit([&](VkCommandBuffer cmd) {

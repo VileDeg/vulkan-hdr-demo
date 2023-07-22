@@ -147,16 +147,72 @@ namespace utils {
 		setImageLayout(cmdbuffer, image, oldImageLayout, newImageLayout, subresourceRange, srcStageMask, dstStageMask);
 	}
 
+	void imageMemoryBarrier(
+		VkCommandBuffer         command_buffer,
+		VkImage                 image,
+		VkAccessFlags           src_access_mask,
+		VkAccessFlags           dst_access_mask,
+		VkImageLayout           old_layout,
+		VkImageLayout           new_layout,
+		VkPipelineStageFlags    src_stage_mask,
+		VkPipelineStageFlags    dst_stage_mask,
+		VkImageSubresourceRange subresource_range)
+	{
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.srcAccessMask = src_access_mask;
+		barrier.dstAccessMask = dst_access_mask;
+		barrier.oldLayout = old_layout;
+		barrier.newLayout = new_layout;
+		barrier.image = image;
+		barrier.subresourceRange = subresource_range;
+
+		vkCmdPipelineBarrier(
+			command_buffer,
+			src_stage_mask,
+			dst_stage_mask,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+	}
+
+	void memoryBarrier(
+		VkCommandBuffer         command_buffer,
+		VkAccessFlags           src_access_mask,
+		VkAccessFlags           dst_access_mask,
+		VkPipelineStageFlags    src_stage_mask,
+		VkPipelineStageFlags    dst_stage_mask)
+	{
+		VkMemoryBarrier memoryBarrier = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+			.srcAccessMask = src_access_mask,
+			.dstAccessMask = dst_access_mask
+		};
+
+		vkCmdPipelineBarrier(
+			command_buffer,
+			src_stage_mask,
+			dst_stage_mask,
+			0,
+			1, &memoryBarrier,
+			0, nullptr,
+			0, nullptr
+		);
+	}
+
 	VkBool32 getSupportedDepthFormat(VkPhysicalDevice physicalDevice, VkFormat* depthFormat)
 	{
 		/* From https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
 		// Since all depth formats may be optional, we need to find a suitable depth format to use
 		// Start with the highest precision packed format
 		std::vector<VkFormat> formatList = {
-			VK_FORMAT_D32_SFLOAT_S8_UINT,
+			/*VK_FORMAT_D32_SFLOAT_S8_UINT,
 			VK_FORMAT_D32_SFLOAT,
 			VK_FORMAT_D24_UNORM_S8_UINT,
-			VK_FORMAT_D16_UNORM_S8_UINT,
+			VK_FORMAT_D16_UNORM_S8_UINT,*/
 			VK_FORMAT_D16_UNORM
 		};
 
@@ -178,8 +234,8 @@ namespace utils {
 	{
 		/* From https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
 		std::vector<VkFormat> formatList = {
-			VK_FORMAT_D32_SFLOAT_S8_UINT,
-			VK_FORMAT_D24_UNORM_S8_UINT,
+			/*VK_FORMAT_D32_SFLOAT_S8_UINT,
+			VK_FORMAT_D24_UNORM_S8_UINT,*/
 			VK_FORMAT_D16_UNORM_S8_UINT,
 		};
 
@@ -195,5 +251,17 @@ namespace utils {
 		}
 
 		return false;
+	}
+
+	VkBool32 formatHasStencil(VkFormat format)
+	{
+		std::vector<VkFormat> stencilFormats = {
+			VK_FORMAT_S8_UINT,
+			VK_FORMAT_D16_UNORM_S8_UINT,
+			VK_FORMAT_D24_UNORM_S8_UINT,
+			VK_FORMAT_D32_SFLOAT_S8_UINT,
+		};
+
+		return std::find(stencilFormats.begin(), stencilFormats.end(), format) != std::end(stencilFormats);
 	}
 }

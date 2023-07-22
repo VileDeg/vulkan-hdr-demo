@@ -139,97 +139,120 @@ void Engine::drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<
 
 void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex)
 {
+	VkImageSubresourceRange range{};
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	range.baseMipLevel = 0;
+	range.levelCount = VK_REMAINING_MIP_LEVELS;
+	range.baseArrayLayer = 0;
+	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+	VkImageSubresourceRange depth_range{ range };
+	depth_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+	// Translate to required layout
+	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+
+		range);
+
+
 	VkClearValue clearValues[2];
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
-	VkRenderPassBeginInfo renderPassBeginInfo = 
-		vkinit::renderpass_begin_info(_shadow.renderpass, { _shadow.width, _shadow.height }, _shadow.faceFramebuffers[lightIndex][faceIndex]);
-	renderPassBeginInfo.clearValueCount = 2;
-	renderPassBeginInfo.pClearValues = clearValues;
-
-	// Render scene from cube face's point of view
-	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	GPUShadowPC pc = {
-		.view = _renderContext.lightView[faceIndex],
-		.far_plane = _renderContext.zFar,
-		.lightIndex = lightIndex
+	VkRenderingAttachmentInfoKHR color_attachment_info = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+		.imageView = _shadow.faceViews[lightIndex][faceIndex],
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = clearValues[0]
 	};
 
-	Material& mat = _materials["shadow"];
-	// Update shader push constant block
-	// Contains current face view matrix
-	vkCmdPushConstants(
-		f.cmd,
-		mat.pipelineLayout,
-		VK_SHADER_STAGE_VERTEX_BIT,
-		0,
-		sizeof(GPUShadowPC),
-		&pc);
+	VkRenderingAttachmentInfoKHR depth_attachment_info = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+		.imageView = _shadow.depth.view,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = clearValues[1]
+	};
 
-	/*Material& mat = _materials["shadow"];
-	vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipeline);
+	VkRect2D area = {
+		.extent = { _shadow.width, _shadow.height }
+	};
+	
+	VkRenderingInfoKHR renderingInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+		.renderArea = area,
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &color_attachment_info,
+		.pDepthAttachment = &depth_attachment_info
+	};
 
-	uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneUB)) * _frameInFlightNum;
-	vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mat.pipelineLayout, 0, 1, &f.shadowPassSet, 1, &uniform_offset);*/
+	vkCmdBeginRendering(f.cmd, &renderingInfo);
+	{
+		GPUShadowPC pc = {
+			.view = _renderContext.lightView[faceIndex],
+			.far_plane = _renderContext.zFar,
+			.lightIndex = lightIndex
+		};
 
-	{ // Draw all objects' shadows
-		for (int i = 0; i < _renderables.size(); ++i) {
-			const RenderObject& obj = *_renderables[i];
-			Model* model = obj.model;
-			if (model == nullptr || !model->lightAffected) {
-				continue;
-			}
+		Material& mat = _materials["shadow"];
+		// Update shader push constant block
+		// Contains current face view matrix
+		vkCmdPushConstants(
+			f.cmd,
+			mat.pipelineLayout,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			0,
+			sizeof(GPUShadowPC),
+			&pc);
 
-			for (int m = 0; m < model->meshes.size(); ++m) {
-				Mesh* mesh = model->meshes[m];
+		{ // Draw all objects' shadows
+			for (int i = 0; i < _renderables.size(); ++i) {
+				const RenderObject& obj = *_renderables[i];
+				Model* model = obj.model;
+				if (model == nullptr || !model->lightAffected) {
+					continue;
+				}
 
-				VkDeviceSize zeroOffset = 0;
-				vkCmdBindVertexBuffers(f.cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
+				for (int m = 0; m < model->meshes.size(); ++m) {
+					Mesh* mesh = model->meshes[m];
 
-				vkCmdBindIndexBuffer(f.cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+					VkDeviceSize zeroOffset = 0;
+					vkCmdBindVertexBuffers(f.cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);
 
-				// We send loop index as instance index to use it in shader to access object data in SSBO
-				vkCmdDrawIndexed(f.cmd, mesh->indices.size(), 1, 0, 0, i);
+					vkCmdBindIndexBuffer(f.cmd, mesh->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+					// We send loop index as instance index to use it in shader to access object data in SSBO
+					vkCmdDrawIndexed(f.cmd, mesh->indices.size(), 1, 0, 0, i);
+				}
 			}
 		}
 	}
+	vkCmdEndRendering(f.cmd);
 
-	vkCmdEndRenderPass(f.cmd);
-	
-//#if ENABLE_SYNC == 1
-//	{
-//		VkImageMemoryBarrier imageMemoryBarrier = {
-//			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-//			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-//			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-//			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, //VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-//			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//			.srcQueueFamilyIndex = _graphicsQueueFamily,
-//			.dstQueueFamilyIndex = _graphicsQueueFamily,
-//			/* .image and .subresourceRange should identify image subresource accessed */
-//			.image = _shadow.cubemapArray.allocImage.image,
-//			.subresourceRange = {
-//				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//				.baseMipLevel = 0,
-//				.levelCount = 1,
-//				.baseArrayLayer = lightIndex * 6, // synchronize only for current light's portion of cube array
-//				.layerCount = 6, // 6 faces of cube
-//			}
-//		};
-//
-//		vkCmdPipelineBarrier(
-//			f.cmd,
-//			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
-//			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,         // dstStageMask
-//			0,
-//			0, nullptr, // memoryBarrier
-//			0, nullptr, // bufferMemoryBarrier
-//			1, &imageMemoryBarrier // imageMemoryBarriers
-//		);
-//	}
-//#endif
+	// Translate to back to optimal layout for sampling
+	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+
+		range);
 }
 
 void Engine::loadDataToGPU()
@@ -348,6 +371,17 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
 	loadDataToGPU();
 
+	VkImageSubresourceRange range = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0,
+			.layerCount = VK_REMAINING_ARRAY_LAYERS
+	};
+
+	VkImageSubresourceRange depth_range{ range };
+	depth_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
 #if 1
 	{ // Shadow pass
 		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
@@ -381,112 +415,97 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		}
 	}
 
-
 #if ENABLE_SYNC == 1
-	{
-		VkImageMemoryBarrier imageMemoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-			//.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			/*.srcQueueFamilyIndex = _graphicsQueueFamily,
-			.dstQueueFamilyIndex = _graphicsQueueFamily,*/
-			/* .image and .subresourceRange should identify image subresource accessed */
-			.image = _shadow.cubemapArray.allocImage.image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0, 
-				.layerCount = MAX_LIGHTS * 6, 
-			}
-		};
+	// Wait for shadow cubemap array to render before rendering the scene
+	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
 
-		vkCmdPipelineBarrier(
-			f.cmd,
-#if 1
-			//VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-#else
-			VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
-			VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
-			VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-			VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT |
-			VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT |
-			VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT |
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-#endif
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,         // dstStageMask
-			0,
-			0, nullptr, // memoryBarrier
-			0, nullptr, // bufferMemoryBarrier
-			1, &imageMemoryBarrier // imageMemoryBarriers
-		);
-	}
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+
+		range);
 #elif ENABLE_SYNC == 2
 	s_fullBarrier(f.cmd);
 #endif
-
 #endif
-
-	VkClearValue clearValues[] = { {.color = { 0.1f, 0.0f, 0.1f, 1.0f } }, {.depthStencil = { 1.0f, 0 } } };
-
-	VkRenderPassBeginInfo renderPassBeginInfo =
-		vkinit::renderpass_begin_info(_viewport.renderpass, _viewport.imageExtent, _viewport.framebuffers[imageIndex]);
-	renderPassBeginInfo.pClearValues = clearValues;
-	renderPassBeginInfo.clearValueCount = 2;
-
 
 	cmdSetViewportScissor(f.cmd, _viewport.imageExtent.width, _viewport.imageExtent.height);
+	{ // Viewport pass
+		// Translate to required layout
+		utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
-	// Viewport pass
-	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-	{
-		drawObjects(f.cmd, _renderables);
-	}
-	vkCmdEndRenderPass(f.cmd);
-#if 1
-#if ENABLE_SYNC == 1
-	{ // Sync graphics to compute
-		VkImageMemoryBarrier imageMemoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
-			/* .image and .subresourceRange should identify image subresource accessed */
-			.image = _viewportImages[imageIndex].image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+
+			range);
+
+		VkClearValue clearValues[2];
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderingAttachmentInfoKHR color_attachment_info = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+			.imageView = _viewport.imageViews[imageIndex],
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clearValues[0]
 		};
 
-		vkCmdPipelineBarrier(
-			f.cmd,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
-			//VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // dstStageMask
-			0,
-			0, nullptr,
-			0, nullptr,
-			1,                                             // imageMemoryBarrierCount
-			&imageMemoryBarrier
-		);
-	}
-#elif ENABLE_SYNC == 2
-	s_fullBarrier(f.cmd);
-#endif
+		VkRenderingAttachmentInfoKHR depth_attachment_info = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+			.imageView = _viewport.depthImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clearValues[1]
+		};
 
+		VkRect2D area = {
+			.extent = {_viewport.imageExtent.width, _viewport.imageExtent.height}
+		};
+
+		VkRenderingInfoKHR renderingInfo = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+			.renderArea = area,
+			.layerCount = 1,
+			.colorAttachmentCount = 1,
+			.pColorAttachments = &color_attachment_info,
+			.pDepthAttachment = &depth_attachment_info
+		};
+
+		// Viewport pass
+		vkCmdBeginRendering(f.cmd, &renderingInfo);
+		{
+			drawObjects(f.cmd, _renderables);
+		}
+		vkCmdEndRendering(f.cmd);
+	}
+
+	// Need to wait until scene is rendered to proceed with post-processing
+	utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_GENERAL,
+
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+
+		range);
+
+#if 1
 	{ // Compute step
 		if (_renderContext.comp.enableAdaptation) {
 			// Compute luminance histogram
@@ -511,23 +530,10 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			}
 
 #if ENABLE_SYNC == 1
-			{
-				VkMemoryBarrier memoryBarrier = {
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-					.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-				};
-
-				vkCmdPipelineBarrier(
-					f.cmd,
-					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-					0,
-					1, &memoryBarrier,
-					0, nullptr,
-					0, nullptr
-				);
-			}
+			// Computed luminance is used by next compute shader so sync needed
+			utils::memoryBarrier(f.cmd,
+				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 #elif ENABLE_SYNC == 2
 			s_fullBarrier(f.cmd);
 #endif
@@ -543,21 +549,10 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		}
 
 #if ENABLE_SYNC == 1
-		VkMemoryBarrier memoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-			.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-		};
-
-		vkCmdPipelineBarrier(
-			f.cmd,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // srcStageMask
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // dstStageMask
-			0,
-			1, &memoryBarrier,
-			0, nullptr,
-			0, nullptr
-		);
+		// Computed average luminance is used by next compute shader so sync needed
+		utils::memoryBarrier(f.cmd,
+			VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 #elif ENABLE_SYNC == 2
 		s_fullBarrier(f.cmd);
 #endif
@@ -582,55 +577,96 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
 		}
 	}
+
 #if ENABLE_SYNC == 1
-	{ // Sync compute to graphics
-		VkImageMemoryBarrier imageMemoryBarrier = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			//.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			//.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+	// Post-processing must finish because viewport image is sampled from during swapchain pass
+	utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+		VK_ACCESS_SHADER_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
 
-			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
-			/* .image and .subresourceRange should identify image subresource accessed */
-			.image = _viewportImages[imageIndex].image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			}
-		};
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_GENERAL,
 
-		vkCmdPipelineBarrier(
-			f.cmd,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,          // srcStageMask
-			//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // dstStageMask
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &imageMemoryBarrier // imageMemoryBarrierCount
-		);
-	}
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+
+		range);
 #elif ENABLE_SYNC == 2
 	s_fullBarrier(f.cmd);
 #endif
+
 #endif
-
-	renderPassBeginInfo.renderPass = _swapchain.renderpass;
-	renderPassBeginInfo.framebuffer = _swapchain.framebuffers[imageIndex];
-	renderPassBeginInfo.renderArea.extent = _swapchain.imageExtent;
-
-	// Swapchain pass
-	vkCmdBeginRenderPass(f.cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		// Record dear imgui primitives into command buffer
-		imguiOnRenderPassEnd(f.cmd);
+		// Traslate to required layout
+		utils::imageMemoryBarrier(f.cmd, _swapchainImages[imageIndex],
+			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+
+			//VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // Why doesn't this work? :(
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+
+			range);
+
+
+		VkClearValue clearValues[2];
+		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		clearValues[1].depthStencil = { 1.0f, 0 };
+
+		VkRenderingAttachmentInfoKHR color_attachment_info = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+			.imageView = _swapchain.imageViews[imageIndex],
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clearValues[0]
+		};
+
+		VkRenderingAttachmentInfoKHR depth_attachment_info = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+			.imageView = _swapchain.depthImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clearValues[1]
+		};
+
+		VkRenderingInfo renderingInfo = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+			.renderArea = {
+				.extent = { _swapchain.imageExtent.width, _swapchain.imageExtent.height }
+			},
+			.layerCount = 1,
+			.colorAttachmentCount = 1,
+			.pColorAttachments = &color_attachment_info,
+			.pDepthAttachment = &depth_attachment_info
+		};
+
+		
+		// Swapchain pass
+		vkCmdBeginRendering(f.cmd, &renderingInfo);
+		{
+			// Record dear imgui primitives into command buffer
+			imguiOnRenderPassEnd(f.cmd);
+		}
+		vkCmdEndRendering(f.cmd);
+
+		// Translate to required layout for presentation on screen
+		utils::imageMemoryBarrier(f.cmd, _swapchainImages[imageIndex],
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+
+			range);
 	}
-	vkCmdEndRenderPass(f.cmd);
 }
 
 void Engine::drawFrame()

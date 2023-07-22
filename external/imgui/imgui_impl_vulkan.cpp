@@ -111,25 +111,28 @@ struct ImGui_ImplVulkan_ViewportData
 // Vulkan data
 struct ImGui_ImplVulkan_Data
 {
-    ImGui_ImplVulkan_InitInfo   VulkanInitInfo;
-    VkRenderPass                RenderPass;
-    VkDeviceSize                BufferMemoryAlignment;
-    VkPipelineCreateFlags       PipelineCreateFlags;
-    VkDescriptorSetLayout       DescriptorSetLayout;
-    VkPipelineLayout            PipelineLayout;
-    VkPipeline                  Pipeline;
-    uint32_t                    Subpass;
-    VkShaderModule              ShaderModuleVert;
-    VkShaderModule              ShaderModuleFrag;
+    bool vk_ext_dynamic_rendering; // Use VK_KHR_dynamic_rendering (no renderpass)
 
-    // Font data
-    VkSampler                   FontSampler;
-    VkDeviceMemory              FontMemory;
-    VkImage                     FontImage;
-    VkImageView                 FontView;
-    VkDescriptorSet             FontDescriptorSet;
-    VkDeviceMemory              UploadBufferMemory;
-    VkBuffer                    UploadBuffer;
+    ImGui_ImplVulkan_InitInfo        VulkanInitInfo;
+    VkRenderPass                     RenderPass;
+    VkPipelineRenderingCreateInfoKHR PipelineRenderingCreateInfo;
+    VkDeviceSize                     BufferMemoryAlignment;
+    VkPipelineCreateFlags            PipelineCreateFlags;
+    VkDescriptorSetLayout            DescriptorSetLayout;
+    VkPipelineLayout                 PipelineLayout;
+    VkPipeline                       Pipeline;
+    uint32_t                         Subpass;
+    VkShaderModule                   ShaderModuleVert;
+    VkShaderModule                   ShaderModuleFrag;
+                                     
+    // Font data                     
+    VkSampler                        FontSampler;
+    VkDeviceMemory                   FontMemory;
+    VkImage                          FontImage;
+    VkImageView                      FontView;
+    VkDescriptorSet                  FontDescriptorSet;
+    VkDeviceMemory                   UploadBufferMemory;
+    VkBuffer                         UploadBuffer;
 
     // Render buffers for main window
     ImGui_ImplVulkanH_WindowRenderBuffers MainWindowRenderBuffers;
@@ -858,6 +861,7 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    info.pNext = bd->vk_ext_dynamic_rendering ? &bd->PipelineRenderingCreateInfo : nullptr;
     info.flags = bd->PipelineCreateFlags;
     info.stageCount = 2;
     info.pStages = stage;
@@ -870,7 +874,7 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
     info.layout = bd->PipelineLayout;
-    info.renderPass = renderPass;
+    info.renderPass = bd->vk_ext_dynamic_rendering ? VK_NULL_HANDLE : renderPass;
     info.subpass = subpass;
     VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, pipeline);
     check_vk_result(err);
@@ -932,6 +936,7 @@ bool ImGui_ImplVulkan_CreateDeviceObjects()
         check_vk_result(err);
     }
 
+
     ImGui_ImplVulkan_CreatePipeline(v->Device, v->Allocator, v->PipelineCache, bd->RenderPass, v->MSAASamples, &bd->Pipeline, bd->Subpass);
 
     return true;
@@ -992,8 +997,7 @@ bool    ImGui_ImplVulkan_LoadFunctions(PFN_vkVoidFunction(*loader_func)(const ch
     return true;
 }
 
-bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass render_pass)
-{
+static bool    ImGui_ImplVulkan_Init_Common(ImGui_ImplVulkan_InitInfo* info, void* pipeline_creation_data, bool vk_ext_dynamic_rendering) {
     IM_ASSERT(g_FunctionsLoaded && "Need to call ImGui_ImplVulkan_LoadFunctions() if IMGUI_IMPL_VULKAN_NO_PROTOTYPES or VK_NO_PROTOTYPES are set!");
 
     ImGuiIO& io = ImGui::GetIO();
@@ -1013,11 +1017,19 @@ bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass rend
     IM_ASSERT(info->DescriptorPool != VK_NULL_HANDLE);
     IM_ASSERT(info->MinImageCount >= 2);
     IM_ASSERT(info->ImageCount >= info->MinImageCount);
-    IM_ASSERT(render_pass != VK_NULL_HANDLE);
+
+    IM_ASSERT(pipeline_creation_data != nullptr);
 
     bd->VulkanInitInfo = *info;
-    bd->RenderPass = render_pass;
+    if (!vk_ext_dynamic_rendering) {
+        bd->RenderPass = (VkRenderPass)pipeline_creation_data;
+    } else {
+        bd->PipelineRenderingCreateInfo = *(VkPipelineRenderingCreateInfoKHR*)pipeline_creation_data;
+    }
+
     bd->Subpass = info->Subpass;
+
+    bd->vk_ext_dynamic_rendering = vk_ext_dynamic_rendering;
 
     ImGui_ImplVulkan_CreateDeviceObjects();
 
@@ -1029,6 +1041,16 @@ bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass rend
         ImGui_ImplVulkan_InitPlatformInterface();
 
     return true;
+}
+
+bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass render_pass)
+{
+    return ImGui_ImplVulkan_Init_Common(info, render_pass, false);
+}
+
+bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkPipelineRenderingCreateInfoKHR pipeline_rendering_create_info)
+{
+    return ImGui_ImplVulkan_Init_Common(info, &pipeline_rendering_create_info, true);
 }
 
 void ImGui_ImplVulkan_Shutdown()

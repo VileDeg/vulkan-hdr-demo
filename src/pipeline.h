@@ -11,7 +11,7 @@ struct Pipeline {
     Pipeline(PipelineData pd);
 
     void Init();
-    void Build(VkDevice device, VkRenderPass renderPass);
+    void Build(VkDevice device, VkPipelineRenderingCreateInfoKHR renderingInfo);
 
     PipelineData _pd;
 

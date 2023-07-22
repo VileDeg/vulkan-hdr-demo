@@ -22,6 +22,7 @@ set(SRC_FILES
     ${SRC_FILES}
 
     ${IMGUI_DIR}/imgui_impl_glfw.cpp 
+    ${IMGUI_DIR}/imgui_impl_vulkan.h
     ${IMGUI_DIR}/imgui_impl_vulkan.cpp 
     ${IMGUI_DIR}/imgui.cpp 
     ${IMGUI_DIR}/imgui_draw.cpp 

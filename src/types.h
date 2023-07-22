@@ -103,8 +103,9 @@ struct ShadowPass {
     static constexpr int TEX_DIM = 512; //1024
     static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
 // Framebuffer properties
-    static constexpr int FB_DIM = TEX_DIM;
-    static constexpr VkFormat FB_COLOR_FORMAT = VK_FORMAT_R32_SFLOAT;
+    //static constexpr int FB_DIM = TEX_DIM;
+    //static constexpr VkFormat FB_COLOR_FORMAT = VK_FORMAT_R32_SFLOAT;
+
     
     uint32_t width, height;
 
@@ -113,15 +114,16 @@ struct ShadowPass {
     Texture depth;
 
     std::array<std::array<VkImageView  , 6>, MAX_LIGHTS> faceViews;
-    std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
+    //std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
 
     VkSampler sampler;
 
-    VkFormat fbDepthFormat;
+    VkFormat colorFormat = VK_FORMAT_R32_SFLOAT;
+    VkFormat depthFormat; // Will be picked from available formats
 
     //VkExtent2D imageExtent; // Corresponds to window dimensions
 
-    VkRenderPass renderpass;
+    //VkRenderPass renderpass;
 };
 
 
@@ -136,23 +138,21 @@ struct UploadContext {
 };
 
 struct GraphicsPass {
-    std::vector<VkImage> images; // Retrieved from created swapchain
-
     std::vector<VkImageView> imageViews;
-    std::vector<VkFramebuffer> framebuffers;
 
-    VkFormat imageFormat;
+    VkFormat colorFormat;
 
     VkImageView depthImageView;
     AllocatedImage depthImage;
-    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
+    VkFormat depthFormat;// = VK_FORMAT_D32_SFLOAT;
 
     VkExtent2D imageExtent; // Corresponds to window dimensions
 
-    VkRenderPass renderpass;
+    VkPipelineRenderingCreateInfoKHR PipelineRenderingInfo();
+    //VkRenderPass renderpass;
 
     GraphicsPass() = default;
-    GraphicsPass(VkFormat format) : imageFormat{ format } {}
+    GraphicsPass(VkFormat format) : colorFormat{ format } {}
 };
 
 

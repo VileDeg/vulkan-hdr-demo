@@ -1013,6 +1013,8 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 		.pipelineLayout = layout
 	};
 
+	setDebugName(VK_OBJECT_TYPE_PIPELINE, pipeline, name);
+
 	_deletionStack.push([&]() { mat.cleanup(_device); });
 
 	return &_materials[name];
