@@ -35,8 +35,8 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 {
     PipelineShaders shaders{};
 
-    shaders.vert.code = readShaderBinary(Engine::shaderPath + vertName);
-    shaders.frag.code = readShaderBinary(Engine::shaderPath + fragName);
+    shaders.vert.code = readShaderBinary(Engine::SHADER_PATH + vertName);
+    shaders.frag.code = readShaderBinary(Engine::SHADER_PATH + fragName);
 
     if (createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;
@@ -56,7 +56,7 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 static void s_createComputePipeline(VkDevice device, const std::string& shaderBinName, ComputeParts& cp)
 {
     ShaderData comp;
-    comp.code = readShaderBinary(Engine::shaderPath + shaderBinName);
+    comp.code = readShaderBinary(Engine::SHADER_PATH + shaderBinName);
 
     if (createShaderModule(device, comp.code, &comp.module)) {
         std::cout << "Compute shader successfully loaded." << std::endl;

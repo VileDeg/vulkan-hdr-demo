@@ -10,6 +10,8 @@ struct ImGuiInputTextCallbackData;
 
 class Engine {
 public:
+    Engine();
+
     void Init();
     void Run();
     void Cleanup();
@@ -72,7 +74,7 @@ private: /* Secondary methods */
     Texture* getTexture(const std::string& name);
     Model* getModel(const std::string& name);
 
-    FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
+    //FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, uint32_t index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
@@ -83,6 +85,7 @@ private: /* Secondary methods */
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
     void drawFrame();
+
 
     AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     size_t pad_uniform_buffer_size(size_t originalSize);
@@ -151,19 +154,13 @@ private:
 
     UploadContext _uploadContext;
 
-    GraphicsPass _swapchain{};
-    std::vector<VkImage> _swapchainImages;
-    VkSwapchainKHR _swapchainHandle{ VK_NULL_HANDLE };
-
-    // 32-bit float HDR format for viewport
-    GraphicsPass _viewport{ VK_FORMAT_R32G32B32A32_SFLOAT };
-    std::vector<AllocatedImage> _viewportImages; // Allocated with VMA
+    SwapchainPass _swapchain;
+    ViewportPass _viewport;
 
     ShadowPass _shadow;
     ComputePass _compute;
 
     uint32_t _frameInFlightNum = 0;
-    uint32_t _frameNumber = 0;
 
     float _frameRate = 60.f; // Updated from ImGui io.framerate
     float _deltaTime = 0.016f;
@@ -175,7 +172,6 @@ private:
     Camera _camera = {};
 
     bool _cursorEnabled = false; 
-    bool _framebufferResized = false;
 
     std::vector<std::shared_ptr<RenderObject>> _renderables;
     std::shared_ptr<RenderObject> _skyboxObject;
@@ -189,16 +185,13 @@ private:
     vkutil::DescriptorLayoutCache* _descriptorLayoutCache;
 
     VkDescriptorSetLayout _globalSetLayout;
-    //VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _diffuseTextureSetLayout;
     VkDescriptorSetLayout _shadowSetLayout;
 
-    VkSampler _blockySampler;
     VkSampler _linearSampler;
 
     VkDescriptorPool _descriptorPool;
 
-    //AllocatedBuffer _sceneParameterBuffer;
     AllocatedImage _skyboxAllocImage;
 
     RenderContext _renderContext;
@@ -206,11 +199,6 @@ private:
     GPUData _gpu;
 
 private:
-    /*PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
-    PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;*/
-
-    //PFN_vkCmdPipelineBarrier2 vkCmdPipelineBarrier2;
-
     PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
@@ -219,44 +207,22 @@ private:
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 
 private:
-    const std::vector<const char*> _enabledValidationLayers{
-        "VK_LAYER_KHRONOS_validation"
-    };
-
-    std::vector<const char*> _instanceExtensions{
-#if ENABLE_VALIDATION_LAYERS == 1
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-#endif
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, // Required by dynamic rendering
-    };
-    std::vector<const char*> _deviceExtensions{ 
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME, // Swapchain to present images on screen
-        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, // Push descriptor to load diffuse texture per each mesh
-        VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
-        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
-
-        VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME, // Required by dynamic rendering
-
-        VK_KHR_MAINTENANCE_2_EXTENSION_NAME, // Required by Renderpass2
-        VK_KHR_MULTIVIEW_EXTENSION_NAME, // Required by Renderpass2
-        VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, // Required by dynamic rendering
-        
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME // To get rid of renderpasses and framebuffers
-        //, "VK_KHR_synchronization2"
-    };
+    std::vector<const char*> _enabledValidationLayers;
+    std::vector<const char*> _instanceExtensions;
+    std::vector<const char*> _deviceExtensions;
 
 public:
-    inline static std::string _assetPath = "assets/";
-    inline static std::string shaderPath = _assetPath + "shaders/bin/";
-    inline static std::string imagePath  = _assetPath + "images/";
-    inline static std::string modelPath  = _assetPath + "models/";
-    inline static std::string scenePath  = _assetPath + "scenes/";
+    static std::string ASSET_PATH;
+    static std::string SHADER_PATH;
+    static std::string IMAGE_PATH;
+    static std::string MODEL_PATH;
+    static std::string SCENE_PATH;
 
 private:
-    static constexpr uint32_t WIDTH  = 1600;
-    static constexpr uint32_t HEIGHT = 900;
+    uint32_t WIDTH;
+    uint32_t HEIGHT;
 
-    static constexpr uint32_t FS_WIDTH  = 1920;
-    static constexpr uint32_t FS_HEIGHT = 1080;
-    static constexpr bool ENABLE_FULLSCREEN = false;
+    uint32_t FS_WIDTH;
+    uint32_t FS_HEIGHT;
+    bool ENABLE_FULLSCREEN = false;
 };

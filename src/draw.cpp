@@ -53,7 +53,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		ASSERT(mesh && mesh->material);
 
 		// Always add the sceneData and SSBO descriptor
-		std::vector<VkDescriptorSet> sets = { getCurrentFrame().globalSet }; //, getCurrentFrame().objectSet 
+		std::vector<VkDescriptorSet> sets = { _frames[_frameInFlightNum].globalSet };
 
 		{ // Push diffuse texture descriptor set
 			constexpr int txc = 2;
@@ -386,11 +386,10 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	{ // Shadow pass
 		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
+		bool anyMoved = false;
 		for (int i = 0; i < MAX_LIGHTS; ++i) {
-			if (!_renderContext.sceneData.lights[i].enabled) {
-				continue;
-			}
-			if (!_renderContext.lightObjects[i]->HasMoved()) {
+			if (!_renderContext.sceneData.lights[i].enabled ||
+				!_renderContext.lightObjects[i]->HasMoved()) {
 				continue;
 			}
 			// Update light view matrices based on lights current position
@@ -412,31 +411,34 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			for (uint32_t face = 0; face < 6; ++face) {
 				updateCubeFace(f, i, face);
 			}
+			anyMoved = true;
+		}
+
+		if (anyMoved) {
+#if ENABLE_SYNC == 1
+			// Wait for shadow cubemap array to render before rendering the scene
+			utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+
+				range);
+#elif ENABLE_SYNC == 2
+			s_fullBarrier(f.cmd);
+#endif
 		}
 	}
-
-#if ENABLE_SYNC == 1
-	// Wait for shadow cubemap array to render before rendering the scene
-	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
-
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-
-		range);
-#elif ENABLE_SYNC == 2
-	s_fullBarrier(f.cmd);
-#endif
 #endif
 
 	cmdSetViewportScissor(f.cmd, _viewport.imageExtent.width, _viewport.imageExtent.height);
 	{ // Viewport pass
 		// Translate to required layout
-		utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+		utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
 			VK_IMAGE_LAYOUT_UNDEFINED,
@@ -492,10 +494,16 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		vkCmdEndRendering(f.cmd);
 	}
 
+	// If the adaptation is disabled we are synchronizing straight to compute tone mapping step which also needs write acess
+	int viewportToComputeDstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	if (!_renderContext.comp.enableAdaptation) {
+		viewportToComputeDstAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
+	}
+
 	// Need to wait until scene is rendered to proceed with post-processing
-	utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
+		viewportToComputeDstAccessMask, // Need only access to reading the image
 
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_IMAGE_LAYOUT_GENERAL,
@@ -505,8 +513,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 		range);
 
-#if 1
 	{ // Compute step
+#if 1
 		if (_renderContext.comp.enableAdaptation) {
 			// Compute luminance histogram
 			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
@@ -546,17 +554,18 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
 				vkCmdDispatch(f.cmd, 1, 1, 1);
 			}
-		}
+
 
 #if ENABLE_SYNC == 1
-		// Computed average luminance is used by next compute shader so sync needed
-		utils::memoryBarrier(f.cmd,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+			// Computed average luminance is used by next compute shader so sync needed
+			utils::memoryBarrier(f.cmd,
+				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 #elif ENABLE_SYNC == 2
-		s_fullBarrier(f.cmd);
+			s_fullBarrier(f.cmd);
 #endif
-
+		}
+#endif
 		// Compute tone mapping
 		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipeline);
 		{
@@ -580,12 +589,13 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 #if ENABLE_SYNC == 1
 	// Post-processing must finish because viewport image is sampled from during swapchain pass
-	utils::imageMemoryBarrier(f.cmd, _viewportImages[imageIndex].image,
+	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 		VK_ACCESS_SHADER_WRITE_BIT,
 		VK_ACCESS_SHADER_READ_BIT,
 
 		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_GENERAL,
+		//VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -595,10 +605,9 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	s_fullBarrier(f.cmd);
 #endif
 
-#endif
 	{
 		// Traslate to required layout
-		utils::imageMemoryBarrier(f.cmd, _swapchainImages[imageIndex],
+		utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
 			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
 			VK_IMAGE_LAYOUT_UNDEFINED,
@@ -625,16 +634,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			.clearValue = clearValues[0]
 		};
 
-		VkRenderingAttachmentInfoKHR depth_attachment_info = {
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-			.imageView = _swapchain.depthImageView,
-			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = clearValues[1]
-		};
-
 		VkRenderingInfo renderingInfo = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
 			.renderArea = {
@@ -643,9 +642,8 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			.layerCount = 1,
 			.colorAttachmentCount = 1,
 			.pColorAttachments = &color_attachment_info,
-			.pDepthAttachment = &depth_attachment_info
+			.pDepthAttachment = nullptr // Swapchain pass doesn't need depth attachment since it's just ImGui rendering to plane
 		};
-
 		
 		// Swapchain pass
 		vkCmdBeginRendering(f.cmd, &renderingInfo);
@@ -656,7 +654,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		vkCmdEndRendering(f.cmd);
 
 		// Translate to required layout for presentation on screen
-		utils::imageMemoryBarrier(f.cmd, _swapchainImages[imageIndex],
+		utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
 			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
 
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -671,33 +669,27 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 void Engine::drawFrame()
 {
-	_frameInFlightNum = (_frameNumber) % MAX_FRAMES_IN_FLIGHT;
 	FrameData& f = _frames[_frameInFlightNum];
 
 	// Since we have descriptor set copies for each frame in flight,
 	// we set the pointers to current frame's descriptor set buffers
-	_gpu.Reset(getCurrentFrame());
+	_gpu.Reset(f);
 
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	imguiUpdate();
-
-    VKASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
-    VKASSERT(vkResetFences(_device, 1, &f.inFlightFence));
+	imguiOnDrawStart();
 
     //Get index of next image after 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(_device, _swapchainHandle, UINT64_MAX, f.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(_device, _swapchain.handle, UINT64_MAX, f.imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     {
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            recreateSwapchain();
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
             return;
-        } else {
-            ASSERTMSG(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR, "failed to acquire swap chain image!");
         }
     }
 
-	// Calls ImGui::Render()
-	imguiOnDrawStart();
+	VKASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
+	VKASSERT(vkResetFences(_device, 1, &f.inFlightFence));
 
 	{ // Command buffer
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
@@ -726,7 +718,7 @@ void Engine::drawFrame()
 
     VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, f.inFlightFence));
 
-    VkSwapchainKHR swapchains[] = { _swapchainHandle };
+    VkSwapchainKHR swapchains[] = { _swapchain.handle };
     VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
@@ -738,14 +730,13 @@ void Engine::drawFrame()
 
     result = vkQueuePresentKHR(_presentQueue, &presentInfo);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _framebufferResized) {
-        //_framebufferResized = false;
-        recreateSwapchain();
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		return;
     }
     else {
         VKASSERTMSG(result, "failed to present swap chain image!");
     }
 
-    ++_frameNumber;
+	_frameInFlightNum = (_frameInFlightNum + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 

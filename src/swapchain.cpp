@@ -134,7 +134,7 @@ void Engine::createSwapchain()
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode = presentMode,
         .clipped = VK_TRUE,
-        .oldSwapchain = _swapchainHandle
+        .oldSwapchain = _swapchain.handle
     };
 
     uint32_t queueFamilyIndices[] = { _graphicsQueueFamily, _presentQueueFamily };
@@ -151,59 +151,35 @@ void Engine::createSwapchain()
  
     //Because we are using the old swapchain to create the new one, 
     //we only delete it after the new one is created
-    if (_swapchainHandle != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(_device, _swapchainHandle, nullptr);
+    if (_swapchain.handle != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(_device, _swapchain.handle, nullptr);
     }
-    _swapchainHandle = newSwapchain;
+    _swapchain.handle = newSwapchain;
 
-    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, nullptr);
-    _swapchainImages.resize(imageCount);
-    vkGetSwapchainImagesKHR(_device, _swapchainHandle, &imageCount, _swapchainImages.data());
+    vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, nullptr);
+    _swapchain.images.resize(imageCount);
+    vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, _swapchain.images.data());
 
-    for (int i = 0; i < _swapchainImages.size(); ++i) {
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchainImages[i], "Swapchain Image " + std::to_string(i));
+    for (int i = 0; i < _swapchain.images.size(); ++i) {
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.images[i], "Swapchain Image " + std::to_string(i));
         
     }
 }
 
 void Engine::prepareMainPass() {
-    bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_swapchain.depthFormat);
-    ASSERTMSG(anyFormats, "Physical device has no supported depth formats");
-
     VkExtent3D imageExtent3D = {
         _swapchain.imageExtent.width,
         _swapchain.imageExtent.height,
         1 
     };
 
-    //Create depth image
-    {
-        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_swapchain.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, imageExtent3D);
+    _swapchain.imageViews.resize(_swapchain.images.size());
 
-        VmaAllocationCreateInfo dimgAllocinfo = {
-            .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-            .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        };
-
-        vmaCreateImage(_allocator, &dimgInfo, &dimgAllocinfo, &_swapchain.depthImage.image, &_swapchain.depthImage.allocation, nullptr);
-
-        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_swapchain.depthFormat, _swapchain.depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-        VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_swapchain.depthImageView));
-
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.depthImage.image, "Swapchain Depth Image");
-    }
-
-    _swapchain.imageViews.resize(_swapchainImages.size());
-    //_swapchain.framebuffers.resize(_swapchain.images.size());
-
-    //VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_swapchain.renderpass, _swapchain.imageExtent);
-
-    for (size_t i = 0; i < _swapchainImages.size(); ++i) {
+    for (size_t i = 0; i < _swapchain.images.size(); ++i) {
         //Image view
         VkImageViewCreateInfo createInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = _swapchainImages[i],
+            .image = _swapchain.images[i],
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = _swapchain.colorFormat,
             .components = {
@@ -223,22 +199,14 @@ void Engine::prepareMainPass() {
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
         setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
-        // Framebuffer
-        /*std::vector<VkImageView> attachments = {
-            _swapchain.imageViews[i],
-            _swapchain.depthImageView
-        };*/
-
-        /*framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();*/
-
-        //VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_swapchain.framebuffers[i]));
     }
 }
 
 
 void Engine::recreateSwapchain()
 {
+    vkDeviceWaitIdle(_device);
+
     int width, height;
     glfwGetFramebufferSize(_window, &width, &height);
     while (width == 0 || height == 0) {
@@ -246,27 +214,17 @@ void Engine::recreateSwapchain()
         glfwWaitEvents();
     }
 
-    vkDeviceWaitIdle(_device);
-
     cleanupSwapchainResources();
 
     createSwapchain();
     prepareMainPass();
+
+    
 }
 
 void Engine::cleanupSwapchainResources()
 {
-    /*for (auto& framebuffer : _swapchain.framebuffers) {
-        vkDestroyFramebuffer(_device, framebuffer, nullptr);
-    }*/
-
-    //Destroy depth image
-    vkDestroyImageView(_device, _swapchain.depthImageView, nullptr);
-    vmaDestroyImage(_allocator, _swapchain.depthImage.image, _swapchain.depthImage.allocation);
-
     for (auto& imageView : _swapchain.imageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
     }
 }
-
-

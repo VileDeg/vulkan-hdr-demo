@@ -12,15 +12,19 @@ static void toggle(bool& x) {
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
-    Engine& eng = *reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
-    eng._framebufferResized = true;
+    Engine& e = *reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    //eng._framebufferResized = true;
 
-    /* Need to add 2 drawFrame() calls to render the image while resizing.
-     * First call will only recreate the swapchain, second call will render the image. */
-    eng.drawFrame();
-    eng.drawFrame();
+    ///* Need to add 2 drawFrame() calls to render the image while resizing.
+    // * First call will only recreate the swapchain, second call will render the image. */
+    e.recreateSwapchain();
+    // Need to reset frames counter otherwise viewport image layout error occurs on window resize
+    e._frameInFlightNum = 0;
 
-    eng._framebufferResized = false;
+    e.drawFrame();
+    //eng.drawFrame();
+
+    //eng._framebufferResized = false;
 }
 
 void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)

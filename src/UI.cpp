@@ -7,8 +7,8 @@
 
 #include "imgui/implot.h"
 
-// utility structure for realtime plot
-// From implot.cpp
+/* utility structure for realtime plot
+ * From implot.cpp */ 
 struct RollingBuffer {
 	float Span;
 	ImVector<ImVec2> Data;
@@ -61,11 +61,8 @@ void Engine::initImgui()
 
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
 
 
 	float fontScale = 0.75f;
@@ -100,11 +97,14 @@ void Engine::initImgui()
 		.DescriptorPool = imguiPool,
 		.MinImageCount = 3,
 		.ImageCount = 3,
-		.MSAASamples = VK_SAMPLE_COUNT_1_BIT
+		.MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+		// Enable dynamic rendering extension usage
+		.UseDynamicRendering = true,
+		.ColorAttachmentFormat = _swapchain.colorFormat
+
 	};
 
-	//ImGui_ImplVulkan_Init(&init_info, _swapchain.renderpass);
-	ImGui_ImplVulkan_Init(&init_info, _swapchain.PipelineRenderingInfo());
+	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
 
 	//execute a gpu command to upload imgui font textures
 	immediate_submit([&](VkCommandBuffer cmd) {
@@ -133,17 +133,19 @@ void Engine::initImgui()
 
 void Engine::imgui_RegisterViewportImageViews()
 {
+	//vkDeviceWaitIdle(_device);
 	ASSERT(_imguiViewportImageViewDescriptorSets.size() == 0);
 	_imguiViewportImageViewDescriptorSets.resize(_viewport.imageViews.size());
 
 	for (size_t i = 0; i < _viewport.imageViews.size(); ++i) {
 		_imguiViewportImageViewDescriptorSets[i] =
-			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_GENERAL);
+			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 }
 
 void Engine::imgui_UnregisterViewportImageViews()
 {
+	//vkDeviceWaitIdle(_device);
 	for (auto& dset : _imguiViewportImageViewDescriptorSets) {
 		ImGui_ImplVulkan_RemoveTexture(dset);
 	}
@@ -322,15 +324,11 @@ void Engine::uiUpdateHDR()
 					// If we don't use this, histogram will be very laggy most of the time.
 					//vkDeviceWaitIdle(_device);
 
-					/*if (maxBin == 0) {
-						pr("here");
-					}*/
-
 					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
 
 					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always); //dim.x * dim.y
+					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always);
 
 					ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
 
@@ -518,7 +516,7 @@ bool Engine::uiSaveScene()
 	std::vector<std::string> scenes;
 	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(scenePath, ".json", scenes);
+	scenes_cstr = browse_path(Engine::SCENE_PATH, ".json", scenes);
 	scenes_cstr.push_back("* New");
 
 	float width = 0;
@@ -537,7 +535,7 @@ bool Engine::uiSaveScene()
 	if (i == scenes_cstr.size() - 1) {
 		char buf[256] = { 0 };
 		if (ImGui::InputText("##Scene name", buf, 256, ImGuiInputTextFlags_EnterReturnsTrue)) {
-			saveScene(scenePath + buf);
+			saveScene(Engine::SCENE_PATH + buf);
 			saved = true;
 		}
 	}
@@ -553,7 +551,7 @@ bool Engine::uiLoadScene()
 	std::vector<std::string> scenes;
 	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(scenePath, ".json", scenes);
+	scenes_cstr = browse_path(Engine::SCENE_PATH, ".json", scenes);
 
 	float width = 0;
 	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
@@ -688,15 +686,17 @@ void Engine::imguiUpdate()
 			uint32_t usY = (uint32_t)vSize.y;
 
 			if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
-				//vkDeviceWaitIdle(_device);
+				// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
+				vkDeviceWaitIdle(_device);
 
 				imgui_UnregisterViewportImageViews();
-				//vkDeviceWaitIdle(_device);
 
 				// Create viewport images and etc. with new extent
 				recreateViewport(usX, usY);
 
 				imgui_RegisterViewportImageViews();
+
+				vkDeviceWaitIdle(_device);
 			}
 
 			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));

@@ -2,40 +2,8 @@
 #include "camera.h"
 #include "engine.h"
 
-//void Camera::calculateFPS()
-//{
-//    using namespace std::chrono;
-//
-//    static int sFpsCount = 0;
-//    static time_point<steady_clock> sLastTime = steady_clock::now();
-//
-//    auto currentTime = steady_clock::now();
-//
-//    const auto diff = currentTime - sLastTime;
-//    const auto elapsedTime = duration_cast<nanoseconds>(diff).count();
-//    ++sFpsCount;
-//
-//    if (elapsedTime > 1'000'000'000) {
-//        sLastTime = currentTime;
-//        _fps = sFpsCount;
-//        sFpsCount = 0;
-//    }
-//}
-//
-//void Camera::calculateDeltaTime()
-//{
-//    static float sLastFrameTime = 0.0f;
-//    float currentTime = glfwGetTime();
-//    _dt = currentTime - sLastFrameTime;
-//    sLastFrameTime = currentTime;
-//}
-
 void Camera::Update(GLFWwindow* window, float deltaTime)
 {
-    /*calculateDeltaTime();
-
-    float deltaTime = _dt;*/
-
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
         deltaTime *= _sprintBoost;
     }

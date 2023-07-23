@@ -1,16 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
 
-VkPipelineRenderingCreateInfoKHR GraphicsPass::PipelineRenderingInfo()
-{
-	return {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &colorFormat,
-		.depthAttachmentFormat = depthFormat
-	};
-}
-
 void Engine::setDisplayLightSourceObjects(bool display)
 {
 	if (!display) {
@@ -69,11 +59,6 @@ void RenderContext::UpdateLightRadius(int i)
 
 void RenderContext::Init(CreateSceneData data)
 {
-	/*auto dot_pos = mainModelName.find(".");
-	auto slash_pos = mainModelName.find("/");*/
-
-	//modelName = mainModelName.substr(slash_pos, dot_pos - slash_pos);
-	//modelName = "dobrovic-sponza";
 	modelName  = data.modelPath;
 	skyboxName = data.skyboxPath;
 
@@ -113,16 +98,9 @@ void RenderContext::Init(CreateSceneData data)
 
 	for (int i = 0; i < MAX_LIGHTS; i++) {
 		sceneData.lights[i] = {
-			//.position = lightPos[i],
 			.position = data.position[i],
-			//.radius = radius[i],
 
 			.color = lightColor[i],
-
-			/*.ambientFactor = 0.1f,
-			.diffuseFactor = 1.0f,
-			.specularFactor = 0.5f,*/
-			//.intensity = intensity[i],
 			.intensity = data.intensity[i],
 
 			.constant = 1.f,
@@ -132,9 +110,7 @@ void RenderContext::Init(CreateSceneData data)
 			.enabled = enable[i]
 		};
 
-		//UpdateLightAttenuation(i, 0);
 		UpdateLightRadius(i);
-		
 	}
 
 	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);

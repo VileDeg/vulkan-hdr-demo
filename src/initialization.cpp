@@ -90,7 +90,7 @@ void Engine::loadInstanceExtensionFunctions()
 {
     DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
 
-    if (ENABLE_VALIDATION_LAYERS) {
+    if (ENABLE_VALIDATION) {
         DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
         DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
     }
@@ -107,7 +107,7 @@ void Engine::createInstance()
         throw std::runtime_error("There are unsupported instance extensions.");
     }
 
-    ASSERTMSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
+    ASSERTMSG(!ENABLE_VALIDATION || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
 
     VkApplicationInfo appInfo{
@@ -118,7 +118,7 @@ void Engine::createInstance()
     };
 
     VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo;
-    if (ENABLE_VALIDATION_LAYERS) {
+    if (ENABLE_VALIDATION) {
         dbgMessengerInfo = {
             .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
@@ -133,10 +133,10 @@ void Engine::createInstance()
     VkInstanceCreateInfo instanceInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         // Pass debug messenger info to instance info to enable validation for instance creation and destruction
-        .pNext = ENABLE_VALIDATION_LAYERS ? &dbgMessengerInfo : nullptr,
+        .pNext = ENABLE_VALIDATION ? &dbgMessengerInfo : nullptr,
         .pApplicationInfo = &appInfo,
-        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
-        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+        .enabledLayerCount = (uint32_t)_enabledValidationLayers.size(),
+        .ppEnabledLayerNames = _enabledValidationLayers.data(),
         .enabledExtensionCount = (uint32_t)_instanceExtensions.size(),
         .ppEnabledExtensionNames = _instanceExtensions.data()
     };
@@ -146,7 +146,7 @@ void Engine::createInstance()
 
     loadInstanceExtensionFunctions();
 
-    if (ENABLE_VALIDATION_LAYERS) {
+    if (ENABLE_VALIDATION) {
         VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
 
         _deletionStack.push([&]() {
@@ -390,8 +390,8 @@ void Engine::createLogicalDevice()
         .pNext = &deviceFeatures,
         .queueCreateInfoCount = _graphicsQueueFamily == _presentQueueFamily ? uint32_t(1) : uint32_t(2),
         .pQueueCreateInfos = queueCreateInfos.data(),
-        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
-        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
+        .enabledLayerCount = ENABLE_VALIDATION ? (uint32_t)_enabledValidationLayers.size() : 0,
+        .ppEnabledLayerNames = ENABLE_VALIDATION ? _enabledValidationLayers.data() : nullptr,
         .enabledExtensionCount = (uint32_t)_deviceExtensions.size(),
         .ppEnabledExtensionNames = _deviceExtensions.data()
     };

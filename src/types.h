@@ -126,7 +126,6 @@ struct ShadowPass {
     //VkRenderPass renderpass;
 };
 
-
 /**
 * Struct that holds data related to immediate command execution.
 * This is used for uploading data to the GPU.
@@ -137,24 +136,30 @@ struct UploadContext {
     VkCommandBuffer commandBuffer;
 };
 
-struct GraphicsPass {
+struct ViewportPass {
+    std::vector<AllocatedImage> images; // Allocated with VMA
+    std::vector<VkImageView> imageViews;
+
+    // Rendering in 32-bit HDR format to allow further processing with compute shaders
+    const VkFormat colorFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    VkImageView depthImageView;
+    AllocatedImage depthImage;
+    VkFormat depthFormat;
+
+    VkExtent2D imageExtent; // Viewport dimensions
+};
+
+struct SwapchainPass {
+    VkSwapchainKHR handle{ VK_NULL_HANDLE };
+
+    std::vector<VkImage> images;
     std::vector<VkImageView> imageViews;
 
     VkFormat colorFormat;
 
-    VkImageView depthImageView;
-    AllocatedImage depthImage;
-    VkFormat depthFormat;// = VK_FORMAT_D32_SFLOAT;
-
-    VkExtent2D imageExtent; // Corresponds to window dimensions
-
-    VkPipelineRenderingCreateInfoKHR PipelineRenderingInfo();
-    //VkRenderPass renderpass;
-
-    GraphicsPass() = default;
-    GraphicsPass(VkFormat format) : colorFormat{ format } {}
+    VkExtent2D imageExtent; // Window dimensions
 };
-
 
 enum TextureDynamicRangeType {
     TEX_SDR, TEX_HDR

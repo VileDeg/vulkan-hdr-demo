@@ -197,11 +197,11 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	// Partially based on Sascha Willems' cubemap demo: 
 	// https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
 
-	ASSERT(loadModelFromObj("cube", Engine::modelPath + "cube/cube.obj"));
+	ASSERT(loadModelFromObj("cube", Engine::MODEL_PATH + "cube/cube.obj"));
 
 	constexpr const char* suff[6] = { "XP", "XN", "YP", "YN", "ZP", "ZN" };
 
-	std::string basePath = Engine::imagePath + cubemapDirName;
+	std::string basePath = Engine::IMAGE_PATH + cubemapDirName;
 
 	VkDeviceSize imageSize;
 	AllocatedBuffer stagingBuffer;
@@ -915,13 +915,6 @@ void Engine::saveScene(std::string fullScenePath)
 
 void Engine::createSamplers() {
 	// Create samplers for textures
-	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
-
-	VKASSERT(vkCreateSampler(_device, &samplerInfo, nullptr, &_blockySampler));
-	_deletionStack.push([=]() {
-		vkDestroySampler(_device, _blockySampler, nullptr);
-		});
-
 	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
 
 	VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
@@ -946,10 +939,10 @@ void Engine::createScene(CreateSceneData data)
 	}
 
 	// Main model of the scene
-	ASSERT(loadModelFromObj("main", Engine::modelPath + data.modelPath));
+	ASSERT(loadModelFromObj("main", Engine::MODEL_PATH + data.modelPath));
 
 	// Sphere model of the light source
-	ASSERT(loadModelFromObj("sphere", Engine::modelPath + "sphere/sphere.obj"));
+	ASSERT(loadModelFromObj("sphere", Engine::MODEL_PATH + "sphere/sphere.obj"));
 
 	// Set materials
 	for (auto& [key, model] : _models) {

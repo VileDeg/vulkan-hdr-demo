@@ -63,7 +63,13 @@
 #define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "
 
 #ifdef NDEBUG
-#define ENABLE_VALIDATION_LAYERS 0
+#define ENABLE_VALIDATION 0
 #else
-#define ENABLE_VALIDATION_LAYERS 1
+#define ENABLE_VALIDATION 1
 #endif
+
+//#define ASSET_PATH  "assets/"
+//#define SHADER_PATH ASSET_PATH "shaders/bin/"
+//#define IMAGE_PATH  ASSET_PATH "images/"
+//#define MODEL_PATH  ASSET_PATH "models/"
+//#define SCENE_PATH  ASSET_PATH "scenes/"

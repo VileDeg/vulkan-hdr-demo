@@ -1,12 +1,58 @@
 #include "stdafx.h"
 #include "engine.h"
 
+std::string Engine::ASSET_PATH = "assets/";
+std::string Engine::SHADER_PATH = ASSET_PATH + "shaders/bin/";
+std::string Engine::IMAGE_PATH = ASSET_PATH + "images/";
+std::string Engine::MODEL_PATH = ASSET_PATH + "models/";
+std::string Engine::SCENE_PATH = ASSET_PATH + "scenes/";
+
+Engine::Engine()
+{
+    _enabledValidationLayers = {
+#if ENABLE_VALIDATION == 1
+        "VK_LAYER_KHRONOS_validation"
+#endif
+    };
+
+    _instanceExtensions = {
+#if ENABLE_VALIDATION == 1
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, // Required by dynamic rendering
+    };
+
+    _deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, // Swapchain to present images on screen
+        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, // Push descriptor to load diffuse texture per each mesh
+        VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
+        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+
+        VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME, // Required by dynamic rendering
+
+        VK_KHR_MAINTENANCE_2_EXTENSION_NAME, // Required by Renderpass2
+        VK_KHR_MULTIVIEW_EXTENSION_NAME, // Required by Renderpass2
+        VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, // Required by dynamic rendering
+
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME // To get rid of renderpasses and framebuffers
+    };
+
+     
+
+     WIDTH = 1600;
+     HEIGHT = 900;
+     
+     FS_WIDTH = 1920;
+     FS_HEIGHT = 1080;
+     ENABLE_FULLSCREEN = false;
+}
+
 void Engine::Init()
 {
     createWindow();
     createInstance();
-    //createDebugMessenger();
     createSurface();
+
     pickPhysicalDevice();
     createLogicalDevice();
 
@@ -15,9 +61,7 @@ void Engine::Init()
     initUploadContext();
     
     createSwapchain();
-
-    //createRenderpass();
-
+    
     prepareMainPass();
     prepareViewportPass(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
     prepareShadowPass();
@@ -28,8 +72,7 @@ void Engine::Init()
     createPipelines();
     createSamplers();
     
-    loadScene(scenePath + "dobrovic-sponza.json");
-    //loadScene(scenePath + "crytek-sponza.json");
+    loadScene(SCENE_PATH + "dobrovic-sponza.json");
     
     initImgui();
 
@@ -66,220 +109,10 @@ void Engine::Cleanup()
     _descriptorAllocator->cleanup();
     _descriptorLayoutCache->cleanup();
 
-    vkDestroySwapchainKHR(_device, _swapchainHandle, nullptr);
+    vkDestroySwapchainKHR(_device, _swapchain.handle, nullptr);
 
     _deletionStack.flush();
 }
-
-
-
-static VkRenderPass s_createRenderpass(VkDevice device, VkFormat colorAttFormat, VkImageLayout colorAttFinalLayout, VkFormat depthAttFormat, const std::vector<VkSubpassDependency>& dependencies)
-{
-    VkAttachmentDescription colorAttachment{
-        .format = colorAttFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = colorAttFinalLayout
-    };
-
-    VkAttachmentDescription depthAttachment{
-        .format = depthAttFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
-
-    VkSubpassDescription subpass;
-    {
-        VkAttachmentReference colorAttachmentRef{
-            .attachment = 0,
-            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-        };
-
-        VkAttachmentReference depthAttachmentRef{
-            .attachment = 1,
-            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        };
-
-        subpass = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachmentRef,
-            .pDepthStencilAttachment = &depthAttachmentRef
-        };
-    }
-
-    std::vector<VkAttachmentDescription> attachments = { colorAttachment, depthAttachment };
-
-    VkRenderPassCreateInfo renderPassInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = uint32_t(attachments.size()),
-        .pAttachments = attachments.data(),
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .dependencyCount = uint32_t(dependencies.size()),
-        .pDependencies = dependencies.data()
-    };
-
-    VkRenderPass renderpass;
-    VKASSERT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderpass));
-
-    return renderpass;
-}
-
-//void Engine::createRenderpass() {
-//    std::vector<VkSubpassDependency> dependencies = {
-//
-//        { // Dependency for upcoming compute shader
-//            .srcSubpass = 0,
-//            .dstSubpass = VK_SUBPASS_EXTERNAL,
-//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-//            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-//            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-//        },
-//        //{ // Dependency for presenting frame to screen
-//        //    .srcSubpass = VK_SUBPASS_EXTERNAL,
-//        //    .dstSubpass = 0,
-//        //    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//        //    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//        //    .srcAccessMask = 0,
-//        //    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-//        //},
-//        // Depth attachment dependency
-//        /*{ 
-//            .srcSubpass = 0,
-//            .dstSubpass = VK_SUBPASS_EXTERNAL,
-//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-//        },
-//        {
-//            .srcSubpass = VK_SUBPASS_EXTERNAL,
-//            .dstSubpass = 0,
-//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-//        }*/
-//
-//    };
-//
-//    _viewport.renderpass = s_createRenderpass(_device, _viewport.imageFormat, VK_IMAGE_LAYOUT_GENERAL, _viewport.depthFormat, dependencies);
-//    
-//    
-//    std::vector<VkSubpassDependency> dependencies1 = {
-//        // Color attachment dependency
-//        { // Dependency for presenting frame to screen
-//            .srcSubpass = VK_SUBPASS_EXTERNAL,
-//            .dstSubpass = 0,
-//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//            .srcAccessMask = 0,
-//            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-//        },
-//     
-//        // Depth attachment dependency
-//        { // Dependency for presenting frame to screen
-//            .srcSubpass = VK_SUBPASS_EXTERNAL,
-//            .dstSubpass = 0,
-//            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//            .srcAccessMask = 0,
-//            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-//        }
-//    };
-//
-//    _swapchain.renderpass = s_createRenderpass(_device, _swapchain.imageFormat, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, _swapchain.depthFormat, dependencies1);
-// 
-//    
-//    { // Shadow renderpass
-//        VkAttachmentDescription osAttachments[2] = {};
-//
-//        // Find a suitable depth format
-//        VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.fbDepthFormat);
-//        assert(validDepthFormat);
-//
-//        osAttachments[0].format = ShadowPass::FB_COLOR_FORMAT;
-//        osAttachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-//        osAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-//        osAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-//        osAttachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-//        osAttachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-//        osAttachments[0].initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-//        osAttachments[0].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-//
-//        // Depth attachment
-//        osAttachments[1].format = _shadow.fbDepthFormat;
-//        osAttachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-//        osAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-//        osAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-//        osAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-//        osAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-//        osAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-//        osAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-//
-//        VkAttachmentReference colorReference = {};
-//        colorReference.attachment = 0;
-//        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-//
-//        VkAttachmentReference depthReference = {};
-//        depthReference.attachment = 1;
-//        depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-//
-//
-//        VkSubpassDescription subpass = {};
-//        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-//        subpass.colorAttachmentCount = 1;
-//        subpass.pColorAttachments = &colorReference;
-//        subpass.pDepthStencilAttachment = &depthReference;
-//
-//        VkSubpassDependency dependency{
-//            .srcSubpass = 0,
-//            .dstSubpass = VK_SUBPASS_EXTERNAL,
-//            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-//            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-//            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-//            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-//        };
-//
-//
-//        std::vector<VkSubpassDependency> dependencies = { dependency/*, depthDependency*/ };
-//
-//        
-//
-//        VkRenderPassCreateInfo renderPassCreateInfo = {};
-//        renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-//        renderPassCreateInfo.attachmentCount = 2;
-//        renderPassCreateInfo.pAttachments = osAttachments;
-//        renderPassCreateInfo.subpassCount = 1;
-//        renderPassCreateInfo.pSubpasses = &subpass;
-//        renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(dependencies.size()),
-//        renderPassCreateInfo.pDependencies = dependencies.data();
-//
-//
-//        VKASSERT(vkCreateRenderPass(_device, &renderPassCreateInfo, nullptr, &_shadow.renderpass));
-//    }
-//
-//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _swapchain.renderpass, "Swapchain Renderpass");
-//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _viewport.renderpass, "Viewport Renderpass");
-//    setDebugName(VK_OBJECT_TYPE_RENDER_PASS, _shadow.renderpass, "Shadow Renderpass");
-//
-//    _deletionStack.push([&]() { 
-//        vkDestroyRenderPass(_device, _shadow.renderpass, nullptr);
-//        vkDestroyRenderPass(_device, _viewport.renderpass, nullptr);
-//        vkDestroyRenderPass(_device, _swapchain.renderpass, nullptr); 
-//    });
-//}
 
 
 void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
@@ -311,15 +144,10 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.depthImage.image, "Viewport Depth Image");
     }
 
-
-    // 32-bit float HDR format
-    size_t imgCount = _swapchainImages.size();
-    _viewportImages.resize(imgCount);
+    size_t imgCount = _swapchain.images.size();
+    _viewport.images.resize(imgCount);
 
     _viewport.imageViews.resize(imgCount);
-    //_viewport.framebuffers.resize(imgCount);
-
-    //VkFramebufferCreateInfo framebufferInfo = vkinit::framebuffer_create_info(_viewport.renderpass, { extentX, extentY });
 
     for (uint32_t i = 0; i < imgCount; i++)
     {
@@ -341,23 +169,13 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         //allocate and create the image
-        VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewportImages[i].image, &_viewportImages[i].allocation, nullptr));
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewportImages[i].image, "Viewport Image " + std::to_string(i));
+        VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
-        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewportImages[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
+        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
         setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
-
-        /*std::vector<VkImageView> attachments = {
-            _viewport.imageViews[i],
-            _viewport.depthImageView
-        };*/
-
-        //framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        //framebufferInfo.pAttachments = attachments.data();
-
-        //VKASSERT(vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_viewport.framebuffers[i]));
     }
 }
 
@@ -373,12 +191,6 @@ void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
 
 void Engine::cleanupViewportResources()
 {
-    /*for (auto& framebuffer : _viewport.framebuffers) {
-        vkDestroyFramebuffer(_device, framebuffer, nullptr);
-    }*/
-
-    //_viewport.framebuffers.clear();
-
     //Destroy depth image
     vkDestroyImageView(_device, _viewport.depthImageView, nullptr);
     vmaDestroyImage(_allocator, _viewport.depthImage.image, _viewport.depthImage.allocation);
@@ -389,11 +201,11 @@ void Engine::cleanupViewportResources()
 
     _viewport.imageViews.clear();
 
-    for (auto& image : _viewportImages) {
+    for (auto& image : _viewport.images) {
         vmaDestroyImage(_allocator, image.image, image.allocation);
     }
 
-    _viewportImages.clear();
+    _viewport.images.clear();
 }
 
 
@@ -402,7 +214,7 @@ void Engine::prepareShadowPass()
     _shadow.width = ShadowPass::TEX_DIM;
     _shadow.height = ShadowPass::TEX_DIM;
 
-    VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
+    bool validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
     ASSERTMSG(validDepthFormat, "Physical device has no supported depth formats");
 
     Texture& cubemap = _shadow.cubemapArray;
@@ -426,7 +238,6 @@ void Engine::prepareShadowPass()
     };
 
     //allocate temporary buffer for holding texture data to upload
-           //VkDeviceSize imageSize = _shadow.width * _shadow.height;
     VmaAllocationCreateInfo imgAllocinfo = {
             .usage = VMA_MEMORY_USAGE_GPU_ONLY,
             .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
@@ -542,20 +353,8 @@ void Engine::prepareShadowPass()
     VkImageView attachments[2];
     attachments[1] = depth.view;
 
-    /*VkFramebufferCreateInfo fbufCreateInfo = {};
-    fbufCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    fbufCreateInfo.renderPass = _shadow.renderpass;
-    fbufCreateInfo.attachmentCount = 2;
-    fbufCreateInfo.pAttachments = attachments;
-    fbufCreateInfo.width = _shadow.width;
-    fbufCreateInfo.height = _shadow.height;
-    fbufCreateInfo.layers = 1;*/
-
     for (int i = 0; i < MAX_LIGHTS; ++i) {
-        
-        //Texture& depth = _shadow.depth[i];
         auto& faceViews = _shadow.faceViews[i];
-        //auto& faceFramebuffers = _shadow.faceFramebuffers[i];
 
         VkImageViewCreateInfo view = {};
         view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -570,17 +369,10 @@ void Engine::prepareShadowPass()
         {
             view.subresourceRange.baseArrayLayer = i * 6 + face;
             VKASSERT(vkCreateImageView(_device, &view, nullptr, &faceViews[face]));
-
-            //attachments[0] = faceViews[face];
-            //VKASSERT(vkCreateFramebuffer(_device, &fbufCreateInfo, nullptr, &faceFramebuffers[face]));
         }
 
         // Cleanup all shadow pass resources for current light
         _deletionStack.push([=]() mutable {
-            /*for (auto& fb : faceFramebuffers) {
-                vkDestroyFramebuffer(_device, fb, nullptr);
-            }*/
-
             for (auto& view : faceViews) {
                 vkDestroyImageView(_device, view, nullptr);
             }
@@ -749,7 +541,6 @@ void Engine::initFrame(FrameData& f)
     _deletionStack.push([&]() { 
         f.cameraBuffer.destroy(_allocator);
         f.sceneBuffer.destroy(_allocator);
-        //f.matBuffer.destroy(_allocator);
 
         f.objectBuffer.destroy(_allocator);
 
