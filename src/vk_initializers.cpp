@@ -180,7 +180,16 @@ VkPipelineInputAssemblyStateCreateInfo vkinit::input_assembly_create_info(VkPrim
 	info.primitiveRestartEnable = VK_FALSE;
 	return info;
 }
-VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(VkPolygonMode polygonMode)
+
+VkPipelineViewportStateCreateInfo vkinit::viewport_state_create_info() {
+	return {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.scissorCount = 1,
+	};
+}
+
+VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(VkPolygonMode polygonMode, int cullModeBits)
 {
 	VkPipelineRasterizationStateCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -193,7 +202,7 @@ VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(V
 	info.polygonMode = polygonMode;
 	info.lineWidth = 1.0f;
 	//backface cull = yes
-	info.cullMode = VK_CULL_MODE_BACK_BIT;
+	info.cullMode = cullModeBits;
 	info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	//no depth bias
 	info.depthBiasEnable = VK_FALSE;

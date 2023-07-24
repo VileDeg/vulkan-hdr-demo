@@ -52,7 +52,9 @@ namespace vkinit {
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info(VkPrimitiveTopology topology);
 
-	VkPipelineRasterizationStateCreateInfo rasterization_state_create_info(VkPolygonMode polygonMode);
+	VkPipelineViewportStateCreateInfo viewport_state_create_info();
+
+	VkPipelineRasterizationStateCreateInfo rasterization_state_create_info(VkPolygonMode polygonMode, int cullModeBits);
 
 	VkPipelineMultisampleStateCreateInfo multisampling_state_create_info();
 

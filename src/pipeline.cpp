@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
 
-#include "pipeline.h"
-
 static std::vector<char> readShaderBinary(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -53,7 +51,7 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
     return shaders;
 }
 
-static void s_createComputePipeline(VkDevice device, const std::string& shaderBinName, ComputeParts& cp)
+static void s_createComputePipeline(VkDevice device, const std::string& shaderBinName, ComputeStage& cp)
 {
     ShaderData comp;
     comp.code = readShaderBinary(Engine::SHADER_PATH + shaderBinName);
@@ -90,74 +88,148 @@ static void s_createComputePipeline(VkDevice device, const std::string& shaderBi
     vkDestroyShaderModule(device, comp.module, nullptr);
 }
 
-void Engine::createPipelines()
+static void s_createGraphicsPipeline(
+    VkDevice device, 
+    const std::string vertBinName, const std::string fragBinName,
+    VkShaderStageFlags pushConstantsStages, uint32_t pushConstantsSize,
+    std::vector<VkDescriptorSetLayout> setLayouts,
+    VkFormat colorFormat, VkFormat depthFormat,
+    int cullMode,
+    VkPipeline& pipeline, VkPipelineLayout& layout)
 {
-    PipelineData pd_general{
-        .shaders = loadShaders(_device, "shader.vert.spv", "shader.frag.spv"),
-        .pushConstantsStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        .pushConstantsSize = sizeof(GPUScenePC),
-        .setLayouts = { _globalSetLayout, _diffuseTextureSetLayout }
+    PipelineShaders shaders = loadShaders(device, vertBinName, fragBinName);
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages {
+        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, shaders.vert.module),
+        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, shaders.frag.module)
     };
 
-    PipelineData pd_shadow{
-        .shaders = loadShaders(_device, "shadow_pass.vert.spv", "shadow_pass.frag.spv"),
-        .pushConstantsStages = VK_SHADER_STAGE_VERTEX_BIT,
-        .pushConstantsSize = sizeof(GPUShadowPC),
-        .setLayouts = { _shadowSetLayout }
+    VertexInputDescription vertexDesc = Vertex::getDescription();
+
+    VkPipelineVertexInputStateCreateInfo vertexInputState = vkinit::vertex_input_state_create_info(
+        uint32_t(vertexDesc.bindings.size()), vertexDesc.bindings.data(),
+        uint32_t(vertexDesc.attributes.size()), vertexDesc.attributes.data()
+    );
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = vkinit::input_assembly_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+    VkPipelineViewportStateCreateInfo viewportState = vkinit::viewport_state_create_info();
+
+    VkPipelineRasterizationStateCreateInfo rasterizationState = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL, cullMode);
+
+    VkPipelineMultisampleStateCreateInfo multisamplingState = vkinit::multisampling_state_create_info();
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilState = vkinit::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = vkinit::color_blend_attachment_state();
+
+    VkPipelineColorBlendStateCreateInfo colorBlending = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable = VK_FALSE,
+        .logicOp = VK_LOGIC_OP_COPY,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment,
+        .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 
+    std::vector<VkDynamicState> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
 
-    /*auto newMaterial = [&](std::string matName, PipelineData pd, VkRenderPass renderpass) {
-        Pipeline pipeline(pd);
-        pipeline.Init();
-        pipeline.Build(_device, renderpass);
+    VkPipelineDynamicStateCreateInfo dynamicState = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
 
-        createMaterial(pipeline.pipeline, pipeline.layout, matName);
-    };*/
+    VkPushConstantRange pushConstantRange = {
+        .stageFlags = pushConstantsStages,
+        .offset = 0,
+        .size = pushConstantsSize
+    };
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
+        .pSetLayouts = setLayouts.data(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+
+    VKASSERT(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout));
 
 
     VkPipelineRenderingCreateInfo renderingInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
         .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &_viewport.colorFormat,
-        .depthAttachmentFormat = _viewport.depthFormat
+        .pColorAttachmentFormats = &colorFormat,
+        .depthAttachmentFormat = depthFormat
     };
 
-    { // General
-        Pipeline pipeline(pd_general);
-        pipeline.Build(_device, renderingInfo);
+    VkGraphicsPipelineCreateInfo pipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &renderingInfo,
+        .stageCount = static_cast<uint32_t>(shaderStages.size()),
+        .pStages = shaderStages.data(),
+        .pVertexInputState = &vertexInputState,
+        .pInputAssemblyState = &inputAssemblyState,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizationState,
+        .pMultisampleState = &multisamplingState,
+        .pDepthStencilState = &depthStencilState,
+        .pColorBlendState = &colorBlending,
+        .pDynamicState = &dynamicState,
+        .layout = layout,
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE
+    };
 
-        createMaterial(pipeline.pipeline, pipeline.layout, "general");
-    }
-    { // Skybox
-        Pipeline pipeline_skybox(pd_general);
-        pipeline_skybox.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+    VKASSERT(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-        pipeline_skybox.Build(_device, renderingInfo);
+    shaders.cleanup(device);
+}
 
-        createMaterial(pipeline_skybox.pipeline, pipeline_skybox.layout, "skybox");
-    }
-
+void Engine::createPipelines()
+{
     // Find a suitable depth format
     VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
     assert(validDepthFormat);
 
-    renderingInfo.pColorAttachmentFormats = &_shadow.colorFormat;
-    renderingInfo.depthAttachmentFormat = _shadow.depthFormat;
+    {
+        VkPipelineLayout layout;
+        VkPipeline pipeline;
 
-    { // Shadow
-        Pipeline pipeline_shadow(pd_shadow);
+        s_createGraphicsPipeline(_device,
+            "shader.vert.spv", "shader.frag.spv",
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
+            { _globalSetLayout, _diffuseTextureSetLayout },
+            _viewport.colorFormat, _viewport.depthFormat, 
+            VK_CULL_MODE_BACK_BIT,
+            pipeline, layout
+        );
+        createMaterial(pipeline, layout, "general");
 
-        // Changing culling mode to front mostly fixes Peter Panning 
-        // and also for some reason fixes the bug when some objects get drawn on top although they shouldn't
-        pipeline_shadow.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-        pipeline_shadow.Build(_device, renderingInfo);
+        s_createGraphicsPipeline(_device,
+            "shader.vert.spv", "shader.frag.spv",
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
+            { _globalSetLayout, _diffuseTextureSetLayout },
+            _viewport.colorFormat, _viewport.depthFormat,
+            VK_CULL_MODE_FRONT_BIT,
+            pipeline, layout
+        );
+        createMaterial(pipeline, layout, "skybox");
 
-        createMaterial(pipeline_shadow.pipeline, pipeline_shadow.layout, "shadow");
+        s_createGraphicsPipeline(_device,
+            "shadow_pass.vert.spv", "shadow_pass.frag.spv",
+            VK_SHADER_STAGE_VERTEX_BIT, sizeof(GPUShadowPC),
+            { _shadowSetLayout },
+            _shadow.colorFormat, _shadow.depthFormat,
+            VK_CULL_MODE_FRONT_BIT,
+            pipeline, layout
+        );
+        createMaterial(pipeline, layout, "shadow");
     }
-
-    pd_general.shaders.cleanup(_device);
-    pd_shadow.shaders.cleanup(_device);
 
     { // Compute luminance histogram
         s_createComputePipeline(_device, "histogram.comp.spv"        , _compute.histogram);
@@ -176,100 +248,3 @@ void Engine::createPipelines()
         vkDestroyPipeline(_device, _compute.toneMapping.pipeline, nullptr);
     });
 }
-
-Pipeline::Pipeline(PipelineData pd)
-    : _pd(pd) 
-{
-    Init();
-}
-
-void Pipeline::Init()
-{
-    shaderStages.push_back(
-        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, _pd.shaders.vert.module));
-    shaderStages.push_back(
-        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, _pd.shaders.frag.module));
-
-    vertexDesc = Vertex::getDescription();
-    vertexInputInfo = vkinit::vertex_input_state_create_info(
-        uint32_t(vertexDesc.bindings.size()), vertexDesc.bindings.data(),
-        uint32_t(vertexDesc.attributes.size()), vertexDesc.attributes.data()
-    );
-
-    inputAssembly = vkinit::input_assembly_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-
-    viewportState = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .scissorCount = 1,
-    };
-
-    rasterizer = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL);
-
-    multisampling = vkinit::multisampling_state_create_info();
-
-    depthStencil = vkinit::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
-
-    colorBlendAttachment = vkinit::color_blend_attachment_state();
-
-    colorBlending = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = VK_FALSE,
-        .logicOp = VK_LOGIC_OP_COPY,
-        .attachmentCount = 1,
-        .pAttachments = &colorBlendAttachment,
-        .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}
-    };
-
-    dynamicStates = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
-
-    dynamicState = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
-        .pDynamicStates = dynamicStates.data()
-    };
-
-    pushConstantRange = {
-        .stageFlags = _pd.pushConstantsStages,
-        .offset = 0,
-        .size = _pd.pushConstantsSize
-    };
-
-    pipelineLayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = static_cast<uint32_t>(_pd.setLayouts.size()),
-        .pSetLayouts = _pd.setLayouts.data(),
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &pushConstantRange
-    };
-}
-
-void Pipeline::Build(VkDevice device, VkPipelineRenderingCreateInfoKHR renderingInfo)
-{
-    VKASSERT(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout));
-
-
-    VkGraphicsPipelineCreateInfo pipelineInfo{
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &renderingInfo,
-        .stageCount = static_cast<uint32_t>(shaderStages.size()),
-        .pStages = shaderStages.data(),
-        .pVertexInputState = &vertexInputInfo,
-        .pInputAssemblyState = &inputAssembly,
-        .pViewportState = &viewportState,
-        .pRasterizationState = &rasterizer,
-        .pMultisampleState = &multisampling,
-        .pDepthStencilState = &depthStencil,
-        .pColorBlendState = &colorBlending,
-        .pDynamicState = &dynamicState,
-        .layout = layout,
-        .subpass = 0,
-        .basePipelineHandle = VK_NULL_HANDLE
-    };
-
-    VKASSERT(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
-}
-

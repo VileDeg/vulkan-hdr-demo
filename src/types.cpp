@@ -113,6 +113,11 @@ void RenderContext::Init(CreateSceneData data)
 		UpdateLightRadius(i);
 	}
 
+	//std::vector<bool> enable = { true, true, true, true };
+	//bool a = true;
+	//GPUBool b = a;
+	//b = enable[0]; // <- This produces warning
+
 	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
 }
 

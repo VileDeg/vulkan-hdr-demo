@@ -1,6 +1,15 @@
 #pragma once
 
+#ifdef NDEBUG
+#define ENABLE_VALIDATION 0
+#define ENABLE_VALIDATION_SYNC 0
+#else
+#define ENABLE_VALIDATION 1
+#define ENABLE_VALIDATION_SYNC 0
+#endif
+
 #define MAX_FRAMES_IN_FLIGHT 3
+
 
 #include "types.h"
 #include "camera.h"
@@ -113,6 +122,7 @@ private:  // UI
     void uiUpdateScene();
     void uiUpdateHDR();
     void uiUpdateRenderContext();
+    void uiUpdateViewport();
     void uiUpdateDebugDisplay();
     void uiUpdateMenuBar();
 

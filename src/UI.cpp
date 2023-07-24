@@ -133,7 +133,6 @@ void Engine::initImgui()
 
 void Engine::imgui_RegisterViewportImageViews()
 {
-	//vkDeviceWaitIdle(_device);
 	ASSERT(_imguiViewportImageViewDescriptorSets.size() == 0);
 	_imguiViewportImageViewDescriptorSets.resize(_viewport.imageViews.size());
 
@@ -145,7 +144,6 @@ void Engine::imgui_RegisterViewportImageViews()
 
 void Engine::imgui_UnregisterViewportImageViews()
 {
-	//vkDeviceWaitIdle(_device);
 	for (auto& dset : _imguiViewportImageViewDescriptorSets) {
 		ImGui_ImplVulkan_RemoveTexture(dset);
 	}
@@ -299,8 +297,14 @@ void Engine::uiUpdateHDR()
 			}
 			if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
 				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
+					// We have to wait for GPU to finish execution because compute shader 
+					// might have not finished operating on current _gpu.compSSBO buffer
+					// even though the command was already recorded to queue.
+					// This is probably a temporary solution as it is very inefficient.
+					// If we don't use this, histogram will be very laggy most of the time.
+					vkDeviceWaitIdle(_device);
+
 					uint32_t bins = MAX_LUMINANCE_BINS;
-					//uint32_t xs[MAX_LUMINANCE_BINS];
 
 					std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
 					std::iota(xs.begin(), xs.end(), 0);
@@ -316,13 +320,6 @@ void Engine::uiUpdateHDR()
 							maxBin = _gpu.compSSBO->luminance[i];
 						}
 					}
-
-					// We have to wait for GPU to finish executing because compute shader 
-					// might have not finished operating on current _gpu.compSSBO buffer
-					// even though the command was already recorded to queue.
-					// This is probably a temporary solution as it is very inefficient.
-					// If we don't use this, histogram will be very laggy most of the time.
-					//vkDeviceWaitIdle(_device);
 
 					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
@@ -386,18 +383,6 @@ void Engine::uiUpdateRenderContext()
 					_renderContext.UpdateLightPosition(i, tmpPos);
 				}
 
-				/*{
-					ImGui::Text("Radius %f", l.radius);
-					ImGui::SameLine();
-					if (ImGui::Button("+")) {
-						_renderContext.UpdateLightAttenuation(i, 1);
-					}
-					ImGui::SameLine();
-					if (ImGui::Button("-")) {
-						_renderContext.UpdateLightAttenuation(i, 2);
-					}
-				}*/
-
 				if (ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f)) {
 					_renderContext.UpdateLightRadius(i);
 				}
@@ -413,8 +398,6 @@ void Engine::uiUpdateRenderContext()
 
 					_renderContext.UpdateLightRadius(i);
 				}
-				/*ImGui::SliderFloat("Linear", &l.linear, 0.0014, 0.7);
-				ImGui::SliderFloat("Quadratic", &l.linear, 0.000007, 0.44);*/
 
 				ImGui::Text("Radius %f", l.radius);
 
@@ -544,6 +527,7 @@ bool Engine::uiSaveScene()
 
 	return saved;
 }
+
 bool Engine::uiLoadScene()
 {
 	bool loaded = false;
@@ -597,6 +581,28 @@ void Engine::uiUpdateMenuBar()
 	}
 }
 
+void Engine::uiUpdateViewport()
+{
+	_isViewportHovered = ImGui::IsWindowHovered();
+
+	ImVec2 vSize = ImGui::GetContentRegionAvail();
+	uint32_t usX = (uint32_t)vSize.x;
+	uint32_t usY = (uint32_t)vSize.y;
+
+	if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
+		// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
+		vkDeviceWaitIdle(_device);
+
+		imgui_UnregisterViewportImageViews();
+
+		// Create viewport images and etc. with new extent
+		recreateViewport(usX, usY);
+
+		imgui_RegisterViewportImageViews();
+	}
+
+	ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));
+}
 
 void Engine::imguiUpdate()
 {
@@ -657,11 +663,6 @@ void Engine::imguiUpdate()
 
 		ImGui::Begin("Config");
 		{
-			/*for (int i = 0; i < _imguiFlags.size(); ++i) {
-				auto s = std::string("Flag ") + std::to_string(i);
-				ImGui::Checkbox(s.c_str(), _imguiFlags[i]);
-			}*/
-
 			uiUpdateScene();
 			uiUpdateHDR();
 			uiUpdateRenderContext();
@@ -675,36 +676,13 @@ void Engine::imguiUpdate()
 		}
 		ImGui::End();
 	
-
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 		ImGui::Begin("Viewport", (bool*)0, ImGuiWindowFlags_None);
 		{
-			_isViewportHovered = ImGui::IsWindowHovered();
-
-			ImVec2 vSize = ImGui::GetContentRegionAvail();
-			uint32_t usX = (uint32_t)vSize.x;
-			uint32_t usY = (uint32_t)vSize.y;
-
-			if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
-				// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
-				vkDeviceWaitIdle(_device);
-
-				imgui_UnregisterViewportImageViews();
-
-				// Create viewport images and etc. with new extent
-				recreateViewport(usX, usY);
-
-				imgui_RegisterViewportImageViews();
-
-				vkDeviceWaitIdle(_device);
-			}
-
-			ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));
+			uiUpdateViewport();		
 		}
 		ImGui::End();
 		ImGui::PopStyleVar();
-
-		
 	}
 	ImGui::End();
 }
@@ -721,9 +699,7 @@ void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
 	ImGuiIO& io = ImGui::GetIO();
 	if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
-		//GLFWwindow* backup_current_context = glfwGetCurrentContext();
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
-		//fwMakeContextCurrent(backup_current_context);
 	}
 }

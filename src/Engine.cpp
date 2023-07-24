@@ -11,7 +11,10 @@ Engine::Engine()
 {
     _enabledValidationLayers = {
 #if ENABLE_VALIDATION == 1
-        "VK_LAYER_KHRONOS_validation"
+        "VK_LAYER_KHRONOS_validation",
+#if ENABLE_VALIDATION_SYNC == 1
+        "VK_LAYER_KHRONOS_synchronization2"
+#endif
 #endif
     };
 
@@ -175,7 +178,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
     }
 }
 

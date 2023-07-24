@@ -198,7 +198,7 @@ void Engine::prepareMainPass() {
         };
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
     }
 }
 

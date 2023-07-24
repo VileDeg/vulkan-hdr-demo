@@ -70,13 +70,11 @@ struct FrameData {
     AllocatedBuffer cameraBuffer;
     AllocatedBuffer sceneBuffer;
     AllocatedBuffer objectBuffer;
-    //AllocatedBuffer matBuffer;
 
     AllocatedBuffer compSSBO;
     AllocatedBuffer compUB;
 
     VkDescriptorSet globalSet;
-    //VkDescriptorSet objectSet;
 
     VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
@@ -85,46 +83,14 @@ struct FrameData {
     VkDescriptorSet shadowPassSet;
 };
 
-struct ComputeParts {
+struct ComputeStage {
     VkDescriptorSetLayout setLayout;
 
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
 };
 
-struct ComputePass {
-    ComputeParts histogram;
-    ComputeParts averageLuminance;
-    ComputeParts toneMapping;
-};
 
-struct ShadowPass {
-// Texture properties
-    static constexpr int TEX_DIM = 512; //1024
-    static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
-// Framebuffer properties
-    //static constexpr int FB_DIM = TEX_DIM;
-    //static constexpr VkFormat FB_COLOR_FORMAT = VK_FORMAT_R32_SFLOAT;
-
-    
-    uint32_t width, height;
-
-    Texture cubemapArray;
-    //std::array<Texture, MAX_LIGHTS> depth;
-    Texture depth;
-
-    std::array<std::array<VkImageView  , 6>, MAX_LIGHTS> faceViews;
-    //std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
-
-    VkSampler sampler;
-
-    VkFormat colorFormat = VK_FORMAT_R32_SFLOAT;
-    VkFormat depthFormat; // Will be picked from available formats
-
-    //VkExtent2D imageExtent; // Corresponds to window dimensions
-
-    //VkRenderPass renderpass;
-};
 
 /**
 * Struct that holds data related to immediate command execution.
@@ -159,6 +125,40 @@ struct SwapchainPass {
     VkFormat colorFormat;
 
     VkExtent2D imageExtent; // Window dimensions
+};
+
+struct ComputePass {
+    ComputeStage histogram;
+    ComputeStage averageLuminance;
+    ComputeStage toneMapping;
+};
+
+struct ShadowPass {
+    // Texture properties
+    static constexpr int TEX_DIM = 512; //1024
+    static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
+    // Framebuffer properties
+        //static constexpr int FB_DIM = TEX_DIM;
+        //static constexpr VkFormat FB_COLOR_FORMAT = VK_FORMAT_R32_SFLOAT;
+
+
+    uint32_t width, height;
+
+    Texture cubemapArray;
+    //std::array<Texture, MAX_LIGHTS> depth;
+    Texture depth;
+
+    std::array<std::array<VkImageView, 6>, MAX_LIGHTS> faceViews;
+    //std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
+
+    VkSampler sampler;
+
+    VkFormat colorFormat = VK_FORMAT_R32_SFLOAT;
+    VkFormat depthFormat; // Will be picked from available formats
+
+    //VkExtent2D imageExtent; // Corresponds to window dimensions
+
+    //VkRenderPass renderpass;
 };
 
 enum TextureDynamicRangeType {
@@ -208,21 +208,13 @@ namespace std {
 
 struct Material {
     std::string tag = "";
-
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
-
-    void cleanup(VkDevice device) {
-        vkDestroyPipeline(device, pipeline, nullptr);
-        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    }
 };
-
 
 
 struct Mesh {
     std::string tag = "";
-
     std::vector<Vertex> vertices;
     AllocatedBuffer vertexBuffer;
 
@@ -241,7 +233,6 @@ struct Mesh {
 
 struct Model {
     std::string tag = "";
-
     std::vector<Mesh*> meshes;
 
     bool lightAffected = true;
@@ -252,7 +243,6 @@ struct Model {
 
 struct RenderObject {
     std::string tag = "";
-
     glm::vec4 color{};
 
     Model* model;
@@ -274,7 +264,6 @@ struct GPUData {
     GPUCameraUB* camera = nullptr;
     GPUSceneUB* scene = nullptr;
     GPUSceneSSBO* ssbo = nullptr;
-    //GPUMatUB* mat = nullptr;
 
     GPUCompSSBO* compSSBO = nullptr;
     GPUCompUB* compUB = nullptr;

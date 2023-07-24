@@ -427,7 +427,6 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			.color = {1, 0, 1, 1},
 			.model = &_models["cube"],
 			.isSkybox = true
-
 		}
 	);
 	_skyboxObject->model->meshes[0]->material = &_materials["skybox"];
@@ -1008,7 +1007,10 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 
 	setDebugName(VK_OBJECT_TYPE_PIPELINE, pipeline, name);
 
-	_deletionStack.push([&]() { mat.cleanup(_device); });
+	_deletionStack.push([&]() { 
+		vkDestroyPipeline(_device, mat.pipeline, nullptr);
+		vkDestroyPipelineLayout(_device, mat.pipelineLayout, nullptr);
+	});
 
 	return &_materials[name];
 }
