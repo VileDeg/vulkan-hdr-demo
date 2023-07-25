@@ -264,4 +264,20 @@ namespace utils {
 
 		return std::find(stencilFormats.begin(), stencilFormats.end(), format) != std::end(stencilFormats);
 	}
+
+	void setDebugName(VkDevice device, VkObjectType type, void* handle, const std::string name)
+	{
+		VkDebugUtilsObjectNameInfoEXT name_info = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = type,
+			.objectHandle = (uint64_t)handle,
+			.pObjectName = name.c_str()
+		};
+
+		auto vkSetDebugUtilsObjectNameEXT = 
+			(PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+		ASSERTMSG(vkSetDebugUtilsObjectNameEXT != nullptr, "Failed to load function");
+
+		vkSetDebugUtilsObjectNameEXT(device, &name_info);
+	}
 }

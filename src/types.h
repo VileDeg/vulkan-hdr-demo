@@ -52,7 +52,7 @@ struct AllocatedImage {
     VkDescriptorImageInfo descInfo;
 };
 
-struct Texture {
+struct Attachment {
     std::string tag = "";
     AllocatedImage allocImage;
     VkImageView view;
@@ -78,6 +78,7 @@ struct FrameData {
 
     VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
+    VkDescriptorSet compBlurSet;
     VkDescriptorSet compTonemapSet;
 
     VkDescriptorSet shadowPassSet;
@@ -109,11 +110,13 @@ struct ViewportPass {
     // Rendering in 32-bit HDR format to allow further processing with compute shaders
     const VkFormat colorFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
-    VkImageView depthImageView;
-    AllocatedImage depthImage;
+    Attachment depth;
+
     VkFormat depthFormat;
 
     VkExtent2D imageExtent; // Viewport dimensions
+
+    Attachment blur;
 };
 
 struct SwapchainPass {
@@ -130,6 +133,7 @@ struct SwapchainPass {
 struct ComputePass {
     ComputeStage histogram;
     ComputeStage averageLuminance;
+    ComputeStage blur;
     ComputeStage toneMapping;
 };
 
@@ -137,28 +141,18 @@ struct ShadowPass {
     // Texture properties
     static constexpr int TEX_DIM = 512; //1024
     static constexpr VkFilter TEX_FILTER = VK_FILTER_LINEAR;
-    // Framebuffer properties
-        //static constexpr int FB_DIM = TEX_DIM;
-        //static constexpr VkFormat FB_COLOR_FORMAT = VK_FORMAT_R32_SFLOAT;
-
 
     uint32_t width, height;
 
-    Texture cubemapArray;
-    //std::array<Texture, MAX_LIGHTS> depth;
-    Texture depth;
+    Attachment cubemapArray;
+    Attachment depth;
 
     std::array<std::array<VkImageView, 6>, MAX_LIGHTS> faceViews;
-    //std::array<std::array<VkFramebuffer, 6>, MAX_LIGHTS> faceFramebuffers;
 
     VkSampler sampler;
 
     VkFormat colorFormat = VK_FORMAT_R32_SFLOAT;
     VkFormat depthFormat; // Will be picked from available formats
-
-    //VkExtent2D imageExtent; // Corresponds to window dimensions
-
-    //VkRenderPass renderpass;
 };
 
 enum TextureDynamicRangeType {
@@ -221,8 +215,8 @@ struct Mesh {
     std::vector<uint32_t> indices;
     AllocatedBuffer indexBuffer;
 
-    Texture* diffuseTex{ nullptr };
-    Texture* bumpTex{ nullptr };
+    Attachment* diffuseTex{ nullptr };
+    Attachment* bumpTex{ nullptr };
 
     int mat_id = -1;
 

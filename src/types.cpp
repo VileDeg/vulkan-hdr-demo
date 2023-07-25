@@ -218,7 +218,7 @@ Mesh* Engine::getMesh(const std::string& name)
 	return _getCache(name, _meshes);
 }
 
-Texture* Engine::getTexture(const std::string& name)
+Attachment* Engine::getTexture(const std::string& name)
 {
 	return _getCache(name, _textures);
 }

@@ -239,7 +239,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 			VkDeviceSize bufferSize = imageSize * 6;
 			// Allocate temporary buffer for holding texture data to upload
-			stagingBuffer = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+			stagingBuffer = allocateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 		} else {
 			// Make sure all the faces of cubemap have exactly the same dimensions and color channels
 			ASSERT(baseTexW == texW && baseTexH == texH && baseTexChannels == texChannels);
@@ -250,16 +250,20 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 		// Copy data to buffer
 		void* dst = (char*)stagingBuffer.gpu_ptr + bufferOffset;
 		memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
-		//stagingBuffer.runOnMemoryMap(_allocator, [&](void* data) {
-		//	// Offset into buffer
-		//	void* dst = (char*)data + bufferOffset;
-		//	memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
-		//	});
+	
 		// We no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
 		stbi_image_free(pixel_ptr);
 
 		bufferOffset += imageSize;
 	}
+
+	VkImageSubresourceRange subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 6
+	};
 
 	// Create optimal tiled target image
 	VkImageCreateInfo imageInfo{
@@ -284,7 +288,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	};
 
 	// This creates entry in cache
-	Texture& newTexture = _textures[basePath];
+	Attachment& newTexture = _textures[basePath];
 	newTexture.tag = basePath;
 
 	VmaAllocationCreateInfo dimg_allocinfo = {};
@@ -321,46 +325,33 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				offset += imageSize;
 			}
 
-			VkImageMemoryBarrier imageBarrier_toTransfer{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-				.srcAccessMask = 0,
-				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				.image = newTexture.allocImage.image,
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0,
-					.levelCount = 1,
-					.baseArrayLayer = 0,
-					.layerCount = 6
-				}
-			};
+			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+				0, 
+				VK_ACCESS_TRANSFER_WRITE_BIT,
 
-			//barrier the image into the transfer-receive layout
-			vkCmdPipelineBarrier(cmd,
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-				0, 0, nullptr, 0, nullptr, 1, &imageBarrier_toTransfer);
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				subresourceRange);
 
 			//copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				static_cast<uint32_t>(bufferCopyRegions.size()), bufferCopyRegions.data());
 
-			VkImageMemoryBarrier imageBarrier_toReadable = imageBarrier_toTransfer;
+			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+				VK_ACCESS_TRANSFER_WRITE_BIT, 
+				VK_ACCESS_SHADER_READ_BIT,
 
-			imageBarrier_toReadable.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			imageBarrier_toReadable.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 
-			imageBarrier_toReadable.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			imageBarrier_toReadable.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			//barrier the image into the shader readable layout
-			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				0, 0, nullptr, 0, nullptr, 1, &imageBarrier_toReadable);
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				subresourceRange);
 		}
 	);
-
-	vkDeviceWaitIdle(_device);
 
 	// Create image view
 	VkImageViewCreateInfo imageinfo = {
@@ -368,43 +359,20 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 		.image = newTexture.allocImage.image,
 		.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
 		.format = imageFormat,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 6
-		},
+		.subresourceRange = subresourceRange,
 	};
 
 	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
 
-
 	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.view, nullptr);
 		vmaDestroyImage(_allocator, newTexture.allocImage.image, newTexture.allocImage.allocation);
-		});
+	});
 
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
 
-	/*VkSampler cubemapSampler;
-	{
-		VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
-		VkSamplerAddressMode mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-		samplerInfo1.addressModeU = mode;
-		samplerInfo1.addressModeV = mode;
-		samplerInfo1.addressModeW = mode;
-
-		VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &cubemapSampler));
-		_deletionStack.push([=]() {
-			vkDestroySampler(_device, cubemapSampler, nullptr);
-			});
-	}*/
-
-
-	// write skybox to descriptor set
+	// write cubemap to descriptor set
 	newTexture.allocImage.descInfo = {
 		.sampler = _linearSampler,//cubemapSampler,
 		.imageView = newTexture.view,
@@ -419,17 +387,6 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				_frames[i].globalSet, &newTexture.allocImage.descInfo, 3);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
-
-
-	_skyboxObject = std::make_shared<RenderObject>(
-		RenderObject{
-			.tag = "Skybox",
-			.color = {1, 0, 1, 1},
-			.model = &_models["cube"],
-			.isSkybox = true
-		}
-	);
-	_skyboxObject->model->meshes[0]->material = &_materials["skybox"];
 }
 
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
@@ -611,9 +568,9 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	}
 
 	// Lambda for convenience
-	auto loadModelTexture = [this](std::string baseDir, std::string texName, Texture** dst) {
+	auto loadModelTexture = [this](std::string baseDir, std::string texName, Attachment** dst) {
 		std::string texture_filename = baseDir + texName;
-		Texture* texture = nullptr;
+		Attachment* texture = nullptr;
 		// Only load the texture if it is not already loaded
 		if (getTexture(texture_filename) == nullptr) {
 			if (!FileExists(texture_filename)) {
@@ -681,14 +638,12 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 
 
-Texture* Engine::loadTextureFromFile(const char* path)
+Attachment* Engine::loadTextureFromFile(const char* path)
 {
 	/* Based on https://github.com/vblanco20-1/vulkan-guide */
 
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-
 	if (!pixels) {
 		PRERR("Failed to load texture file " << path);
 		return nullptr;
@@ -697,17 +652,16 @@ Texture* Engine::loadTextureFromFile(const char* path)
 	void* pixel_ptr = pixels;
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-	//the format R8G8B8A8 matches exactly with the pixels loaded from stb_image lib
+	// The format R8G8B8A8 matches exactly with the pixels loaded from stb_image lib
 	VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
 
-	//allocate temporary buffer for holding texture data to upload
-	AllocatedBuffer stagingBuffer = createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+	// Allocate temporary buffer for holding texture data to upload
+	AllocatedBuffer stagingBuffer = allocateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
-	//copy data to buffer
+	// Copy data to buffer
 	memcpy(stagingBuffer.gpu_ptr, pixel_ptr, static_cast<size_t>(imageSize));
 	
-
-	//we no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
+	// We no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
 	stbi_image_free(pixels);
 
 	VkExtent3D imageExtent{
@@ -716,13 +670,20 @@ Texture* Engine::loadTextureFromFile(const char* path)
 		.depth = 1
 	};
 
+	VkImageSubresourceRange subresourceRange = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 1
+	};
+
 	VkImageCreateInfo dimg_info =
 		vkinit::image_create_info(imageFormat,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, imageExtent);
 
-
 	// This creates entry in cache
-	Texture& newTexture = _textures[path];
+	Attachment& newTexture = _textures[path];
 	newTexture.tag = path;
 
 	VmaAllocationCreateInfo dimg_allocinfo = {};
@@ -733,27 +694,6 @@ Texture* Engine::loadTextureFromFile(const char* path)
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
-			VkImageMemoryBarrier imageBarrier_toTransfer{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-				.srcAccessMask = 0,
-				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				.image = newTexture.allocImage.image,
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0,
-					.levelCount = 1,
-					.baseArrayLayer = 0,
-					.layerCount = 1
-				}
-			};
-
-			//barrier the image into the transfer-receive layout
-			vkCmdPipelineBarrier(cmd,
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-				0, 0, nullptr, 0, nullptr, 1, &imageBarrier_toTransfer);
-
 			VkBufferImageCopy copyRegion{
 				.bufferOffset = 0,
 				.bufferRowLength = 0,
@@ -767,19 +707,30 @@ Texture* Engine::loadTextureFromFile(const char* path)
 				.imageExtent = imageExtent
 			};
 
+			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+				0,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				subresourceRange);
+
 			//copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			VkImageMemoryBarrier imageBarrier_toReadable = imageBarrier_toTransfer;
+			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
 
-			imageBarrier_toReadable.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			imageBarrier_toReadable.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 
-			imageBarrier_toReadable.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			imageBarrier_toReadable.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			//barrier the image into the shader readable layout
-			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier_toReadable);
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				subresourceRange);
 		}
 	);
 
@@ -810,7 +761,7 @@ void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 		mesh.indices.size() * sizeof(uint32_t);
 
 	// Allocate temporary buffer for holding texture data to upload
-	AllocatedBuffer stagingBuffer = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+	AllocatedBuffer stagingBuffer = allocateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	if (isVertexBuffer) {
 		memcpy(stagingBuffer.gpu_ptr, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
@@ -822,7 +773,7 @@ void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 
 	AllocatedBuffer& allocBuffer = isVertexBuffer ? mesh.vertexBuffer : mesh.indexBuffer;
 
-	allocBuffer = createBuffer(bufferSize, usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	allocBuffer = allocateBuffer(bufferSize, usg | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
 	immediate_submit([&](VkCommandBuffer cmd) {
 		VkBufferCopy copy;
@@ -952,6 +903,16 @@ void Engine::createScene(CreateSceneData data)
 
 	loadCubemap(data.skyboxPath.c_str(), true);
 
+	_skyboxObject = std::make_shared<RenderObject>(
+		RenderObject{
+			.tag = "Skybox",
+			.color = {1, 0, 1, 1},
+			.model = &_models["cube"],
+			.isSkybox = true
+		}
+	);
+	_skyboxObject->model->meshes[0]->material = &_materials["skybox"];
+
 	_renderContext.Init(data);
 
 	if (getModel("sphere")) {
@@ -994,7 +955,7 @@ void Engine::createScene(CreateSceneData data)
 
 	_deletionStack.push([this]() {
 		_sceneDisposeStack.flush();
-		});
+	});
 }
 
 Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
@@ -1005,7 +966,7 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 		.pipelineLayout = layout
 	};
 
-	setDebugName(VK_OBJECT_TYPE_PIPELINE, pipeline, name);
+	utils::setDebugName(_device, VK_OBJECT_TYPE_PIPELINE, pipeline, name);
 
 	_deletionStack.push([&]() { 
 		vkDestroyPipeline(_device, mat.pipeline, nullptr);

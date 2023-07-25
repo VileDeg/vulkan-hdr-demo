@@ -16,7 +16,7 @@ void Engine::createVmaAllocator()
     _deletionStack.push([&]() { vmaDestroyAllocator(_allocator); });
 }
 
-AllocatedBuffer Engine::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+AllocatedBuffer Engine::allocateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 {
     VkBufferCreateInfo bufferInfo{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -39,6 +39,21 @@ AllocatedBuffer Engine::createBuffer(size_t allocSize, VkBufferUsageFlags usage,
 
     return newBuffer;
 }
+
+//AllocatedImage Engine::allocateImage(VkFormat format, VkImageUsageFlags usage, VkExtent3D extent)
+//{
+//    VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, extent);
+//
+//    VmaAllocationCreateInfo dimgAllocinfo = {
+//        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+//        .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+//    };
+//
+//    AllocatedImage newImage;
+//    vmaCreateImage(_allocator, &imgInfo, &dimgAllocinfo, &newImage.image, &newImage.allocation, nullptr);
+//
+//    return newImage;
+//}
 
 size_t Engine::pad_uniform_buffer_size(size_t originalSize)
 {

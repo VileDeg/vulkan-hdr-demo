@@ -234,6 +234,7 @@ void Engine::createPipelines()
     { // Compute luminance histogram
         s_createComputePipeline(_device, "histogram.comp.spv"        , _compute.histogram);
         s_createComputePipeline(_device, "average_luminance.comp.spv", _compute.averageLuminance);
+        s_createComputePipeline(_device, "bilateral.comp.spv"        , _compute.blur);
         s_createComputePipeline(_device, "tonemap.comp.spv"          , _compute.toneMapping);
     }
 
@@ -243,6 +244,9 @@ void Engine::createPipelines()
 
         vkDestroyPipelineLayout(_device, _compute.averageLuminance.pipelineLayout, nullptr);
         vkDestroyPipeline(_device, _compute.averageLuminance.pipeline, nullptr);
+
+        vkDestroyPipelineLayout(_device, _compute.blur.pipelineLayout, nullptr);
+        vkDestroyPipeline(_device, _compute.blur.pipeline, nullptr);
 
         vkDestroyPipelineLayout(_device, _compute.toneMapping.pipelineLayout, nullptr);
         vkDestroyPipeline(_device, _compute.toneMapping.pipeline, nullptr);

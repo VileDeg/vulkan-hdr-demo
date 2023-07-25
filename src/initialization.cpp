@@ -50,7 +50,6 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
 }
 
 static bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
-
     uint32_t propertyCount = 0;
     vkEnumerateInstanceLayerProperties(&propertyCount, nullptr);
     std::vector<VkLayerProperties> availableLayerProperties(propertyCount);
@@ -403,7 +402,7 @@ void Engine::createLogicalDevice()
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);
 
-    setDebugName(VK_OBJECT_TYPE_QUEUE, _graphicsQueue, "Main and only queue");
+    utils::setDebugName(_device, VK_OBJECT_TYPE_QUEUE, _graphicsQueue, "Main and only queue");
 
     loadDeviceExtensionFunctions();
 }

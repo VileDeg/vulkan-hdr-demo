@@ -61,6 +61,7 @@ void Engine::Init()
 
     createVmaAllocator();
 
+    createSamplers();
     initUploadContext();
     
     createSwapchain();
@@ -69,11 +70,12 @@ void Engine::Init()
     prepareViewportPass(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
     prepareShadowPass();
 
+
     initDescriptors();
 
     createFrameData();
     createPipelines();
-    createSamplers();
+   
     
     loadScene(SCENE_PATH + "dobrovic-sponza.json");
     
@@ -118,6 +120,36 @@ void Engine::Cleanup()
 }
 
 
+static void s_createAttachment(VkDevice device, VmaAllocator allocator, 
+    VkFormat format, VkImageUsageFlags usage, 
+    VkExtent3D extent, VkImageAspectFlags aspect,
+    VkImageLayout layout, VkSampler sampler,
+    Attachment& att,
+    const std::string debugName = "")
+{
+    VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, extent);
+
+    VmaAllocationCreateInfo imgAllocinfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+
+    vmaCreateImage(allocator, &imgInfo, &imgAllocinfo, &att.allocImage.image, &att.allocImage.allocation, nullptr);
+
+    VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, att.allocImage.image, aspect);
+
+    VKASSERT(vkCreateImageView(device, &view_info, nullptr, &att.view));
+
+    utils::setDebugName(device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "IMAGE: " + debugName);
+    utils::setDebugName(device, VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "IMAGE_VIEW: " + debugName);
+
+    att.allocImage.descInfo = {
+        .sampler = sampler,
+        .imageView = att.view,
+        .imageLayout = layout
+    };
+}
+
 void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     _viewport.imageExtent = { extentX, extentY };
     bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
@@ -131,20 +163,12 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     //Create depth image
     {
-        VkImageCreateInfo dimgInfo = vkinit::image_create_info(_viewport.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, extent3D);
-
-        VmaAllocationCreateInfo dimgAllocinfo = {
-            .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-            .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        };
-
-        vmaCreateImage(_allocator, &dimgInfo, &dimgAllocinfo, &_viewport.depthImage.image, &_viewport.depthImage.allocation, nullptr);
-
-        VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.depthFormat, _viewport.depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-        VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.depthImageView));
-
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.depthImage.image, "Viewport Depth Image");
+        s_createAttachment(_device, _allocator,
+            _viewport.depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            extent3D, VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, _linearSampler,
+            _viewport.depth, "VIEWPORT_DEPTH"
+        );
     }
 
     size_t imgCount = _swapchain.images.size();
@@ -173,14 +197,38 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
         //allocate and create the image
         VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
-        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
+        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
-        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
+        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
+    }
+
+    { // Create blur texture
+        s_createAttachment(_device, _allocator,
+            _viewport.colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, _linearSampler,
+            _viewport.blur, "VIEWPORT_BLUR"
+        );
+
+        immediate_submit([this](VkCommandBuffer cmd) {
+            utils::setImageLayout(cmd, _viewport.blur.allocImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            /*utils::imageMemoryBarrier(cmd, _viewport.blur.allocImage.image, 
+                0, 0,
+
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_GENERAL,
+
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,*/
+        });
     }
 }
+
+
+
 
 void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
 {
@@ -195,8 +243,11 @@ void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
 void Engine::cleanupViewportResources()
 {
     //Destroy depth image
-    vkDestroyImageView(_device, _viewport.depthImageView, nullptr);
-    vmaDestroyImage(_allocator, _viewport.depthImage.image, _viewport.depthImage.allocation);
+    vkDestroyImageView(_device, _viewport.depth.view, nullptr);
+    vmaDestroyImage(_allocator, _viewport.depth.allocImage.image, _viewport.depth.allocImage.allocation);
+
+    vkDestroyImageView(_device, _viewport.blur.view, nullptr);
+    vmaDestroyImage(_allocator, _viewport.blur.allocImage.image, _viewport.blur.allocImage.allocation);
 
     for (auto& imageView : _viewport.imageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
@@ -220,7 +271,7 @@ void Engine::prepareShadowPass()
     bool validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
     ASSERTMSG(validDepthFormat, "Physical device has no supported depth formats");
 
-    Texture& cubemap = _shadow.cubemapArray;
+    Attachment& cubemap = _shadow.cubemapArray;
     // 32 bit float format for higher precision
     const uint32_t cubeArrayLayerCount = 6 * MAX_LIGHTS;
 
@@ -395,6 +446,8 @@ void Engine::prepareShadowPass()
 }
 
 
+
+
 void Engine::initDescriptors()
 {
     _descriptorAllocator = new vkutil::DescriptorAllocator{};
@@ -468,7 +521,7 @@ void Engine::initFrame(FrameData& f)
         VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
 
         static int i = 0;
-        setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(i));
+        utils::setDebugName(_device,  VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(i));
         ++i;
 
 
@@ -484,11 +537,11 @@ void Engine::initFrame(FrameData& f)
 
     {
         { // Camera + scene + mat buffers descriptor set
-            f.cameraBuffer = createBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.sceneBuffer  = createBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.sceneBuffer  = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             //f.matBuffer    = createBuffer(sizeof(GPUMatUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            f.objectBuffer = createBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Image descriptor for the shadow cube map
             _shadow.cubemapArray.allocImage.descInfo = {
@@ -516,14 +569,14 @@ void Engine::initFrame(FrameData& f)
         }
 
         { // Compute descriptor sets
-            f.compSSBO = createBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.compUB = createBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compSSBO = allocateBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compUB = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Create layout and write descriptor set for COMPUTE histogram step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
                 .build(f.compHistogramSet, _compute.histogram.setLayout);
 
             // Create layout and write descriptor set for COMPUTE average luminance step
@@ -532,11 +585,19 @@ void Engine::initFrame(FrameData& f)
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .build(f.compAvgLumSet, _compute.averageLuminance.setLayout);
 
+            // Create layout and write descriptor set for COMPUTE blur step
+            vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
+                .bind_image(3, &_viewport.blur.allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                .build(f.compBlurSet, _compute.blur.setLayout);
+
             // Create layout and write descriptor set for COMPUTE tone mapping step
             vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(2, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(f.compTonemapSet, _compute.toneMapping.setLayout);
         }
     }
@@ -566,13 +627,3 @@ void Engine::createFrameData()
     }
 }
 
-void Engine::setDebugName(VkObjectType type, void* handle, const std::string name)
-{
-    VkDebugUtilsObjectNameInfoEXT name_info = {
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType = type,
-        .objectHandle = (uint64_t)handle,
-        .pObjectName = name.c_str()
-    };
-    vkSetDebugUtilsObjectNameEXT(_device, &name_info);
-}

@@ -15,10 +15,14 @@ ub;
 #define THREADS_X 32
 #define THREADS_Y 32
 
+#define RGB_TO_LUM vec3(0.2125, 0.7154, 0.0721)
+
 layout (rgba32f, set = 0, binding = 2) uniform image2D inOutHDRImage;
 
 const float WHITE_POINT = 10.0;
 const float GAMMA = 2.2;
+
+const float threshold = 0.5;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -42,6 +46,17 @@ void main() {
                 case 3: outColor = ACESFilm(outColor); break;
                 case 4: outColor = ACESFitted(outColor); break;
             }
+
+            float lum = dot(outColor, RGB_TO_LUM);
+            float exposure = 0;
+            if (lum >= threshold) {
+                exposure = -2.0;
+            } else {
+                exposure = 1.5;
+            }
+            outColor *= pow(2, exposure);
+
+            
         }
 
         // Gamma correction

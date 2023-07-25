@@ -36,11 +36,12 @@ private: /* Methods used from Init directly */
     void createVmaAllocator();
     void createSwapchain();
 
-    //void createRenderpass();
+   
 
     void prepareMainPass();
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
     void prepareShadowPass();
+    void prepareComputePass();
 
     void createPipelines();
     void createFrameData();
@@ -69,8 +70,8 @@ private: /* Secondary methods */
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
 
-    Texture* loadTextureFromFile(const char* path);
 
+    Attachment* loadTextureFromFile(const char* path);
     void loadCubemap(const char* cubemapDirName, bool isHDR);
 
     void uploadMesh(Mesh& mesh);
@@ -80,7 +81,7 @@ private: /* Secondary methods */
 
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
-    Texture* getTexture(const std::string& name);
+    Attachment* getTexture(const std::string& name);
     Model* getModel(const std::string& name);
 
     //FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
@@ -96,7 +97,9 @@ private: /* Secondary methods */
     void drawFrame();
 
 
-    AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+    AllocatedBuffer allocateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+    //AllocatedImage allocateImage(VkFormat format, VkImageUsageFlags usage, VkExtent3D extent);
+
     size_t pad_uniform_buffer_size(size_t originalSize);
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
@@ -139,7 +142,7 @@ private:
     float _fovY = 90.f; // degrees
 
 private:
-    void setDebugName(VkObjectType type, void* handle, const std::string name);
+    //void setDebugName(VkObjectType type, void* handle, const std::string name);
 
 private: 
     GLFWwindow* _window;
@@ -189,7 +192,7 @@ private:
     std::unordered_map<std::string, Model> _models;
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;
-    std::unordered_map<std::string, Texture> _textures;
+    std::unordered_map<std::string, Attachment> _textures;
 
     vkutil::DescriptorAllocator* _descriptorAllocator;
     vkutil::DescriptorLayoutCache* _descriptorLayoutCache;
@@ -203,6 +206,8 @@ private:
     VkDescriptorPool _descriptorPool;
 
     AllocatedImage _skyboxAllocImage;
+
+    Attachment _blurBuffer;
 
     RenderContext _renderContext;
 

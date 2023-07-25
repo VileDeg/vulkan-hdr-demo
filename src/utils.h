@@ -46,4 +46,6 @@ namespace utils {
 	VkBool32 getSupportedDepthStencilFormat(VkPhysicalDevice physicalDevice, VkFormat* depthStencilFormat);
 
 	VkBool32 formatHasStencil(VkFormat format);
+
+	void setDebugName(VkDevice device, VkObjectType type, void* handle, const std::string name);
 }
