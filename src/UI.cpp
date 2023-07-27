@@ -183,8 +183,8 @@ void Engine::uiUpdateHDR()
 {
 	if (ImGui::TreeNodeEx("HDR", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-		if (ImGui::TreeNodeEx("Tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable tone mapping", &_renderContext.comp.enableToneMapping);
+		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Checkbox("Enable global tone mapping", &_renderContext.comp.enableToneMapping);
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
@@ -212,6 +212,12 @@ void Engine::uiUpdateHDR()
 					_renderContext.comp.gammaMode = item_current;
 				}
 			}
+
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Checkbox("Enable LTM", &_renderContext.comp.enableLTM);
 
 			ImGui::TreePop();
 		}

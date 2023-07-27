@@ -187,7 +187,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT /* | VK_IMAGE_USAGE_TRANSFER_DST_BIT */,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         };
 
@@ -207,7 +207,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     { // Create blur texture
         s_createAttachment(_device, _allocator,
-            _viewport.colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            _viewport.colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT /* | VK_IMAGE_USAGE_TRANSFER_SRC_BIT*/,
             extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_GENERAL, _linearSampler,
             _viewport.blur, "VIEWPORT_BLUR"

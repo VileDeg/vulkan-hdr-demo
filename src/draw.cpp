@@ -566,48 +566,76 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 #endif
 #endif
 		}
+		
 #if 1
-		// Compute blur
-		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipeline);
-		{
-			VkDescriptorImageInfo imageBufferInfo{
-					.sampler = _linearSampler,
-					.imageView = _viewport.imageViews[imageIndex],
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-			};
-			VkWriteDescriptorSet inputHDRImage =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compBlurSet, &imageBufferInfo, 2);
+		if (_renderContext.comp.enableLTM) {
+			// Compute blur
+			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipeline);
+			{
+				VkDescriptorImageInfo imageBufferInfo{
+						.sampler = _linearSampler,
+						.imageView = _viewport.imageViews[imageIndex],
+						.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+				};
+				VkWriteDescriptorSet inputHDRImage =
+					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+						f.compBlurSet, &imageBufferInfo, 2);
 
-			VkDescriptorImageInfo imageBufferInfo1{
-					.sampler = _linearSampler,
-					.imageView = _viewport.blur.view,
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-			};
-			VkWriteDescriptorSet outHDRImage =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compBlurSet, &imageBufferInfo1, 3);
+				VkDescriptorImageInfo imageBufferInfo1{
+						.sampler = _linearSampler,
+						.imageView = _viewport.blur.view,
+						.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+				};
+				VkWriteDescriptorSet outHDRImage =
+					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+						f.compBlurSet, &imageBufferInfo1, 3);
 
 
-			vkUpdateDescriptorSets(_device, 1, &inputHDRImage, 0, nullptr);
-			vkUpdateDescriptorSets(_device, 1, &outHDRImage, 0, nullptr);
-			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipelineLayout, 0, 1, &f.compBlurSet, 0, nullptr);
+				vkUpdateDescriptorSets(_device, 1, &inputHDRImage, 0, nullptr);
+				vkUpdateDescriptorSets(_device, 1, &outHDRImage, 0, nullptr);
+				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipelineLayout, 0, 1, &f.compBlurSet, 0, nullptr);
 
-			constexpr uint32_t group_size = 32;
-			// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
-			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / group_size + 1, _viewport.imageExtent.height / group_size + 1, 1);
-		}
+				constexpr uint32_t group_size = 32;
+				// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
+				vkCmdDispatch(f.cmd, _viewport.imageExtent.width / group_size + 1, _viewport.imageExtent.height / group_size + 1, 1);
+			}
 
 #if ENABLE_SYNC == 1
-		// Computed average luminance is used by next compute shader so sync needed
-		utils::memoryBarrier(f.cmd,
-			VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+			utils::memoryBarrier(f.cmd,
+				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 #elif ENABLE_SYNC == 2
-		s_fullBarrier(f.cmd);
+			s_fullBarrier(f.cmd);
+#endif
+			/*VkImageSubresourceLayers layers = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			};
+
+			VkExtent3D extent = {
+				.width = _viewport.imageExtent.width,
+				.height = _viewport.imageExtent.height,
+				.depth = 1
+			};
+
+			VkImageCopy region = {
+				.srcSubresource = layers,
+				.srcOffset = 0,
+				.dstSubresource = layers,
+				.dstOffset = 0,
+				.extent = extent
+			};
+
+			utils::imageMemoryBarrier(f.cmd, _viewport.blur.allocImage.image);
+
+			vkCmdCopyImage(f.cmd, _viewport.blur.allocImage.image, VK_IMAGE_LAYOUT_GENERAL, _viewport.images[imageIndex].image, VK_IMAGE_LAYOUT_GENERAL, 1, &region);*/
+		}
 #endif
 
-#endif
+
 #if 1	
 
 
@@ -617,6 +645,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			VkDescriptorImageInfo imageBufferInfo{
 				.sampler = _linearSampler,
 				.imageView = _viewport.imageViews[imageIndex],
+				//.imageView = _viewport.blur.view,
 				.imageLayout = VK_IMAGE_LAYOUT_GENERAL
 			};
 			VkWriteDescriptorSet inOutHDRImage =

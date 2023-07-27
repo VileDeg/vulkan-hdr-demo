@@ -7,7 +7,7 @@ uniform AdaptationUB {
     float timeCoeff;
     uint lumLowerIndex;
     uint lumUpperIndex;
-    int _pad0;
+    bool enableLTM;
 
     vec4 weights; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
 

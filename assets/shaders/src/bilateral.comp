@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/tone_mapping.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
@@ -16,71 +17,59 @@ layout (set = 0, binding = 1)
 #include "incl/luminanceUB.incl" 
 ub;
 
-const int SAMPLE_COUNT = 11;
+#define RGB_TO_LUM vec3(0.2125, 0.7154, 0.0721)
 
-const float OFFSETS[11] = float[11](
-    -9.260003189282239,
-    -7.304547036499911,
-    -5.353083811756559,
-    -3.4048471718931532,
-    -1.4588111840004858,
-    0.48624268466894843,
-    2.431625915613778,
-    4.378621204796657,
-    6.328357272092126,
-    8.281739853232981,
-    10
-);
-
-const float WEIGHTS[11] = float[11](
-    0.002071619848105582,
-    0.012832728894200915,
-    0.0517012035286156,
-    0.1355841921107385,
-    0.23159560769543552,
-    0.2577662485651885,
-    0.18695197035734282,
-    0.08833722224378082,
-    0.027179417353550506,
-    0.005441161635553416,
-    0.0005386277674878371
-);
-
-
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inImage;
+layout (rgba32f, set = 0, binding = 2) uniform /*readonly*/ image2D inImage;
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D outImage;
 
-int boxW = 11;
+
+const float WHITE_POINT = 10.0;
+
+vec3 applyToneMapping(vec3 col) {
+	vec3 outCol = col;
+	switch (ub.toneMappingMode) {
+        case 0: outCol = ReinhardExtended(col, WHITE_POINT); break;
+        case 1: outCol = Reinhard(col); break;
+        case 2: outCol = Uncharted2Filmic(col); break;
+        case 3: outCol = ACESFilm(col); break;
+        case 4: outCol = ACESFitted(col); break;
+    }
+	return outCol;
+}
+
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	uvec2 dim = imageSize(inImage).xy;
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+		const float shadw = exp2(-1);
+		const float highl = exp2(1);
+		const float exposr = 1.0; // 0.7
+
+		const float sigmaSq = 5 * 5;
+
+
         ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
-	    /*vec3 result = vec3(imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)));
-        vec2 blurDirection = vec2(1, 0);
-        for (int i = 0; i < SAMPLE_COUNT; ++i) {
-            vec2 offset = blurDirection * OFFSETS[i] / dim;
-            result += vec3(imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy + offset))) * WEIGHTS[i];
-        }
-        barrier();*/
-        vec3 result = vec3(0);
-        for (int i = -boxW / 2; i < boxW / 2; ++i) {
-            for (int j = -boxW / 2; j < boxW / 2; ++j) {
-                result += vec3(imageLoad(inImage, coords + ivec2(i,j)));
-            }
-        }
-        result /= boxW * boxW;
-        //barrier();
-        imageStore(outImage, coords, vec4(result, 1.0));
-        /*barrier();
-        result = vec3(imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)));
-        blurDirection = vec2(0, 1);
-        for (int i = 0; i < SAMPLE_COUNT; ++i) {
-            vec2 offset = blurDirection * OFFSETS[i] / dim;
-            result += vec3(imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy + offset))) * WEIGHTS[i];
-        }
-        barrier();
-        imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(result, 1.0));*/
+		vec3 inpColor = imageLoad(inImage, coords).rgb * exposr;
+
+		vec3 highlights = clamp(applyToneMapping(inpColor * highl), 0.0, 1.0);
+		vec3 midtones   = clamp(applyToneMapping(inpColor), 0.0, 1.0);
+		vec3 shadows	= clamp(applyToneMapping(inpColor * shadw), 0.0, 1.0);
+
+		vec3 lums = vec3(
+			sqrt(dot(highlights, RGB_TO_LUM)),
+			sqrt(dot(midtones  , RGB_TO_LUM)),
+			sqrt(dot(shadows   , RGB_TO_LUM))
+		);
+
+		vec3 diff = lums - vec3(0.5);
+        vec3 weights = vec3(exp(-0.5 * diff * diff * sigmaSq));
+        weights /= dot(weights, vec3(1.0)) + 0.00001; // normalized weights
+
+		vec3 outColor = highlights * weights.x + midtones * weights.y + shadows * weights.z;
+		//vec3 outColor = vec3(dot(lums, weights));
+
+        //imageStore(outImage, coords, vec4(outColor, 1.0));
+		imageStore(inImage, coords, vec4(outColor, 1.0));
 	}
 }

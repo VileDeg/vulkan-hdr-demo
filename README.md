@@ -1,18 +1,29 @@
 # vulkan-hdr-demo
 
+<p align="center">
+ <img width="300" src="fig/crest.png"> 
+</p>
+
 ## About
-This repository contains a simple renderer, that uses Vulkan API and is written in C++.
+This repository contains a 3D renderer, that uses Vulkan API and is written in C++.
 
-For cross-platform compilation it uses CMake build system. Platforms currently supported: `Windows, Linux`.
+**Note: Project is still actively being worked on, thus it may contain a lot of commented code sections, lack appropriate comments and can be unintuitive to use**.
 
-Current functionality:
+### Current functionality:
 * Camera movement `W, A, S, D, Shift(down), Space(up)`
-* Model loading: `.obj`, `without textures`.
+* Model loading: `.obj` with `materials` and `diffuse textures`.
 * Texture loading: `RGBA`.
-* Phong lighting model: `several point lights with attenuation`.
-* Tone mapping algorithms: `Reinhart`.
+* HDR skybox cubemap loading: `32-bit float`.
+* Phong lighting model: `several point lights with configurable position, intensity, attenuation etc`.
+* Several global tone mapping algorithms: `Reinhard`, `ACES`, `Uncharted2` etc.
+* Dynamic exposure adaptation: `using luminance histogram`.
+* UI for scene configuration: `ImGui`.
+* Dynamic shadows: `omnidirectional shadow mapping`.
+* Scene Save/Load: `JSON format`.
+* Bump mapping: `bump maps`.
 
 ## Compilation
+For cross-platform compilation it uses CMake build system. Platforms currently supported: `Windows, Linux`.
 
 ### Configure the project with CMake:
 ```
@@ -52,9 +63,11 @@ You can run it from command line, or on Windows also from Visual Studio.
 * [GLFW](https://www.glfw.org/)
 * [GLM](https://glm.g-truc.net/0.9.9/index.html)
 * [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h)
-* [tiny_obj_loader](https://github.com/tinyobjloader/tinyobjloader)
-* [tinygltf](https://github.com/syoyo/tinygltf)
+* [tinyobj](https://github.com/tinyobjloader/tinyobjloader)
 * [Vulkan Memory Allocator by AMD](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+* [ImGui](https://github.com/ocornut/imgui)
+* [ImPlot](https://github.com/epezent/implot)
+* [JSON for Modern C++](https://github.com/nlohmann/json)
 
 ### Web pages
 As this is mainly a personal learning project, a lot of resources where used to learn Vulkan API.
@@ -65,11 +78,19 @@ Here are the main ones:
 * [Vulkan Tutorial by Alexander Overvoorde](https://vulkan-tutorial.com/)
 * [LearnOpenGL by Joey de Vries](https://learnopengl.com/)
 
-Following are the repositories from which some code was taken as-is or with modifications. Authors are also attributed in the source code:
+Following are the repositories from which some code was taken as-is or with modifications. Authors are also attributed in source code:
 * [vulkan-guide repository by vblanco20-1](https://github.com/vblanco20-1/vulkan-guide)
 * [VulkanTutorial repository by Jan Pečiva](https://github.com/pc-john/VulkanTutorial)
-
+* [Vulkan examples by Sascha Willems](https://github.com/SaschaWillems/Vulkan)
 ### Assets
-Assets used and the information about them can be found in `assets` folder and subfolders.
+Assets used and information about them can be found in `assets` folder and subfolders.
 
 Usually each model's folder contains some `(LICENSE|copyright).txt` file.
+
+### Application screenshots
+
+![dobrovic](fig/dobrovic-sponza.png)
+
+![crytek](fig/crytek-sponza.png)
+
+![sibenik](fig/sibenik.png)
