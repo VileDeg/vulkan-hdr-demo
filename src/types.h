@@ -56,6 +56,11 @@ struct Attachment {
     std::string tag = "";
     AllocatedImage allocImage;
     VkImageView view;
+
+    void Cleanup(VkDevice device, VmaAllocator allocator) {
+        vkDestroyImageView(device, view, nullptr);
+        vmaDestroyImage(allocator, allocImage.image, allocImage.allocation);
+    }
 };
 
 struct FrameData {
@@ -76,21 +81,40 @@ struct FrameData {
 
     VkDescriptorSet globalSet;
 
-    VkDescriptorSet compHistogramSet;
+    /*VkDescriptorSet compHistogramSet;
     VkDescriptorSet compAvgLumSet;
     VkDescriptorSet compBlurSet;
-    VkDescriptorSet compTonemapSet;
+    VkDescriptorSet compTonemapSet;*/
 
     VkDescriptorSet shadowPassSet;
 };
 
+
 struct ComputeStage {
+    std::string tag = "";
+
     VkDescriptorSetLayout setLayout;
 
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
-};
 
+    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> sets;
+
+    static constexpr int MAX_IMAGE_UPDATES = 64;
+    std::vector<VkDescriptorImageInfo> descImageInfo;
+    std::vector<VkWriteDescriptorSet> writes;
+
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    VkDevice device;
+
+    void Create(VkDevice device, const std::string& shaderBinName);
+    void Destroy(VkDevice device);
+
+    ComputeStage& Bind(VkCommandBuffer cmd);
+    ComputeStage& UpdateImage(VkImageView view, VkSampler sampler, int set_i, int binding);
+    ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
+    void Barrier();
+};
 
 
 /**
@@ -115,8 +139,6 @@ struct ViewportPass {
     VkFormat depthFormat;
 
     VkExtent2D imageExtent; // Viewport dimensions
-
-    Attachment blur;
 };
 
 struct SwapchainPass {
@@ -130,10 +152,23 @@ struct SwapchainPass {
     VkExtent2D imageExtent; // Window dimensions
 };
 
+struct ComputeStagesLTM {
+    static constexpr int MAX_LTM_STAGES = 3;
+    ComputeStage stages[MAX_LTM_STAGES];
+
+    static constexpr int MAX_LTM_ATTACMENTS = 4;
+    Attachment att[MAX_LTM_ATTACMENTS];
+    /*Attachment logLuminance;
+    Attachment base;
+    Attachment detail;*/
+};
+
 struct ComputePass {
     ComputeStage histogram;
     ComputeStage averageLuminance;
-    ComputeStage blur;
+
+    ComputeStagesLTM ltm;
+
     ComputeStage toneMapping;
 };
 

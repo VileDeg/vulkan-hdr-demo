@@ -559,14 +559,6 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 		newModel.meshes.push_back(mesh);
 	}
 
-
-	// Add default material in case there are none ?
-	//materials.push_back(tinyobj::material_t());
-
-	for (size_t i = 0; i < materials.size(); i++) {
-		pr("\tmaterial[" << i << "].diffuse_texname = " << materials[i].diffuse_texname);
-	}
-
 	// Lambda for convenience
 	auto loadModelTexture = [this](std::string baseDir, std::string texName, Attachment** dst) {
 		std::string texture_filename = baseDir + texName;
@@ -616,9 +608,8 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 		++mesh_i;
 	}
 
-
-	pr("\tbmin = " << bmin[0] << ", " << bmin[1] << ", " << bmin[2]);
-	pr("\tbmax = " << bmax[0] << ", " << bmax[1] << ", " << bmax[2]);
+	/*pr("\tbmin = " << bmin[0] << ", " << bmin[1] << ", " << bmin[2]);
+	pr("\tbmax = " << bmax[0] << ", " << bmax[1] << ", " << bmax[2]);*/
 
 	// Max extent is half of biggest difference of a bounds coordinate
 	float maxExtent = 0.5f * (bmax[0] - bmin[0]);

@@ -1,0 +1,52 @@
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/tone_mapping.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (std430, set = 0, binding = 0) 
+#include "incl/luminanceSSBO.incl" 
+ssbo;
+
+layout (set = 0, binding = 1) 
+#include "incl/luminanceUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inLogLumImage;
+layout (rgba32f, set = 0, binding = 3) uniform readonly image2D inChrominanceImage;
+layout (rgba32f, set = 0, binding = 4) uniform readonly image2D inBaseFreqImage;
+layout (rgba32f, set = 0, binding = 5) uniform readonly image2D inDetailImage;
+
+layout (rgba32f, set = 0, binding = 6) uniform writeonly image2D viewportImage;
+
+#define EPSILON 0.0001
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	uvec2 dim = imageSize(inBaseFreqImage).xy;
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+		// Filter implementation from https://www.shadertoy.com/view/4dfGDH
+		ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+		float logLum = imageLoad(inLogLumImage, coords).r;
+        vec3 chrom  = imageLoad(inChrominanceImage, coords).rgb;
+		float base   = imageLoad(inBaseFreqImage, coords).r;
+		float detail = imageLoad(inDetailImage, coords).r;
+		
+		// Offset and scale the base
+		float offsetBase = (base - ub.baseOffset) * ub.baseScale;
+		//offsetBase = max(offsetBase, EPSILON);
+		// Bring luminance back to linear
+		//float lumReconstruct = exp2(offsetBase + detail);
+		float lumReconstruct = offsetBase + detail;
+		//float lumReconstruct = exp2(detail);
+		// Reconstruct color from luminance
+		vec3 outColor = lumReconstruct * chrom;
+
+		imageStore(viewportImage, coords, vec4(outColor, 1.0));
+	}
+}

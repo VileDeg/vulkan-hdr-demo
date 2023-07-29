@@ -1,48 +1,21 @@
 #include "stdafx.h"
 #include "engine.h"
 
-static std::vector<char> readShaderBinary(const std::string& filename)
-{
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-    ASSERTMSG(file.is_open(), "Failed to open file: " << filename);
-
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-
-    file.close();
-
-    return buffer;
-}
-
-static bool createShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule* module)
-{
-    VkShaderModuleCreateInfo moduleInfo{
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = code.size(),
-        .pCode = (uint32_t*)code.data()
-    };
-
-    return vkCreateShaderModule(device, &moduleInfo, nullptr, module) == VK_SUCCESS;
-}
-
 
 static PipelineShaders loadShaders(VkDevice device, const std::string& vertName, const std::string& fragName)
 {
     PipelineShaders shaders{};
 
-    shaders.vert.code = readShaderBinary(Engine::SHADER_PATH + vertName);
-    shaders.frag.code = readShaderBinary(Engine::SHADER_PATH + fragName);
+    shaders.vert.code = utils::readShaderBinary(Engine::SHADER_PATH + vertName);
+    shaders.frag.code = utils::readShaderBinary(Engine::SHADER_PATH + fragName);
 
-    if (createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
+    if (utils::createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load vertex shader");
     }
 
-    if (createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
+    if (utils::createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
         std::cout << "Fragment shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load fragment shader");
@@ -51,12 +24,14 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
     return shaders;
 }
 
-static void s_createComputePipeline(VkDevice device, const std::string& shaderBinName, ComputeStage& cp)
+static ComputeStage createComputePipeline(VkDevice device, const std::string& shaderBinName)
 {
-    ShaderData comp;
-    comp.code = readShaderBinary(Engine::SHADER_PATH + shaderBinName);
+    ComputeStage cp;
 
-    if (createShaderModule(device, comp.code, &comp.module)) {
+    ShaderData comp;
+    comp.code = utils::readShaderBinary(Engine::SHADER_PATH + shaderBinName);
+
+    if (utils::createShaderModule(device, comp.code, &comp.module)) {
         std::cout << "Compute shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load compute shader");
@@ -86,7 +61,10 @@ static void s_createComputePipeline(VkDevice device, const std::string& shaderBi
     VKASSERT(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &cp.pipeline));
 
     vkDestroyShaderModule(device, comp.module, nullptr);
+
+    return cp;
 }
+
 
 static void s_createGraphicsPipeline(
     VkDevice device, 
@@ -231,24 +209,25 @@ void Engine::createPipelines()
         createMaterial(pipeline, layout, "shadow");
     }
 
-    { // Compute luminance histogram
-        s_createComputePipeline(_device, "histogram.comp.spv"        , _compute.histogram);
-        s_createComputePipeline(_device, "average_luminance.comp.spv", _compute.averageLuminance);
-        s_createComputePipeline(_device, "bilateral.comp.spv"        , _compute.blur);
-        s_createComputePipeline(_device, "tonemap.comp.spv"          , _compute.toneMapping);
+    { // Compute 
+        _compute.histogram.Create(_device, "histogram.comp.spv");
+        _compute.averageLuminance.Create(_device, "average_luminance.comp.spv");
+
+        _compute.ltm.stages[0].Create(_device, "ltm_durand_lum_chrom.comp.spv");
+        _compute.ltm.stages[1].Create(_device, "ltm_durand_bilateral_base.comp.spv");
+        _compute.ltm.stages[2].Create(_device, "ltm_durand_reconstruct.comp.spv");
+
+        _compute.toneMapping.Create(_device, "tonemap.comp.spv");
     }
 
     _deletionStack.push([=]() mutable {
-        vkDestroyPipelineLayout(_device, _compute.histogram.pipelineLayout, nullptr);
-        vkDestroyPipeline(_device, _compute.histogram.pipeline, nullptr);
+        _compute.histogram.Destroy(_device);
+        _compute.averageLuminance.Destroy(_device);
 
-        vkDestroyPipelineLayout(_device, _compute.averageLuminance.pipelineLayout, nullptr);
-        vkDestroyPipeline(_device, _compute.averageLuminance.pipeline, nullptr);
+        for (int i = 0; i < ComputeStagesLTM::MAX_LTM_STAGES; ++i) {
+            _compute.ltm.stages[i].Destroy(_device);
+        }
 
-        vkDestroyPipelineLayout(_device, _compute.blur.pipelineLayout, nullptr);
-        vkDestroyPipeline(_device, _compute.blur.pipeline, nullptr);
-
-        vkDestroyPipelineLayout(_device, _compute.toneMapping.pipelineLayout, nullptr);
-        vkDestroyPipeline(_device, _compute.toneMapping.pipeline, nullptr);
+        _compute.toneMapping.Destroy(_device);
     });
 }

@@ -15,8 +15,6 @@ ub;
 #define THREADS_X 32
 #define THREADS_Y 32
 
-
-
 layout (rgba32f, set = 0, binding = 2) uniform image2D inOutHDRImage;
 
 const float WHITE_POINT = 10.0;

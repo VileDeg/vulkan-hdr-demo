@@ -14,7 +14,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     return VK_FALSE;
 }
 
-static bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) {
+static bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) 
+{
     uint32_t propertyCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensionProperties(propertyCount);
@@ -49,7 +50,8 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
     return true;
 }
 
-static bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) {
+static bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) 
+{
     uint32_t propertyCount = 0;
     vkEnumerateInstanceLayerProperties(&propertyCount, nullptr);
     std::vector<VkLayerProperties> availableLayerProperties(propertyCount);
@@ -73,7 +75,8 @@ static bool checkValidationLayerSupport(const std::vector<const char*>& required
     return true;
 }
 
-static std::vector<const char*> get_required_extensions() {
+static std::vector<const char*> get_required_extensions() 
+{
     std::vector<const char*> requiredExtensions{};
 
     uint32_t glfwExtCount;
@@ -84,6 +87,116 @@ static std::vector<const char*> get_required_extensions() {
 
     return requiredExtensions;
 }
+
+static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<const char*>& deviceExtensions) 
+{
+    uint32_t extensionCount = 0;
+    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
+    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
+
+    bool allSupported = true;
+    for (const auto& de : deviceExtensions) {
+        bool found = false;
+        for (VkExtensionProperties& property : availableExtensionProperties) {
+            if (strcmp(property.extensionName, de) == 0) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            allSupported = false;
+        }
+    }
+
+    return allSupported;
+}
+
+static std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
+findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*>& deviceExtensions) 
+{
+    // This function is based on the code by https://github.com/pc-john/
+    // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
+    // Repository: https://github.com/pc-john/VulkanTutorial/
+
+    // find compatible devices
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+    std::vector<VkPhysicalDevice> deviceList(deviceCount);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, deviceList.data());
+
+    std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>> compatibleDevices;
+    for (VkPhysicalDevice pd : deviceList) {
+
+        if (!checkDeviceExtensionSupport(pd, deviceExtensions))
+            continue;
+
+        VkPhysicalDeviceProperties deviceProperties{};
+        vkGetPhysicalDeviceProperties(pd, &deviceProperties);
+
+        // select queues for graphics rendering and for presentation
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilyList.data());
+
+        uint32_t graphicsQueueFamily = UINT32_MAX;
+        uint32_t presentQueueFamily = UINT32_MAX;
+        for (uint32_t i = 0, c = uint32_t(queueFamilyList.size()); i < c; i++) {
+
+            // test for presentation support
+            VkBool32 presentationSupported = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
+
+
+            bool allQSupported = queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
+#if VKDEMO_USE_COMPUTE
+            allQSupported = allQSupported && (queueFamilyList[i].queueFlags & VK_QUEUE_COMPUTE_BIT);
+#endif
+
+            if (presentationSupported) {
+
+                // test for graphics operations support
+                if (allQSupported) {
+                    // if presentation and graphics operations are supported on the same queue,
+                    // we will use single queue
+
+                    compatibleDevices.emplace_back(pd, i, i, deviceProperties);
+                    goto nextDevice;
+                } else
+                    // if only presentation is supported, we store the first such queue
+                    if (presentQueueFamily == UINT32_MAX)
+                        presentQueueFamily = i;
+            } else {
+                if (allQSupported)
+                    // if only graphics operations are supported, we store the first such queue
+                    if (graphicsQueueFamily == UINT32_MAX)
+                        graphicsQueueFamily = i;
+            }
+        }
+
+        if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX)
+            // presentation and graphics operations are supported on the different queues
+            compatibleDevices.emplace_back(pd, graphicsQueueFamily, presentQueueFamily, deviceProperties);
+    nextDevice:;
+    }
+
+    return compatibleDevices;
+}
+
+static bool checkRequiredDeviceFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2& deviceFeatures)
+{
+    // Check if the device supports the shaderDrawParameters feature
+    vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
+
+    auto drFeatures = *reinterpret_cast<VkPhysicalDeviceDynamicRenderingFeatures*>(deviceFeatures.pNext);
+    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(drFeatures.pNext);
+
+    bool supported = drFeatures.dynamicRendering &&
+        shaderDrawParametersFeatures.shaderDrawParameters;
+    return supported;
+}
+
 
 void Engine::loadInstanceExtensionFunctions()
 {
@@ -162,105 +275,6 @@ void Engine::createSurface()
     _deletionStack.push([&]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
 }
 
-static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<const char*>& deviceExtensions)
-{
-    uint32_t extensionCount = 0;
-    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
-    vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
-
-    bool allSupported = true;
-    for (const auto& de : deviceExtensions) {
-        bool found = false;
-        for (VkExtensionProperties& property : availableExtensionProperties) {
-            if (strcmp(property.extensionName, de) == 0) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            allSupported = false;
-        }
-    }
-
-    return allSupported;
-}
-
-
-
-static
-std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>>
-findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vector<const char*>& deviceExtensions)
-{
-    // This function is based on the code by https://github.com/pc-john/
-    // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
-    // Repository: https://github.com/pc-john/VulkanTutorial/
-
-    // find compatible devices
-    uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-    std::vector<VkPhysicalDevice> deviceList(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, deviceList.data());
-
-    std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>> compatibleDevices;
-    for (VkPhysicalDevice pd : deviceList) {
-
-        if (!checkDeviceExtensionSupport(pd, deviceExtensions))
-            continue;
-
-        VkPhysicalDeviceProperties deviceProperties{};
-        vkGetPhysicalDeviceProperties(pd, &deviceProperties);
-
-        // select queues for graphics rendering and for presentation
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilyList.data());
-
-        uint32_t graphicsQueueFamily = UINT32_MAX;
-        uint32_t presentQueueFamily = UINT32_MAX;
-        for (uint32_t i = 0, c = uint32_t(queueFamilyList.size()); i < c; i++) {
-
-            // test for presentation support
-            VkBool32 presentationSupported = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
-
-
-            bool allQSupported = queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
-#if VKDEMO_USE_COMPUTE
-            allQSupported = allQSupported && (queueFamilyList[i].queueFlags & VK_QUEUE_COMPUTE_BIT);
-#endif
-
-            if (presentationSupported) {
-
-                // test for graphics operations support
-                if (allQSupported) {
-                    // if presentation and graphics operations are supported on the same queue,
-                    // we will use single queue
-
-                    compatibleDevices.emplace_back(pd, i, i, deviceProperties);
-                    goto nextDevice;
-                } else
-                    // if only presentation is supported, we store the first such queue
-                    if (presentQueueFamily == UINT32_MAX)
-                        presentQueueFamily = i;
-            } else {
-                if (allQSupported)
-                    // if only graphics operations are supported, we store the first such queue
-                    if (graphicsQueueFamily == UINT32_MAX)
-                        graphicsQueueFamily = i;
-            }
-        }
-
-        if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX)
-            // presentation and graphics operations are supported on the different queues
-            compatibleDevices.emplace_back(pd, graphicsQueueFamily, presentQueueFamily, deviceProperties);
-    nextDevice:;
-    }
-
-    return compatibleDevices;
-}
-
 void Engine::pickPhysicalDevice()
 {
     // This function is based on the code by https://github.com/pc-john/
@@ -316,27 +330,9 @@ void Engine::pickPhysicalDevice()
         << _gpuProperties.limits.minUniformBufferOffsetAlignment);
 }
 
-
-static bool checkRequiredFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2& deviceFeatures)
-{
-    // Check if the device supports the shaderDrawParameters feature
-    vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
-
-    auto drFeatures = *reinterpret_cast<VkPhysicalDeviceDynamicRenderingFeatures*>(deviceFeatures.pNext);
-    auto shaderDrawParametersFeatures = *reinterpret_cast<VkPhysicalDeviceShaderDrawParametersFeatures*>(drFeatures.pNext);
-
-    bool supported = drFeatures.dynamicRendering &&
-        shaderDrawParametersFeatures.shaderDrawParameters;
-    return supported;
-}
-
 void Engine::loadDeviceExtensionFunctions()
 {
     DYNAMIC_LOAD(vkCmdPushDescriptorSetKHR, _instance);
-    /*DYNAMIC_LOAD(vkCmdPipelineBarrier2, _instance);
-
-    DYNAMIC_LOAD(vkCmdBeginRenderingKHR, _instance);
-    DYNAMIC_LOAD(vkCmdEndRenderingKHR, _instance);*/
 }
 
 void Engine::createLogicalDevice()
@@ -355,6 +351,7 @@ void Engine::createLogicalDevice()
             .pQueuePriorities = &(const float&)1.0f
         },
     };
+
 
     // Needed for gl_BaseIndex
     VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures{
@@ -375,13 +372,23 @@ void Engine::createLogicalDevice()
         .dynamicRendering = VK_TRUE
     };
 
-    VkPhysicalDeviceFeatures2 deviceFeatures{
+    /*VkPhysicalDeviceDescriptorIndexingFeatures diFeatures = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .pNext = &drFeatures,
+        .descriptorBindingUniformBufferUpdateAfterBind = true,
+        .descriptorBindingSampledImageUpdateAfterBind = true,
+        .descriptorBindingStorageImageUpdateAfterBind = true,
+        .descriptorBindingStorageBufferUpdateAfterBind = true,
+        .descriptorBindingPartiallyBound = true
+    };*/
+
+    VkPhysicalDeviceFeatures2 deviceFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &drFeatures
     };
 
-    if (!checkRequiredFeaturesSupport(_physicalDevice, deviceFeatures)) {
-        throw std::runtime_error("Physcial device does not support required features");
+    if (!checkRequiredDeviceFeaturesSupport(_physicalDevice, deviceFeatures)) {
+        throw std::runtime_error("Physcial device does not support all required features");
     }
 
     VkDeviceCreateInfo deviceCreateInfo{

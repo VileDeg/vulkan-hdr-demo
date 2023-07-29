@@ -218,6 +218,8 @@ void Engine::uiUpdateHDR()
 
 		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Checkbox("Enable LTM", &_renderContext.comp.enableLTM);
+			ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
+			ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 10.f);
 
 			ImGui::TreePop();
 		}

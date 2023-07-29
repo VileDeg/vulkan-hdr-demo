@@ -107,7 +107,7 @@ void RenderContext::Init(CreateSceneData data)
 			.linear = 0.22f,
 			.quadratic = 0.2f,
 
-			.enabled = enable[i]
+			.enabled = (bool)enable[i]
 		};
 
 		UpdateLightRadius(i);
@@ -141,6 +141,104 @@ bool RenderObject::HasMoved() {
 	_prevPos = pos;
 
 	return hasMoved;
+}
+
+void ComputeStage::Create(VkDevice device, const std::string& shaderBinName) {
+	this->device = device;
+	ShaderData comp;
+	comp.code = utils::readShaderBinary(Engine::SHADER_PATH + shaderBinName);
+
+	if (utils::createShaderModule(device, comp.code, &comp.module)) {
+		std::cout << "Compute shader successfully loaded." << std::endl;
+	} else {
+		PRWRN("Failed to load compute shader");
+	}
+
+	VkPipelineShaderStageCreateInfo stageInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = comp.module,
+		.pName = "main"
+	};
+
+	VkPipelineLayoutCreateInfo layoutInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 1,
+		.pSetLayouts = &setLayout,
+	};
+
+	VKASSERT(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout));
+
+	VkComputePipelineCreateInfo computePipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = stageInfo,
+		.layout = pipelineLayout,
+	};
+
+	VKASSERT(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &pipeline));
+
+	vkDestroyShaderModule(device, comp.module, nullptr);
+
+	descImageInfo.reserve(MAX_IMAGE_UPDATES);
+	writes.reserve(MAX_IMAGE_UPDATES);
+}
+
+ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd) {
+	commandBuffer = cmd;
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	return *this;
+}
+
+ComputeStage& ComputeStage::UpdateImage(VkImageView view, VkSampler sampler, int set_i, int binding) {
+	VkDescriptorImageInfo imgInfo{
+		.sampler = sampler,
+		.imageView = view,
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+	};
+
+	descImageInfo.push_back(imgInfo);
+
+	VkWriteDescriptorSet descWrite =
+		vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			sets[set_i], &descImageInfo.back(), binding);
+	
+	writes.push_back(descWrite);
+	ASSERT(writes.size() <= MAX_IMAGE_UPDATES);
+
+	return *this;
+}
+
+ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i) {
+	if (!writes.empty()) {
+		vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+		writes.clear();
+		descImageInfo.clear();
+	}
+
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &sets[set_i], 0, nullptr);
+
+	ASSERT(MAX_LUMINANCE_BINS == 256);
+	constexpr uint32_t group_size = 16;
+	vkCmdDispatch(commandBuffer, groupsX, groupsY, 1);
+	
+	
+	return *this;
+}
+
+void ComputeStage::Barrier() {
+#if ENABLE_SYNC == 1
+	// Computed luminance is used by next compute shader so sync needed
+	utils::memoryBarrier(commandBuffer,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+#elif ENABLE_SYNC == 2
+	s_fullBarrier(commandBuffer);
+#endif
+}
+
+void ComputeStage::Destroy(VkDevice device) {
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+	vkDestroyPipeline(device, pipeline, nullptr);
 }
 
 

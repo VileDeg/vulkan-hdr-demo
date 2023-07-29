@@ -7,7 +7,7 @@ uniform AdaptationUB {
     float timeCoeff;
     uint lumLowerIndex;
     uint lumUpperIndex;
-    bool enableLTM;
+    int _pad0;
 
     vec4 weights; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
 
@@ -15,5 +15,10 @@ uniform AdaptationUB {
     int toneMappingMode;
     bool enableAdaptation;
     int gammaMode;
+
+    bool enableLTM;
+    float baseOffset;
+    float baseScale;
+    int _pad1;
 }
 

@@ -20,7 +20,7 @@ static constexpr int ACCESS_MASK_ALL =
 	VK_ACCESS_HOST_READ_BIT |
 	VK_ACCESS_HOST_WRITE_BIT;
 
-#define ENABLE_SYNC 1
+
 
 static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h) 
 {
@@ -365,8 +365,6 @@ static void s_fullBarrier(VkCommandBuffer& cmd) {
 	);
 }
 
-
-
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
 	loadDataToGPU();
@@ -516,152 +514,66 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	{ // Compute step
 #if 1
 		if (_renderContext.comp.enableAdaptation) {
-#if 1
 			// Compute luminance histogram
-			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipeline);
-			{
-				VkDescriptorImageInfo imageBufferInfo{
-					.sampler = _linearSampler,
-					.imageView = _viewport.imageViews[imageIndex],
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				};
-				VkWriteDescriptorSet readonlyHDRImage =
-					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-						f.compHistogramSet, &imageBufferInfo, 2);
-
-
-				vkUpdateDescriptorSets(_device, 1, &readonlyHDRImage, 0, nullptr);
-				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.histogram.pipelineLayout, 0, 1, &f.compHistogramSet, 0, nullptr);
-
-				ASSERT(MAX_LUMINANCE_BINS == 256);
-				constexpr uint32_t group_size = 16;
-				vkCmdDispatch(f.cmd, _viewport.imageExtent.width / group_size + 1, _viewport.imageExtent.height / group_size + 1, 1);
-			}
-#if ENABLE_SYNC == 1
-			// Computed luminance is used by next compute shader so sync needed
-			utils::memoryBarrier(f.cmd,
-				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-#elif ENABLE_SYNC == 2
-			s_fullBarrier(f.cmd);
+			ASSERT(MAX_LUMINANCE_BINS == 256);
+			_compute.histogram.Bind(f.cmd)
+				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
+				.Dispatch(_viewport.imageExtent.width / 16 + 1, _viewport.imageExtent.height / 16 + 1, imageIndex)
+				.Barrier();
 #endif
-#endif
+
 #if 1
 			// Compute average luminance
-			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipeline);
-			{
-				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.averageLuminance.pipelineLayout, 0, 1, &f.compAvgLumSet, 0, nullptr);
-
-				// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
-				vkCmdDispatch(f.cmd, 1, 1, 1);
-			}
-
-#if ENABLE_SYNC == 1
-			// Computed average luminance is used by next compute shader so sync needed
-			utils::memoryBarrier(f.cmd,
-				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-#elif ENABLE_SYNC == 2
-			s_fullBarrier(f.cmd);
-#endif
+			_compute.averageLuminance.Bind(f.cmd)
+				.Dispatch(1, 1, imageIndex)
+				.Barrier();
 #endif
 		}
 		
 #if 1
 		if (_renderContext.comp.enableLTM) {
-			// Compute blur
-			vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipeline);
-			{
-				VkDescriptorImageInfo imageBufferInfo{
-						.sampler = _linearSampler,
-						.imageView = _viewport.imageViews[imageIndex],
-						.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				};
-				VkWriteDescriptorSet inputHDRImage =
-					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-						f.compBlurSet, &imageBufferInfo, 2);
+			_compute.ltm.stages[0].Bind(f.cmd)
+				// In
+				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
+				// Out
+				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 3)
+				.UpdateImage(_compute.ltm.att[1].view, _linearSampler, imageIndex, 4)
 
-				VkDescriptorImageInfo imageBufferInfo1{
-						.sampler = _linearSampler,
-						.imageView = _viewport.blur.view,
-						.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				};
-				VkWriteDescriptorSet outHDRImage =
-					vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-						f.compBlurSet, &imageBufferInfo1, 3);
+				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+				.Barrier();
 
+			_compute.ltm.stages[1].Bind(f.cmd)
+				// In
+				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 2)
+				// Out
+				.UpdateImage(_compute.ltm.att[2].view, _linearSampler, imageIndex, 3)
+				.UpdateImage(_compute.ltm.att[3].view, _linearSampler, imageIndex, 4)
 
-				vkUpdateDescriptorSets(_device, 1, &inputHDRImage, 0, nullptr);
-				vkUpdateDescriptorSets(_device, 1, &outHDRImage, 0, nullptr);
-				vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.blur.pipelineLayout, 0, 1, &f.compBlurSet, 0, nullptr);
+				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+				.Barrier();
 
-				constexpr uint32_t group_size = 32;
-				// Need to run just one group of MAX_LUMINANCE_BINS to calculate average of luminance array
-				vkCmdDispatch(f.cmd, _viewport.imageExtent.width / group_size + 1, _viewport.imageExtent.height / group_size + 1, 1);
-			}
+			_compute.ltm.stages[2].Bind(f.cmd)
+				// In
+				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 2)
+				.UpdateImage(_compute.ltm.att[1].view, _linearSampler, imageIndex, 3)
+				.UpdateImage(_compute.ltm.att[2].view, _linearSampler, imageIndex, 4)
+				.UpdateImage(_compute.ltm.att[3].view, _linearSampler, imageIndex, 5)
+				// Out
+				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 6)
 
-#if ENABLE_SYNC == 1
-
-			utils::memoryBarrier(f.cmd,
-				VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-#elif ENABLE_SYNC == 2
-			s_fullBarrier(f.cmd);
-#endif
-			/*VkImageSubresourceLayers layers = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			};
-
-			VkExtent3D extent = {
-				.width = _viewport.imageExtent.width,
-				.height = _viewport.imageExtent.height,
-				.depth = 1
-			};
-
-			VkImageCopy region = {
-				.srcSubresource = layers,
-				.srcOffset = 0,
-				.dstSubresource = layers,
-				.dstOffset = 0,
-				.extent = extent
-			};
-
-			utils::imageMemoryBarrier(f.cmd, _viewport.blur.allocImage.image);
-
-			vkCmdCopyImage(f.cmd, _viewport.blur.allocImage.image, VK_IMAGE_LAYOUT_GENERAL, _viewport.images[imageIndex].image, VK_IMAGE_LAYOUT_GENERAL, 1, &region);*/
+				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+				.Barrier();
 		}
 #endif
-
 
 #if 1	
-
-
 		// Compute tone mapping
-		vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipeline);
-		{
-			VkDescriptorImageInfo imageBufferInfo{
-				.sampler = _linearSampler,
-				.imageView = _viewport.imageViews[imageIndex],
-				//.imageView = _viewport.blur.view,
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-			};
-			VkWriteDescriptorSet inOutHDRImage =
-				vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					f.compTonemapSet, &imageBufferInfo, 2);
-
-			vkUpdateDescriptorSets(_device, 1, &inOutHDRImage, 0, nullptr);
-
-			vkCmdBindDescriptorSets(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _compute.toneMapping.pipelineLayout, 0, 1, &f.compTonemapSet, 0, nullptr);
-
-			constexpr uint32_t thread_size = 32;
-			vkCmdDispatch(f.cmd, _viewport.imageExtent.width / thread_size + 1, _viewport.imageExtent.height / thread_size + 1, 1);
-		}
+		_compute.toneMapping.Bind(f.cmd)
+			.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
+			.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex);
 #endif
 	}
-#endif
+
 
 #if ENABLE_SYNC == 1
 	// Post-processing must finish because viewport image is sampled from during swapchain pass

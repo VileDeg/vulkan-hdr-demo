@@ -8,9 +8,6 @@
 #define ENABLE_VALIDATION_SYNC 0
 #endif
 
-#define MAX_FRAMES_IN_FLIGHT 3
-
-
 #include "types.h"
 #include "camera.h"
 #include "vk_descriptors.h"
@@ -35,8 +32,6 @@ private: /* Methods used from Init directly */
     void createLogicalDevice();
     void createVmaAllocator();
     void createSwapchain();
-
-   
 
     void prepareMainPass();
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
@@ -66,7 +61,7 @@ private: /* Secondary methods */
 
     void initDescriptors();
     void initUploadContext();
-    void initFrame(FrameData& f);
+    void initFrame(FrameData& f, int frame_i);
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
 
@@ -79,12 +74,17 @@ private: /* Secondary methods */
 
     Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
 
+    void createAttachment(
+        VkFormat format, VkImageUsageFlags usage,
+        VkExtent3D extent, VkImageAspectFlags aspect,
+        VkImageLayout layout,
+        Attachment& att,
+        const std::string debugName = "");
+
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
     Attachment* getTexture(const std::string& name);
     Model* getModel(const std::string& name);
-
-    //FrameData& getCurrentFrame() { return _frames[_frameInFlightNum]; }
 
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, uint32_t index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
@@ -96,9 +96,7 @@ private: /* Secondary methods */
 
     void drawFrame();
 
-
     AllocatedBuffer allocateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-    //AllocatedImage allocateImage(VkFormat format, VkImageUsageFlags usage, VkExtent3D extent);
 
     size_t pad_uniform_buffer_size(size_t originalSize);
 
@@ -140,9 +138,6 @@ private:  // UI
 
 private:
     float _fovY = 90.f; // degrees
-
-private:
-    //void setDebugName(VkObjectType type, void* handle, const std::string name);
 
 private: 
     GLFWwindow* _window;
