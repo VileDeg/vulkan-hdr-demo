@@ -81,6 +81,14 @@ private: /* Secondary methods */
         Attachment& att,
         const std::string debugName = "");
 
+    void createAttachmentPyramid(
+        VkFormat format, VkImageUsageFlags usage,
+        VkExtent3D extent, VkImageAspectFlags aspect,
+        VkImageLayout layout,
+        uint32_t numOfMipLevels,
+        AttachmentPyramid& att,
+        const std::string debugName = "");
+
     Material* getMaterial(const std::string& name);
     Mesh* getMesh(const std::string& name);
     Attachment* getTexture(const std::string& name);

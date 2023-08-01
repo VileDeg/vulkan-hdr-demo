@@ -1,26 +1,23 @@
 #version 460
 
 #include "incl/defs.glsl"
-#include "incl/tone_mapping.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
 #define THREADS_Y  32
 
 layout (std430, set = 0, binding = 0) 
-#include "incl/luminanceSSBO.incl" 
+#include "incl/computeSSBO.incl" 
 ssbo;
 
 layout (set = 0, binding = 1) 
-#include "incl/luminanceUB.incl" 
+#include "incl/computeUB.incl" 
 ub;
 
 layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inImage;
 
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D logLumImage;
 layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D chrominanceImage;
-
-#define RGB_TO_LUM vec3(0.2125, 0.7154, 0.0721)
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -33,8 +30,8 @@ void main() {
 		//float lum = 1.0 / 61.0 * inpColor.r * 20 + inpColor.g * 40 + inpColor.b;
 		float lum = dot(inpColor, RGB_TO_LUM);
 		vec3 chrom = inpColor / lum;
-		//float log2Lum = log2(lum);
-		float log2Lum = lum;
+		float log2Lum = log2(lum); // + 1.0
+		//float log2Lum = lum;
 		
 		imageStore(logLumImage, coords, vec4(vec3(log2Lum), 1.0));
 		imageStore(chrominanceImage, coords, vec4(chrom, 1.0));

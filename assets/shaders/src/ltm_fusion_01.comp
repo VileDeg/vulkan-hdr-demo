@@ -1,0 +1,90 @@
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/tone_mapping.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (std430, set = 0, binding = 0) 
+#include "incl/computeSSBO.incl" 
+ssbo;
+
+layout (set = 0, binding = 1) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inImage;
+
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D chrominanceImage;
+
+layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D luminanceImage;
+layout (rgba32f, set = 0, binding = 5) uniform writeonly image2D weightImage;
+//layout (rgba32f, set = 0, binding = 6) uniform writeonly image2D laplacianSumImage;
+layout (rgba32f, set = 0, binding = 6) uniform writeonly image2D laplacianImage; // Lowest laplacian mip (highest-res)
+
+const float WHITE_POINT = 10.0;
+
+vec3 applyToneMapping(vec3 col) {
+	vec3 outCol = col;
+	switch (ub.toneMappingMode) {
+        case 0: outCol = ReinhardExtended(col, WHITE_POINT); break;
+        case 1: outCol = Reinhard(col); break;
+        case 2: outCol = Uncharted2Filmic(col); break;
+        case 3: outCol = ACESFilm(col); break;
+        case 4: outCol = ACESFitted(col); break;
+    }
+	return outCol;
+}
+
+const float shadowExp = exp2(1.5);
+const float highlightExp = exp2(-2.0);
+
+const float exposure = 1.0;
+
+const float sigmaSq = 5 * 5;
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	uvec2 dim = imageSize(inImage).xy;
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
+		vec3 inpColor = imageLoad(inImage, coords).rgb;
+		inpColor *= exposure;
+
+		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
+
+		float highlights = sqrt(dot(clamp(applyToneMapping(inpColor * highlightExp), 0.0, 1.0), RGB_TO_LUM));
+
+		float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
+        float midtones   = sqrt(midtonesSquare);
+
+        float shadows	 = sqrt(dot(clamp(applyToneMapping(inpColor * shadowExp), 0.0, 1.0), RGB_TO_LUM));
+
+		vec3 lums  = vec3(highlights, midtones, shadows);
+		vec3 chrom = midtonesColor / midtonesSquare;
+
+		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
+		vec3 diff = lums - vec3(0.5);
+        vec3 weights = vec3(exp(-0.5 * diff * diff * sigmaSq));
+		// Normalize weights
+        weights /= dot(weights, vec3(1.0)) + 0.00001;
+
+		// Blend luminances by weights
+		//float blended = dot(lums, weights);
+
+		imageStore(luminanceImage, coords, vec4(lums, 1.0));
+		imageStore(chrominanceImage, coords, vec4(chrom, 1.0));
+
+		imageStore(weightImage, coords, vec4(weights, 1.0));
+		/* Store blended luminance to the final sum.
+		   Evidently this is only done for mip level 0, 
+		   for next levels laplacian will be added to sum instead of luminance * weights blend */
+		//imageStore(laplacianSumImage, coords, vec4(vec3(blended), 1.0));
+
+		// Write luminance to laplacian mip 0 to add the blended luminance later to laplacian sum
+		imageStore(laplacianImage, coords, vec4(lums, 1.0));
+	}
+}

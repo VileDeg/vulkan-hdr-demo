@@ -372,19 +372,15 @@ void Engine::createLogicalDevice()
         .dynamicRendering = VK_TRUE
     };
 
-    /*VkPhysicalDeviceDescriptorIndexingFeatures diFeatures = {
+    VkPhysicalDeviceDescriptorIndexingFeatures diFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
         .pNext = &drFeatures,
-        .descriptorBindingUniformBufferUpdateAfterBind = true,
-        .descriptorBindingSampledImageUpdateAfterBind = true,
-        .descriptorBindingStorageImageUpdateAfterBind = true,
-        .descriptorBindingStorageBufferUpdateAfterBind = true,
-        .descriptorBindingPartiallyBound = true
-    };*/
+        .descriptorBindingPartiallyBound = true // To allow unused descriptors to remain invalid
+    };
 
     VkPhysicalDeviceFeatures2 deviceFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &drFeatures
+        .pNext = &diFeatures
     };
 
     if (!checkRequiredDeviceFeaturesSupport(_physicalDevice, deviceFeatures)) {

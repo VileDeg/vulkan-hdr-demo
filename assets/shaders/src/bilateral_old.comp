@@ -9,11 +9,11 @@
 #define EPSILON 0.005
 
 layout (std430, set = 0, binding = 0) 
-#include "incl/luminanceSSBO.incl" 
+#include "incl/computeSSBO.incl" 
 ssbo;
 
 layout (set = 0, binding = 1) 
-#include "incl/luminanceUB.incl" 
+#include "incl/computeUB.incl" 
 ub;
 
 const int SAMPLE_COUNT = 11;

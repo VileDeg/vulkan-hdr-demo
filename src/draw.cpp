@@ -338,6 +338,8 @@ void Engine::loadDataToGPU()
 		_renderContext.comp.timeCoeff = 1 - std::exp(-_deltaTime * _renderContext.eyeAdaptationTimeCoefficient);
 		_renderContext.comp.lumLowerIndex = li;
 		_renderContext.comp.lumUpperIndex = ui;
+		float avg = (_viewport.imageExtent.width + _viewport.imageExtent.height) / 2;
+		_renderContext.comp.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
 
 		memcpy(_gpu.compUB, &_renderContext.comp, sizeof(GPUCompUB));
 
@@ -363,6 +365,123 @@ static void s_fullBarrier(VkCommandBuffer& cmd) {
 		&memoryBarrier,                     // pMemoryBarriers
 		0, 0, 0, 0
 	);
+}
+
+static void generateMips(VkCommandBuffer& cmd, VkImage& image, int numOfMips, uint32_t width, uint32_t height) 
+{
+	int32_t w = width;
+	int32_t h = height;
+
+	VkImageSubresourceRange srcRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+	};
+	VkImageSubresourceRange dstRange = srcRange;
+
+	utils::imageMemoryBarrier(cmd, image,
+		VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+		VK_ACCESS_TRANSFER_READ_BIT,
+
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+
+		srcRange);
+
+
+	int32_t w_mip = w;
+	int32_t h_mip = h;
+	for (uint32_t i = 0; i < numOfMips - 1; ++i) {
+		VkImageBlit region = {
+			.srcSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = i,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+			.srcOffsets = {
+				{ 0, 0, 0 },
+				{ w_mip, h_mip, 1 }
+			},
+			.dstSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = i + 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+			.dstOffsets = {
+				{ 0, 0, 0 },
+				{ w_mip >> 1, h_mip >> 1, 1 }
+			}
+		};
+
+		srcRange.baseMipLevel = i;
+		dstRange.baseMipLevel = i + 1;
+
+		if (i > 0) {
+			utils::imageMemoryBarrier(cmd, image,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+
+				srcRange);
+		}
+
+		utils::imageMemoryBarrier(cmd, image,
+			VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+
+			dstRange);
+
+		vkCmdBlitImage(cmd,
+			image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &region, VK_FILTER_LINEAR
+		);
+
+		utils::imageMemoryBarrier(cmd, image,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+
+			srcRange);
+
+		w_mip >>= 1;
+		h_mip >>= 1;
+	}
+
+	utils::imageMemoryBarrier(cmd, image,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_IMAGE_LAYOUT_GENERAL,
+
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+
+		dstRange);
 }
 
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
@@ -517,7 +636,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			// Compute luminance histogram
 			ASSERT(MAX_LUMINANCE_BINS == 256);
 			_compute.histogram.Bind(f.cmd)
-				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
+				.UpdateImage(_viewport.imageViews[imageIndex], 2)
 				.Dispatch(_viewport.imageExtent.width / 16 + 1, _viewport.imageExtent.height / 16 + 1, imageIndex)
 				.Barrier();
 #endif
@@ -532,44 +651,100 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		
 #if 1
 		if (_renderContext.comp.enableLTM) {
-			_compute.ltm.stages[0].Bind(f.cmd)
-				// In
-				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
-				// Out
-				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 3)
-				.UpdateImage(_compute.ltm.att[1].view, _linearSampler, imageIndex, 4)
+			int threadsXY = 32;
 
-				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+			int groupsX = _viewport.imageExtent.width  / threadsXY + 1;
+			int groupsY = _viewport.imageExtent.height / threadsXY + 1;
+#if 0
+			_compute.durand.stages[0].Bind(f.cmd)
+				// In
+				.UpdateImage(_viewport.imageViews[imageIndex], 2)
+				// Out
+				.UpdateImage(_compute.durand.att[0].view, 3)
+				.UpdateImage(_compute.durand.att[1].view, 4)
+
+				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 
-			_compute.ltm.stages[1].Bind(f.cmd)
+			_compute.durand.stages[1].Bind(f.cmd)
 				// In
-				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 2)
+				.UpdateImage(_compute.durand.att[0].view, 2)
 				// Out
-				.UpdateImage(_compute.ltm.att[2].view, _linearSampler, imageIndex, 3)
-				.UpdateImage(_compute.ltm.att[3].view, _linearSampler, imageIndex, 4)
+				.UpdateImage(_compute.durand.att[2].view, 3)
+				.UpdateImage(_compute.durand.att[3].view, 4)
 
-				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 
-			_compute.ltm.stages[2].Bind(f.cmd)
+			_compute.durand.stages[2].Bind(f.cmd)
 				// In
-				.UpdateImage(_compute.ltm.att[0].view, _linearSampler, imageIndex, 2)
-				.UpdateImage(_compute.ltm.att[1].view, _linearSampler, imageIndex, 3)
-				.UpdateImage(_compute.ltm.att[2].view, _linearSampler, imageIndex, 4)
-				.UpdateImage(_compute.ltm.att[3].view, _linearSampler, imageIndex, 5)
+				.UpdateImage(_compute.durand.att[0].view, 2)
+				.UpdateImage(_compute.durand.att[1].view, 3)
+				.UpdateImage(_compute.durand.att[2].view, 4)
+				.UpdateImage(_compute.durand.att[3].view, 5)
 				// Out
-				.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 6)
+				.UpdateImage(_viewport.imageViews[imageIndex], 6)
 
-				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex)
+				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
+#else
+			_compute.fusion.stages[0].Bind(f.cmd)
+				// In
+				.UpdateImage(_viewport.imageViews[imageIndex], 2)
+				// Out
+				.UpdateImage(_compute.fusion.chrominance, 3)
+				.UpdateImage(_compute.fusion.luminance.views[0], 4)
+				.UpdateImage(_compute.fusion.weight.views[0], 5)
+				.UpdateImage(_compute.fusion.laplacian.views[0], 6)
+
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+
+			generateMips(f.cmd, _compute.fusion.luminance.allocImage.image, 
+				_renderContext.comp.numOfViewportMips, 
+				_viewport.imageExtent.width, _viewport.imageExtent.height);
+
+			generateMips(f.cmd, _compute.fusion.weight.allocImage.image,
+				_renderContext.comp.numOfViewportMips,
+				_viewport.imageExtent.width, _viewport.imageExtent.height);
+
+			_compute.fusion.stages[1].Bind(f.cmd)
+				// In
+				.UpdateImagePyramid(_compute.fusion.luminance, 2)
+				// Out
+				.UpdateImagePyramid(_compute.fusion.laplacian, 3)
+
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			_compute.fusion.stages[2].Bind(f.cmd)
+				// In
+				.UpdateImagePyramid(_compute.fusion.laplacian, 2)
+				.UpdateImagePyramid(_compute.fusion.weight, 3)
+				// Out
+				.UpdateImage(_compute.fusion.laplacianSum, 4)
+
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			_compute.fusion.stages[3].Bind(f.cmd)
+				// In
+				.UpdateImage(_compute.fusion.chrominance, 2)
+				.UpdateImage(_compute.fusion.laplacianSum, 3)
+				// Out
+				.UpdateImage(_viewport.imageViews[imageIndex], 4)
+
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+#endif
 		}
 #endif
 
 #if 1	
 		// Compute tone mapping
 		_compute.toneMapping.Bind(f.cmd)
-			.UpdateImage(_viewport.imageViews[imageIndex], _linearSampler, imageIndex, 2)
+			.UpdateImage(_viewport.imageViews[imageIndex], 2)
 			.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex);
 #endif
 	}

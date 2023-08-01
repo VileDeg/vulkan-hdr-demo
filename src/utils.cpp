@@ -142,8 +142,8 @@ namespace utils {
 		VkImageSubresourceRange subresourceRange = {};
 		subresourceRange.aspectMask = aspectMask;
 		subresourceRange.baseMipLevel = 0;
-		subresourceRange.levelCount = 1;
-		subresourceRange.layerCount = 1;
+		subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+		subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 		setImageLayout(cmdbuffer, image, oldImageLayout, newImageLayout, subresourceRange, srcStageMask, dstStageMask);
 	}
 

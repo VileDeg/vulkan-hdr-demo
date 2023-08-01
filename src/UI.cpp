@@ -184,7 +184,11 @@ void Engine::uiUpdateHDR()
 	if (ImGui::TreeNodeEx("HDR", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable global tone mapping", &_renderContext.comp.enableToneMapping);
+			if (ImGui::Checkbox("Enable global tone mapping", &_renderContext.comp.enableToneMapping)) {
+				if (_renderContext.comp.enableToneMapping) {
+					_renderContext.comp.enableLTM = false;
+				}
+			}
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
@@ -204,22 +208,37 @@ void Engine::uiUpdateHDR()
 				}
 			}
 
-			{ // Gamma correction
-				const char* items[] = {
-					"No gamma correction", "Gamma correction", "Inverse gamma correction" };
-				static int item_current = _renderContext.comp.gammaMode;
-				if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
-					_renderContext.comp.gammaMode = item_current;
-				}
-			}
-
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable LTM", &_renderContext.comp.enableLTM);
+			if (ImGui::Checkbox("Enable local tone mapping", &_renderContext.comp.enableLTM)) {
+				if (_renderContext.comp.enableLTM) {
+					_renderContext.comp.enableToneMapping = false;
+				}
+			}
+			ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 1.f);
 			ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
-			ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 10.f);
+
+			//ImGui::SliderFloat("Spacial sigma", &_renderContext.comp.sigmaS, 3.f, 50.0f);
+			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _renderContext.comp.sigmaS);
+			ImGui::SliderFloat("Range sigma", &_renderContext.comp.sigmaR, 0.1f, 2.0f);
+
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+			{ // Gamma correction
+				/*const char* items[] = {
+					"No gamma correction", "Gamma correction", "Inverse gamma correction" };
+				static int item_current = _renderContext.comp.gammaMode;
+				if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
+					_renderContext.comp.gammaMode = item_current;
+				}*/
+
+				ImGui::SliderFloat("Gamma", &_renderContext.comp.gamma, 0.5f, 3.f);
+			}
 
 			ImGui::TreePop();
 		}
@@ -594,8 +613,16 @@ void Engine::uiUpdateViewport()
 	_isViewportHovered = ImGui::IsWindowHovered();
 
 	ImVec2 vSize = ImGui::GetContentRegionAvail();
+
 	uint32_t usX = (uint32_t)vSize.x;
 	uint32_t usY = (uint32_t)vSize.y;
+
+	// We round up our viewport size to multiple of 4 to make mipmapping of it a lot more accurate
+	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
+	static int step = 4;
+
+	usX = math::roundUpPw2(usX, step);
+	usY = math::roundUpPw2(usY, step);
 
 	if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
 		// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
@@ -684,12 +711,14 @@ void Engine::imguiUpdate()
 		}
 		ImGui::End();
 	
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 		ImGui::Begin("Viewport", (bool*)0, ImGuiWindowFlags_None);
 		{
 			uiUpdateViewport();		
 		}
 		ImGui::End();
+		ImGui::PopStyleVar();
 		ImGui::PopStyleVar();
 	}
 	ImGui::End();

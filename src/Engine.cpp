@@ -39,7 +39,7 @@ Engine::Engine()
 
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, // To get rid of renderpasses and framebuffers
 
-        //VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME // To update desc sets after binding
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME // To update desc sets after binding and to allow unused descriptors to remain invalid
     };
 
      WIDTH = 1600;
@@ -138,8 +138,8 @@ void Engine::createAttachment(
 
     VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &att.view));
 
-    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "IMAGE: " + debugName);
-    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "IMAGE_VIEW: " + debugName);
+    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
+    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "ATTACHMENT::VIEW::" + debugName);
 
     att.allocImage.descInfo = {
         .sampler = _linearSampler,
@@ -152,7 +152,53 @@ void Engine::createAttachment(
     });
 }
 
+void Engine::createAttachmentPyramid(
+    VkFormat format, VkImageUsageFlags usage,
+    VkExtent3D extent, VkImageAspectFlags aspect,
+    VkImageLayout layout,
+    uint32_t numOfMipLevels,
+    AttachmentPyramid& att,
+    const std::string debugName)
+{
+    // Create image with specified number of mips
+    VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, extent, numOfMipLevels);
+
+    VmaAllocationCreateInfo imgAllocinfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+    vmaCreateImage(_allocator, &imgInfo, &imgAllocinfo, &att.allocImage.image, &att.allocImage.allocation, nullptr);
+
+    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
+
+    // Create image view for each mip level
+    for (uint32_t i = 0; i < numOfMipLevels; ++i) {
+        VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, att.allocImage.image, aspect, i);
+
+        VkImageView view;
+        VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &view));
+        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, view, "ATTACHMENT::VIEW::" + debugName);
+
+        att.views.push_back(view);
+    }
+
+
+    /*att.allocImage.descInfo = {
+        .sampler = _linearSampler,
+        .imageView = att.view,
+        .imageLayout = layout
+    };*/
+
+    immediate_submit([&](VkCommandBuffer cmd) {
+        utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
+        });
+}
+
 void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
+    //int step = 8;
+    //extentX = math::roundUpPw2(extentX, step);
+    //extentY = math::roundUpPw2(extentY, step);
+
     _viewport.imageExtent = { extentX, extentY };
     bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
     ASSERTMSG(anyFormats, "Physical device has no supported depth formats");
@@ -208,14 +254,64 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     }
 
     { // Compute attachments
-        for (int i = 0; i < ComputeStagesLTM::MAX_LTM_ATTACMENTS; ++i) {
+        for (int i = 0; i < _compute.durand.att.size(); ++i) {
             createAttachment(
-                _viewport.colorFormat, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                _viewport.colorFormat, 
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                 extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_GENERAL,
-                _compute.ltm.att[i], "COMPUTE_ATTACHMENT_" + std::to_string(i)
+                _compute.durand.att[i], "COMPUTE::DURAND" + std::to_string(i)
             );
         }
+
+        int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
+        _renderContext.comp.numOfViewportMips = numOfViewportMips;
+
+        createAttachment(
+            _viewport.colorFormat, 
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            _compute.fusion.chrominance, "COMPUTE::FUSION::CHROMINANCE"
+        );
+
+        createAttachment(
+            _viewport.colorFormat, 
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            _compute.fusion.laplacianSum, "COMPUTE::FUSION::LAPLACIAN_SM"
+        );
+
+        createAttachmentPyramid(
+            _viewport.colorFormat, 
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | 
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            numOfViewportMips,
+            _compute.fusion.luminance, "COMPUTE::FUSION::LUMINANCE"
+        );
+
+        createAttachmentPyramid(
+            _viewport.colorFormat,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            numOfViewportMips,
+            _compute.fusion.weight, "COMPUTE::FUSION::WEIGHT"
+        );
+
+        createAttachmentPyramid(
+            _viewport.colorFormat,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            numOfViewportMips,
+            _compute.fusion.laplacian, "COMPUTE::FUSION::LAPLACIAN"
+        );
     }
 }
 
@@ -237,11 +333,15 @@ void Engine::cleanupViewportResources()
     //Destroy depth image
     _viewport.depth.Cleanup(_device, _allocator);
 
-    { // Compute attachments
-        for (int i = 0; i < ComputeStagesLTM::MAX_LTM_ATTACMENTS; ++i) {
-            _compute.ltm.att[i].Cleanup(_device, _allocator);
-        }
+    for (auto& a : _compute.durand.att) {
+        a.Cleanup(_device, _allocator);
     }
+
+    _compute.fusion.chrominance.Cleanup(_device, _allocator);
+    _compute.fusion.laplacianSum.Cleanup(_device, _allocator);
+    _compute.fusion.luminance.Cleanup(_device, _allocator);
+    _compute.fusion.weight.Cleanup(_device, _allocator);
+    _compute.fusion.laplacian.Cleanup(_device, _allocator);
 
     for (auto& imageView : _viewport.imageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
@@ -534,7 +634,6 @@ void Engine::initFrame(FrameData& f, int frame_i)
         { // Camera + scene + mat buffers descriptor set
             f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             f.sceneBuffer = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            //f.matBuffer    = createBuffer(sizeof(GPUMatUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
@@ -580,42 +679,110 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .build(_compute.averageLuminance.sets[frame_i], _compute.averageLuminance.setLayout);
 
-            { // Create layout and write descriptor set for COMPUTE LTM step
+            { // Create layout and write descriptor set for COMPUTE LTM Durand step
                 // 0 - lum, 1 - chrom, 2 - base
+
+                for (int i = 0; i < _compute.durand.stages.size(); ++i) {
+                    auto builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                        .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                        .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
+
+                    for (int j = 2; j < 2 + _compute.durand.numOfImageAttachmentsUsed[i]; ++j) {
+                        builder.bind_image(j, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+                    }
+
+                    builder.build(_compute.durand.stages[i].sets[frame_i], _compute.durand.stages[i].setLayout);
+                }
+
+                //auto builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
+
+                //for (int i = 2; i < 5; ++i) {
+                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+                //}
+                //    //// In
+                //    //.bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
+                //    //// Out
+                //    //.bind_image(3, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                //    //.bind_image(4, &_compute.durand.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+
+                //builder.build(_compute.durand.stages[0].sets[frame_i], _compute.durand.stages[0].setLayout);
+
+                //builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
+                //for (int i = 2; i < 5; ++i) {
+                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+                //}
+                //    // In
+                //    //.bind_image(2, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
+                //    //// Out
+                //    //.bind_image(3, &_compute.durand.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                //    //.bind_image(4, &_compute.durand.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+
+                //builder.build(_compute.durand.stages[1].sets[frame_i], _compute.durand.stages[1].setLayout);
+
+                //builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data;
+
+                //for (int i = 2; i < 7; ++i) {
+                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+                //}
+
+                //    // In
+                //    //.bind_image(2, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
+                //    //.bind_image(3, &_compute.durand.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                //    //.bind_image(4, &_compute.durand.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                //    //.bind_image(5, &_compute.durand.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+                //    //// Out
+                //    //.bind_image(6, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
+
+                //builder.build(_compute.durand.stages[2].sets[frame_i], _compute.durand.stages[2].setLayout);
+            }
+
+            {
                 vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                     .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                     .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                    // In
-                    .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                    // Out
-                    .bind_image(3, &_compute.ltm.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                    .bind_image(4, &_compute.ltm.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
 
-                    .build(_compute.ltm.stages[0].sets[frame_i], _compute.ltm.stages[0].setLayout);
+                    .bind_image_empty(2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
 
-                vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                    // In
-                    .bind_image(2, &_compute.ltm.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                    // Out
-                    .bind_image(3, &_compute.ltm.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                    .bind_image(4, &_compute.ltm.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-
-                    .build(_compute.ltm.stages[1].sets[frame_i], _compute.ltm.stages[1].setLayout);
+                    .build(_compute.fusion.stages[0].sets[frame_i], _compute.fusion.stages[0].setLayout);
 
                 vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                     .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                     .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                    // In
-                    .bind_image(2, &_compute.ltm.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                    .bind_image(3, &_compute.ltm.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                    .bind_image(4, &_compute.ltm.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                    .bind_image(5, &_compute.ltm.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                    // Out
-                    .bind_image(6, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
 
-                    .build(_compute.ltm.stages[2].sets[frame_i], _compute.ltm.stages[2].setLayout);
+                    .bind_image_empty(2, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(3, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+
+                    .build(_compute.fusion.stages[1].sets[frame_i], _compute.fusion.stages[1].setLayout);
+
+                vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+
+                    .bind_image_empty(2, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(3, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+
+                    .build(_compute.fusion.stages[2].sets[frame_i], _compute.fusion.stages[2].setLayout);
+
+                vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+
+                    .bind_image_empty(2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    .bind_image_empty(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+
+                    .build(_compute.fusion.stages[3].sets[frame_i], _compute.fusion.stages[3].setLayout);
             }
 
             // Create layout and write descriptor set for COMPUTE tone mapping step

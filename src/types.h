@@ -63,6 +63,20 @@ struct Attachment {
     }
 };
 
+struct AttachmentPyramid {
+    std::string tag = "";
+    AllocatedImage allocImage;
+    std::vector<VkImageView> views;
+
+    void Cleanup(VkDevice device, VmaAllocator allocator) {
+        for (auto& v : views) {
+            vkDestroyImageView(device, v, nullptr);
+        }
+        views.clear();
+        vmaDestroyImage(allocator, allocImage.image, allocImage.allocation);
+    }
+};
+
 struct FrameData {
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
@@ -81,41 +95,8 @@ struct FrameData {
 
     VkDescriptorSet globalSet;
 
-    /*VkDescriptorSet compHistogramSet;
-    VkDescriptorSet compAvgLumSet;
-    VkDescriptorSet compBlurSet;
-    VkDescriptorSet compTonemapSet;*/
-
     VkDescriptorSet shadowPassSet;
 };
-
-
-struct ComputeStage {
-    std::string tag = "";
-
-    VkDescriptorSetLayout setLayout;
-
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
-
-    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> sets;
-
-    static constexpr int MAX_IMAGE_UPDATES = 64;
-    std::vector<VkDescriptorImageInfo> descImageInfo;
-    std::vector<VkWriteDescriptorSet> writes;
-
-    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-    VkDevice device;
-
-    void Create(VkDevice device, const std::string& shaderBinName);
-    void Destroy(VkDevice device);
-
-    ComputeStage& Bind(VkCommandBuffer cmd);
-    ComputeStage& UpdateImage(VkImageView view, VkSampler sampler, int set_i, int binding);
-    ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
-    void Barrier();
-};
-
 
 /**
 * Struct that holds data related to immediate command execution.
@@ -126,6 +107,8 @@ struct UploadContext {
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
 };
+
+#define MAX_VIEWPORT_MIPS 13
 
 struct ViewportPass {
     std::vector<AllocatedImage> images; // Allocated with VMA
@@ -152,22 +135,77 @@ struct SwapchainPass {
     VkExtent2D imageExtent; // Window dimensions
 };
 
-struct ComputeStagesLTM {
-    static constexpr int MAX_LTM_STAGES = 3;
-    ComputeStage stages[MAX_LTM_STAGES];
 
-    static constexpr int MAX_LTM_ATTACMENTS = 4;
-    Attachment att[MAX_LTM_ATTACMENTS];
-    /*Attachment logLuminance;
-    Attachment base;
-    Attachment detail;*/
+struct ComputeStageImageBinding {
+    std::vector<VkImageView> views;
+    uint32_t binding;
+};
+
+struct ComputeStage {
+    std::string tag = "";
+
+    VkDescriptorSetLayout setLayout;
+
+    VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
+
+    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> sets;
+
+    std::vector<ComputeStageImageBinding> imageBindings;
+
+    static constexpr int MAX_IMAGE_UPDATES = 64;
+
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    VkDevice device;
+    VkSampler sampler;
+
+    void Create(VkDevice device, VkSampler sampler,
+        const std::string& shaderBinName);
+    void Destroy();
+
+    ComputeStage& Bind(VkCommandBuffer cmd);
+
+    ComputeStage& UpdateImage(VkImageView view, uint32_t binding);
+    ComputeStage& UpdateImage(Attachment att, uint32_t binding);
+
+    ComputeStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
+
+    ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
+    void Barrier();
+};
+
+struct Durand2002 {
+    constexpr static uint32_t STAGES_COUNT = 3;
+    std::array<ComputeStage, STAGES_COUNT> stages;
+    constexpr static uint32_t ATTACMENTS_COUNT = 4;
+    std::array<Attachment, ATTACMENTS_COUNT> att;
+
+    std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
+        3, 3, 5
+    };
+};
+
+struct ExposureFusion {
+    constexpr static uint32_t STAGES_COUNT = 4;
+    std::array<ComputeStage, STAGES_COUNT> stages;
+    /*constexpr static uint32_t ATTACMENTS_COUNT = 4;
+    std::array<Attachment, ATTACMENTS_COUNT> att;*/
+
+    Attachment chrominance, laplacianSum;
+    AttachmentPyramid luminance, weight, laplacian;
+
+
+    std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
+        5, 2, 3, 3
+    };
 };
 
 struct ComputePass {
     ComputeStage histogram;
     ComputeStage averageLuminance;
 
-    ComputeStagesLTM ltm;
+    Durand2002 durand;
+    ExposureFusion fusion;
 
     ComputeStage toneMapping;
 };

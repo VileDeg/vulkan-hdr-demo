@@ -24,48 +24,6 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
     return shaders;
 }
 
-static ComputeStage createComputePipeline(VkDevice device, const std::string& shaderBinName)
-{
-    ComputeStage cp;
-
-    ShaderData comp;
-    comp.code = utils::readShaderBinary(Engine::SHADER_PATH + shaderBinName);
-
-    if (utils::createShaderModule(device, comp.code, &comp.module)) {
-        std::cout << "Compute shader successfully loaded." << std::endl;
-    } else {
-        PRWRN("Failed to load compute shader");
-    }
-
-    VkPipelineShaderStageCreateInfo stageInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-        .module = comp.module,
-        .pName = "main"
-    };
-
-    VkPipelineLayoutCreateInfo layoutInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &cp.setLayout,
-    };
-
-    VKASSERT(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &cp.pipelineLayout));
-
-    VkComputePipelineCreateInfo computePipelineInfo{
-        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .stage = stageInfo,
-        .layout = cp.pipelineLayout,
-    };
-
-    VKASSERT(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &cp.pipeline));
-
-    vkDestroyShaderModule(device, comp.module, nullptr);
-
-    return cp;
-}
-
-
 static void s_createGraphicsPipeline(
     VkDevice device, 
     const std::string vertBinName, const std::string fragBinName,
@@ -210,24 +168,33 @@ void Engine::createPipelines()
     }
 
     { // Compute 
-        _compute.histogram.Create(_device, "histogram.comp.spv");
-        _compute.averageLuminance.Create(_device, "average_luminance.comp.spv");
+        _compute.histogram.Create(_device, _linearSampler, "histogram.comp.spv");
+        _compute.averageLuminance.Create(_device, _linearSampler, "average_luminance.comp.spv");
 
-        _compute.ltm.stages[0].Create(_device, "ltm_durand_lum_chrom.comp.spv");
-        _compute.ltm.stages[1].Create(_device, "ltm_durand_bilateral_base.comp.spv");
-        _compute.ltm.stages[2].Create(_device, "ltm_durand_reconstruct.comp.spv");
+        _compute.durand.stages[0].Create(_device, _linearSampler, "ltm_durand_lum_chrom.comp.spv");
+        _compute.durand.stages[1].Create(_device, _linearSampler, "ltm_durand_bilateral_base.comp.spv");
+        _compute.durand.stages[2].Create(_device, _linearSampler, "ltm_durand_reconstruct.comp.spv");
 
-        _compute.toneMapping.Create(_device, "tonemap.comp.spv");
+        _compute.fusion.stages[0].Create(_device, _linearSampler, "ltm_fusion_01.comp.spv");
+        _compute.fusion.stages[1].Create(_device, _linearSampler, "ltm_fusion_02.comp.spv");
+        _compute.fusion.stages[2].Create(_device, _linearSampler, "ltm_fusion_03.comp.spv");
+        _compute.fusion.stages[3].Create(_device, _linearSampler, "ltm_fusion_04.comp.spv");
+
+        _compute.toneMapping.Create(_device, _linearSampler, "tonemap.comp.spv");
     }
 
     _deletionStack.push([=]() mutable {
-        _compute.histogram.Destroy(_device);
-        _compute.averageLuminance.Destroy(_device);
+        _compute.histogram.Destroy();
+        _compute.averageLuminance.Destroy();
 
-        for (int i = 0; i < ComputeStagesLTM::MAX_LTM_STAGES; ++i) {
-            _compute.ltm.stages[i].Destroy(_device);
+        for (auto& stage : _compute.durand.stages) {
+            stage.Destroy();
         }
 
-        _compute.toneMapping.Destroy(_device);
+        for (auto& stage : _compute.fusion.stages) {
+            stage.Destroy();
+        }
+
+        _compute.toneMapping.Destroy();
     });
 }

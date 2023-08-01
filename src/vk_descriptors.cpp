@@ -239,6 +239,36 @@ namespace vkutil {
 	}
 
 
+	vkutil::DescriptorBuilder& DescriptorBuilder::bind_image_empty(uint32_t binding, uint32_t descriptorCount, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	{
+		if (descriptorCount == 0) {
+			return *this;
+		}
+
+		VkDescriptorSetLayoutBinding newBinding{};
+
+		newBinding.descriptorCount = descriptorCount;
+		newBinding.descriptorType = type;
+		newBinding.pImmutableSamplers = nullptr;
+		newBinding.stageFlags = stageFlags;
+		newBinding.binding = binding;
+
+		bindings.push_back(newBinding);
+
+		/*VkWriteDescriptorSet newWrite{};
+		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		newWrite.pNext = nullptr;
+
+		newWrite.descriptorCount = descriptorCount;
+		newWrite.descriptorType = type;
+		newWrite.pImageInfo = nullptr;
+		newWrite.dstBinding = binding;
+
+		writes.push_back(newWrite);*/
+
+		return *this;
+	}
+
 	vkutil::DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding, VkDescriptorImageInfo* imageInfo, VkDescriptorType type, VkShaderStageFlags stageFlags)
 	{
 		VkDescriptorSetLayoutBinding newBinding{};
@@ -267,12 +297,52 @@ namespace vkutil {
 		return *this;
 	}
 
+	vkutil::DescriptorBuilder& DescriptorBuilder::bind_image_array(uint32_t binding, std::vector<VkDescriptorImageInfo>& imageInfos, VkDescriptorType type, VkShaderStageFlags stageFlags)
+	{
+		VkDescriptorSetLayoutBinding newBinding{};
+
+		newBinding.descriptorCount = imageInfos.size();
+		newBinding.descriptorType = type;
+		newBinding.pImmutableSamplers = nullptr;
+		newBinding.stageFlags = stageFlags;
+		newBinding.binding = binding;
+
+		bindings.push_back(newBinding);
+
+		if (!imageInfos.empty()) { // Added condition to allow for later manual update
+			VkWriteDescriptorSet newWrite{};
+			newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			newWrite.pNext = nullptr;
+
+			newWrite.descriptorCount = imageInfos.size();
+			newWrite.descriptorType = type;
+			newWrite.pImageInfo = imageInfos.data();
+			newWrite.dstBinding = binding;
+
+			writes.push_back(newWrite);
+		}
+
+		return *this;
+	}
+
 	bool DescriptorBuilder::build(VkDescriptorSet& set, VkDescriptorSetLayout& layout)
 	{
+		std::vector<VkDescriptorBindingFlags> bindingFlags;
+		for (auto& b : bindings) {
+			bindingFlags.push_back(VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT);
+		}
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+			.pNext = nullptr,
+			.bindingCount = static_cast<uint32_t>(bindings.size()),
+			.pBindingFlags = bindingFlags.data()
+		};
+
 		//build layout first
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.pNext = nullptr;
+		layoutInfo.pNext = &flagsInfo;
 
 		layoutInfo.pBindings = bindings.data();
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());

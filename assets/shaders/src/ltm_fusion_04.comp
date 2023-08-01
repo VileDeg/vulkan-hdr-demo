@@ -1,0 +1,37 @@
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/tone_mapping.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (std430, set = 0, binding = 0) 
+#include "incl/computeSSBO.incl" 
+ssbo;
+
+layout (set = 0, binding = 1) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inChrominanceImage;
+layout (rgba32f, set = 0, binding = 3) uniform readonly image2D inLaplacianSumImage;
+
+layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D finalImage;
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	uvec2 dim = imageSize(inChrominanceImage).xy; // Mip level 0 corresponds to full-res image
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+		vec3  chrom  = imageLoad(inChrominanceImage, coords).rgb;
+		float laplacianSum = imageLoad(inLaplacianSumImage, coords).r; // Since it's luminance we only need one channel
+
+		vec3 outColor = chrom * laplacianSum;
+
+		imageStore(finalImage, coords, vec4(outColor, 1.0));
+	}
+}

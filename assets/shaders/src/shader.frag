@@ -41,8 +41,6 @@ layout(set = 1, binding = 1) uniform sampler2D bump;
 
 void main()  
 {
-    //vec3 norm = vec3(0);
-    //float px  = texture(bump, uv).r;
     vec3 bumpNormal = normal;
     vec2 bumpUV = uv;
 

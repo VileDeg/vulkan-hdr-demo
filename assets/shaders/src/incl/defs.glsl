@@ -1,6 +1,10 @@
 #ifndef _DEFS_GLSL_
 #define _DEFS_GLSL_
 
+    #define RGB_TO_LUM vec3(0.2125, 0.7154, 0.0721)
+
+    #define MAX_VIEWPORT_MIPS 13
+
     #define MAX_LIGHTS 4
 
     #define MAX_OBJECTS 10
@@ -34,15 +38,8 @@
 
     struct ObjectData{
 	    mat4 model;
-
         mat4 normalMatrix;
-        //vec3 _pad0;
-        //vec4 _pad1;
-
-	    //vec4 color;
         MatData mat[MAX_MESHES_PER_OBJECT];
     };
-
-    
 
 #endif

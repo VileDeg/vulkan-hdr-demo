@@ -267,7 +267,8 @@ VkPipelineDepthStencilStateCreateInfo vkinit::depth_stencil_create_info(bool bDe
 
 VkImageCreateInfo vkinit::image_create_info(
 	VkFormat format, VkImageUsageFlags usageFlags, 
-	VkExtent3D extent, VkImageCreateFlagBits createFlags/* = (VkImageCreateFlagBits)0*/)
+	VkExtent3D extent, uint32_t mipLevels /* = 1*/, 
+	VkImageCreateFlagBits createFlags/* = (VkImageCreateFlagBits)0*/)
 {
 	VkImageCreateInfo info = { };
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -279,7 +280,7 @@ VkImageCreateInfo vkinit::image_create_info(
 	info.format = format;
 	info.extent = extent;
 
-	info.mipLevels = 1;
+	info.mipLevels = mipLevels;
 	info.arrayLayers = 1;
 	info.samples = VK_SAMPLE_COUNT_1_BIT;
 	info.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -290,7 +291,7 @@ VkImageCreateInfo vkinit::image_create_info(
 
 VkImageViewCreateInfo vkinit::imageview_create_info(
 	VkFormat format, VkImage image, 
-	VkImageAspectFlags aspectFlags, VkImageViewType viewType/* = VK_IMAGE_VIEW_TYPE_2D*/)
+	VkImageAspectFlags aspectFlags, uint32_t baseMipLevel/* = 0*/, VkImageViewType viewType/* = VK_IMAGE_VIEW_TYPE_2D*/)
 {
 	//build a image-view for the depth image to use for rendering
 	VkImageViewCreateInfo info = {};
@@ -300,7 +301,7 @@ VkImageViewCreateInfo vkinit::imageview_create_info(
 	info.viewType = viewType;
 	info.image = image;
 	info.format = format;
-	info.subresourceRange.baseMipLevel = 0;
+	info.subresourceRange.baseMipLevel = baseMipLevel;
 	info.subresourceRange.levelCount = 1;
 	info.subresourceRange.baseArrayLayer = 0;
 	info.subresourceRange.layerCount = 1;
@@ -350,7 +351,7 @@ VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter filters, VkSamplerAddre
 
 	return info;
 }
-VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, uint32_t binding)
+VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfos, uint32_t binding)
 {
 	VkWriteDescriptorSet write = {};
 	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -360,7 +361,7 @@ VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDes
 	write.dstSet = dstSet;
 	write.descriptorCount = 1;
 	write.descriptorType = type;
-	write.pImageInfo = imageInfo;
+	write.pImageInfo = imageInfos;
 
 	return write;
 }

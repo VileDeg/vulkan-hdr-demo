@@ -36,3 +36,4 @@
 #include "defs.h"
 #include "vk_initializers.h"
 #include "utils.h"
+#include "math_utils.h"

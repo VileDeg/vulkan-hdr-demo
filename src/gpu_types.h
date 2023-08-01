@@ -128,17 +128,22 @@ struct GPUCompUB {
     float timeCoeff = 1.f;
     uint32_t lumLowerIndex;
     uint32_t lumUpperIndex;
-    int _pad0;
+    float gamma = 2.2f;
 
     glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
 
-    GPUBool enableToneMapping = true;
+    GPUBool enableToneMapping = false; // true
     int toneMappingMode{ 3 };
     GPUBool enableAdaptation = true;
     int gammaMode{ 1 };
 
     GPUBool enableLTM = true;
-    float baseOffset = 0;
-    float baseScale = 1.;
+    float baseScale = 0.45;
+    float baseOffset = 0.42;
+    float sigmaS = 20; // should always equal to 2% of image size
+
+    float sigmaR = 0.4;
+    int numOfViewportMips;
+    int _pad0;
     int _pad1;
 };

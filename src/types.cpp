@@ -143,8 +143,12 @@ bool RenderObject::HasMoved() {
 	return hasMoved;
 }
 
-void ComputeStage::Create(VkDevice device, const std::string& shaderBinName) {
+void ComputeStage::Create(VkDevice device, VkSampler sampler,
+	const std::string& shaderBinName) 
+{
 	this->device = device;
+	this->sampler = sampler;
+
 	ShaderData comp;
 	comp.code = utils::readShaderBinary(Engine::SHADER_PATH + shaderBinName);
 
@@ -179,8 +183,9 @@ void ComputeStage::Create(VkDevice device, const std::string& shaderBinName) {
 
 	vkDestroyShaderModule(device, comp.module, nullptr);
 
-	descImageInfo.reserve(MAX_IMAGE_UPDATES);
-	writes.reserve(MAX_IMAGE_UPDATES);
+	imageBindings.reserve(MAX_IMAGE_UPDATES);
+	/*descImageInfo.reserve(MAX_IMAGE_UPDATES);
+	writes.reserve(MAX_IMAGE_UPDATES);*/
 }
 
 ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd) {
@@ -189,30 +194,63 @@ ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd) {
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImage(VkImageView view, VkSampler sampler, int set_i, int binding) {
-	VkDescriptorImageInfo imgInfo{
-		.sampler = sampler,
-		.imageView = view,
-		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-	};
+ComputeStage& ComputeStage::UpdateImage(VkImageView view, uint32_t binding) {
+	imageBindings.push_back({ { view }, binding });
+	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
 
-	descImageInfo.push_back(imgInfo);
+	return *this;
+}
 
-	VkWriteDescriptorSet descWrite =
-		vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			sets[set_i], &descImageInfo.back(), binding);
-	
-	writes.push_back(descWrite);
-	ASSERT(writes.size() <= MAX_IMAGE_UPDATES);
+ComputeStage& ComputeStage::UpdateImage(Attachment att, uint32_t binding) {
+	imageBindings.push_back({ { att.view }, binding });
+	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
+
+	return *this;
+}
+
+ComputeStage& ComputeStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding)
+{
+	imageBindings.push_back({ att.views, binding });
+	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
 
 	return *this;
 }
 
 ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i) {
-	if (!writes.empty()) {
+	if (!imageBindings.empty()) {
+		// Need to create vector for image infos to hold data until update command is executed
+		std::vector<std::vector<VkDescriptorImageInfo>> imageInfos;
+		imageInfos.resize(imageBindings.size());
+
+		std::vector<VkWriteDescriptorSet> writes;
+		int i = 0; 
+		for (auto& ib : imageBindings) {
+			for (auto& v : ib.views) {
+				VkDescriptorImageInfo imgInfo{
+					.sampler = sampler,
+					.imageView = v,
+					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				imageInfos[i].push_back(imgInfo);
+			}
+
+			VkWriteDescriptorSet write = {};
+			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write.pNext = nullptr;
+
+			write.dstBinding = ib.binding;
+			write.dstSet = sets[set_i];
+			write.descriptorCount = imageInfos[i].size();
+			write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			write.pImageInfo = imageInfos[i].data();
+
+			writes.push_back(write);
+			++i;
+		}
+
 		vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
-		writes.clear();
-		descImageInfo.clear();
+		imageBindings.clear();
 	}
 
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &sets[set_i], 0, nullptr);
@@ -236,7 +274,7 @@ void ComputeStage::Barrier() {
 #endif
 }
 
-void ComputeStage::Destroy(VkDevice device) {
+void ComputeStage::Destroy() {
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 }
