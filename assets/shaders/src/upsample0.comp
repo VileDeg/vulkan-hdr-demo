@@ -13,29 +13,32 @@ ub;
 #include "incl/compPC.incl"
 pc;
 
-layout (rgba32f, set = 0, binding = 1) uniform readonly image2D mipChain[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inBlendedLaplacian[MAX_VIEWPORT_MIPS];
 
 layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D upsample0[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	int i = pc.mipIndex;
-	uvec2 dim = imageSize(mipChain[i]).xy;
+	uvec2 dim = imageSize(upsample0[i]).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	// Ignore threads that map to areas beyond the bounds of our image
-	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-        ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	if (coords.x < dim.x && coords.y < dim.y) {
+		// Select only upper left pixel out of 4
+		// Store black color otherwise to erase left garbage values
+		if (mod(coords.x, 2) != 0 || mod(coords.y, 2) != 0) {
+			imageStore(upsample0[i], coords, vec4(vec3(0), 1.0));
+			return;
+		}
 
-		vec3 px = imageLoad(mipChain[i], coords).rgb;
-		// For normalization
-		px *= 4;
-
-		// Increase size by 2
-		coords <<= 1;
+		ivec2 coordsLower = coords / 2;
 		// Clamp to border
-		ivec2 dimHigher = imageSize(mipChain[i-1]).xy;
-		coords.x = min(coords.x, dimHigher.x-1);
-		coords.y = min(coords.y, dimHigher.y-1);
+		ivec2 dimLower = imageSize(inBlendedLaplacian[i+1]).xy;
+		coordsLower.x = min(coordsLower.x, dimLower.x-1);
+		coordsLower.y = min(coordsLower.y, dimLower.y-1);
+		// For normalization multiply by 4
+		vec3 px = imageLoad(inBlendedLaplacian[i+1], coordsLower).rgb * 4;
 
-		imageStore(upsample0[i-1], coords, vec4(px, 1.0));
-	}	
+		imageStore(upsample0[i], coords, vec4(px, 1.0));
+	}
 }

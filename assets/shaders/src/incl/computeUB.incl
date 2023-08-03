@@ -1,4 +1,4 @@
-uniform AdaptationUB {
+uniform ComputeUB {
     float minLogLum;
     float logLumRange;
     float oneOverLogLumRange;
@@ -23,7 +23,7 @@ uniform AdaptationUB {
 
     float sigmaR;
     int numOfViewportMips;
-    int _pad0;
-    int _pad1;
+    float shadowsExposure;
+    float highlightsExposure;
 }
 

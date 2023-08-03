@@ -6,37 +6,30 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;
-
-layout (set = 0, binding = 1) 
+layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inLaplacianMips[MAX_VIEWPORT_MIPS];
-layout (rgba32f, set = 0, binding = 3) uniform readonly image2D inWeightMips[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D upsample0[MAX_VIEWPORT_MIPS]; // upsample0
 
-layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D laplacianSumImage;
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D laplacianSumImage;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-	uvec2 dim = imageSize(inLaplacianMips[0]).xy; // Mip level 0 corresponds to full-res image
+	uvec2 dim = imageSize(upsample0[0]).xy; // Mip level 0 corresponds to full-res image
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords = ivec2(gl_GlobalInvocationID.xy); 
 
 		vec3 laplacianSum = vec3(0);
 		for (int i = 0; i < ub.numOfViewportMips; ++i) {
-			ivec2 dimMip = imageSize(inLaplacianMips[i]).xy;
+			ivec2 dimMip = imageSize(upsample0[i]).xy;
 			coords.x = min(coords.x, dimMip.x-1);
 			coords.y = min(coords.y, dimMip.y-1);
 
-			vec3 laplac  = imageLoad(inLaplacianMips[i], coords).rgb;
-			vec3 weights = imageLoad(inWeightMips[i], coords).rgb;
-			//weights /= i+1;
+			vec3 laplac  = imageLoad(upsample0[i], coords).rgb;
 
-			laplacianSum += dot(laplac, weights);
+			laplacianSum += laplac;
 
 			coords >>= 1;
 		}

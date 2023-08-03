@@ -175,14 +175,23 @@ void Engine::createPipelines()
         _compute.durand.stages[1].Create(_device, _linearSampler, "ltm_durand_bilateral_base.comp.spv");
         _compute.durand.stages[2].Create(_device, _linearSampler, "ltm_durand_reconstruct.comp.spv");
 
-        _compute.fusion.stages[0].Create(_device, _linearSampler, "ltm_fusion_01.comp.spv");
-        _compute.fusion.stages[1].Create(_device, _linearSampler, "ltm_fusion_02.comp.spv", true); // Use push constants
-        _compute.fusion.stages[2].Create(_device, _linearSampler, "ltm_fusion_03.comp.spv");
-        _compute.fusion.stages[3].Create(_device, _linearSampler, "ltm_fusion_04.comp.spv");
+        for (auto& stage : _compute.fusion.stages) {
+            stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
+        }
 
+        /*_compute.fusion.stages["0"].Create(_device, _linearSampler, "ltm_fusion_0.comp.spv");
+        _compute.fusion.stages["1"].Create(_device, _linearSampler, "ltm_fusion_1.comp.spv", true);
+        _compute.fusion.stages["2"].Create(_device, _linearSampler, "ltm_fusion_2.comp.spv");
+        _compute.fusion.stages["3"].Create(_device, _linearSampler, "ltm_fusion_3.comp.spv");
+        _compute.fusion.stages["4"].Create(_device, _linearSampler, "ltm_fusion_4.comp.spv");
+
+        _compute.fusion.stages["upsample0"].Create(_device, _linearSampler, "upsample0.comp.spv", true);
+        _compute.fusion.stages["upsample1"].Create(_device, _linearSampler, "upsample1.comp.spv", true);
+        _compute.fusion.stages["upsample2"].Create(_device, _linearSampler, "upsample2.comp.spv", true);
+
+        _compute.fusion.stages["add"].Create(_device, _linearSampler, "mipmap_add.comp.spv", true);*/
+        
         _compute.toneMapping.Create(_device, _linearSampler, "tonemap.comp.spv");
-
-        _compute.fusion.downsample.Create(_device, _linearSampler, "downsample.comp.spv", true); // Use push constants
     }
 
     _deletionStack.push([=]() mutable {
@@ -194,11 +203,13 @@ void Engine::createPipelines()
         }
 
         for (auto& stage : _compute.fusion.stages) {
-            stage.Destroy();
+            stage.second.Destroy();
         }
 
         _compute.toneMapping.Destroy();
 
-        _compute.fusion.downsample.Destroy();
+        /*_compute.fusion.upsample0.Destroy();
+        _compute.fusion.upsample1.Destroy();
+        _compute.fusion.upsample2.Destroy();*/
     });
 }

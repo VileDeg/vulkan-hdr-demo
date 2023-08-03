@@ -111,7 +111,7 @@ struct GPUSceneSSBO {
 
 struct GPUCompPC {
     int mipIndex;
-    bool horizontalPass;
+    GPUBool horizontalPass;
     int _pad0;
     int _pad1;
 };
@@ -151,6 +151,6 @@ struct GPUCompUB {
 
     float sigmaR = 0.4;
     int numOfViewportMips;
-    int _pad0;
-    int _pad1;
+    float shadowsExposure = (float)std::exp2(1.5);
+    float highlightsExposure = (float)std::exp2(-2.0);
 };

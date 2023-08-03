@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "engine.h"
 
+#include "vk_descriptors.h"
+
 void Engine::setDisplayLightSourceObjects(bool display)
 {
 	if (!display) {
@@ -143,6 +145,7 @@ bool RenderObject::HasMoved() {
 	return hasMoved;
 }
 
+
 void ComputeStage::Create(VkDevice device, VkSampler sampler,
 	const std::string& shaderBinName, bool usePushConstants/* = false*/)
 {
@@ -276,11 +279,7 @@ ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set
 	WriteSets(set_i);
 
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &sets[set_i], 0, nullptr);
-
-	ASSERT(MAX_LUMINANCE_BINS == 256);
-	constexpr uint32_t group_size = 16;
 	vkCmdDispatch(commandBuffer, groupsX, groupsY, 1);
-	
 	
 	return *this;
 }
@@ -292,11 +291,67 @@ void ComputeStage::Barrier()
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 }
 
+void ComputeStage::InitDescriptorSets(
+	DescriptorLayoutCache* dLayoutCache, DescriptorAllocator* dAllocator,
+	FrameData& f, int frame_i)
+{
+	ASSERT(!dsetBindings.empty());
+
+	DescriptorBuilder builder = DescriptorBuilder::begin(dLayoutCache, dAllocator);
+
+	for (int i = 0; i < dsetBindings.size(); ++i) {
+		switch (dsetBindings[i]) {
+		case UB:
+			builder.bind_buffer(i, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT);
+			break;
+		case SSBO:
+			builder.bind_buffer(i, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT);
+			break;
+		case IMG:
+			builder.bind_image_empty(i, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+			break;
+		case PYR:
+			builder.bind_image_empty(i, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+			break;
+		default:
+			ASSERT(false);
+			break;
+		}
+	}
+
+	builder.build(sets[frame_i], setLayout);
+}
+
 void ComputeStage::Destroy() 
 {
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 }
+
+ExposureFusion::ExposureFusion() {
+	stages["0"] = { .shaderName = "ltm_fusion_0.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
+	stages["1"] = { .shaderName = "ltm_fusion_1.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
+	stages["2"] = { .shaderName = "ltm_fusion_2.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR} };
+	//stages["3"] = { .shaderName = "ltm_fusion_3.comp.spv", .dsetBindings = { UB, PYR, IMG} };
+	stages["4"] = { .shaderName = "ltm_fusion_4.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+
+	stages["upsample0_sub"] = { .shaderName = "upsample0.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample1_sub"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample2_sub"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };// Was update2 shader
+
+	stages["upsample0_add"] = { .shaderName = "upsample0.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample1_add"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample2_add"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };// Was update2 shader
+
+	stages["add"]	   = { .shaderName = "mipmap_add.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["subtract"] = { .shaderName = "mipmap_subtract.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR}, .usesPushConstants = true };
+
+	att["chrom"] = att["laplacSum"] = {};
+
+	pyr["lum"] = pyr["weight"] = pyr["laplac"] = pyr["blendedLaplac"] = {};
+	pyr["upsampled0"] = pyr["upsampled1"] = {};
+}
+
 
 
 VertexInputDescription Vertex::getDescription()

@@ -224,6 +224,10 @@ void Engine::uiUpdateHDR()
 			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _renderContext.comp.sigmaS);
 			ImGui::SliderFloat("Range sigma", &_renderContext.comp.sigmaR, 0.1f, 2.0f);
 
+
+			ImGui::SliderFloat("Shadows Exposure", &_renderContext.comp.shadowsExposure, exp2(0), exp2(5));
+			ImGui::SliderFloat("Highlights Exposure", &_renderContext.comp.highlightsExposure, exp2(-5), exp2(0));
+
 			ImGui::TreePop();
 		}
 
@@ -619,7 +623,7 @@ void Engine::uiUpdateViewport()
 
 	// We round up our viewport size to multiple of 4 to make mipmapping of it a lot more accurate
 	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
-	static int step = 4;
+	static int step = 32;
 
 	usX = math::roundUpPw2(usX, step);
 	usY = math::roundUpPw2(usY, step);

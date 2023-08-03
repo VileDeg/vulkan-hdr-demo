@@ -2,6 +2,7 @@
 
 #include "gpu_types.h"
 
+
 struct DeletionStack {
     std::stack<std::function<void()>> deletors;
 
@@ -141,6 +142,15 @@ struct ComputeStageImageBinding {
     uint32_t binding;
 };
 
+// Compute stage bindings
+enum {
+    UB, SSBO, IMG, PYR
+};
+
+// Forward declaration
+class DescriptorLayoutCache;
+class DescriptorAllocator;
+
 struct ComputeStage {
     std::string tag = "";
 
@@ -159,6 +169,12 @@ struct ComputeStage {
     VkDevice device;
     VkSampler sampler;
 
+    std::string shaderName;
+    std::vector<int> dsetBindings;
+    bool usesPushConstants;
+
+    //int lastSetUpdateIndex = -1;
+
     void Create(VkDevice device, VkSampler sampler,
         const std::string& shaderBinName, bool usePushConstants = false);
     void Destroy();
@@ -174,6 +190,10 @@ struct ComputeStage {
 
     ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
     void Barrier();
+
+    void InitDescriptorSets(
+        DescriptorLayoutCache* dLayoutCache, DescriptorAllocator* dAllocator,
+        FrameData& f, int frame_i);
 };
 
 struct Durand2002 {
@@ -188,21 +208,20 @@ struct Durand2002 {
 };
 
 struct ExposureFusion {
-    constexpr static uint32_t STAGES_COUNT = 4;
-    std::array<ComputeStage, STAGES_COUNT> stages;
-    /*constexpr static uint32_t ATTACMENTS_COUNT = 4;
-    std::array<Attachment, ATTACMENTS_COUNT> att;*/
+    /*constexpr static uint32_t STAGES_COUNT = 5;
+    std::array<ComputeStage, STAGES_COUNT> stages;*/
+    std::map<std::string, ComputeStage> stages;
+    std::map<std::string, Attachment> att;
+    std::map<std::string, AttachmentPyramid> pyr;
 
-    Attachment chrominance, laplacianSum;
-    AttachmentPyramid luminance, weight, laplacian;
+    //Attachment chrominance, laplacianSum;
 
-    ComputeStage downsample; // Used by exposure fusion
-    //Attachment filter0;
-    AttachmentPyramid upsample0, upsample1;
+    //AttachmentPyramid luminance, weight, laplacian, blendedLaplacian;
 
-    /*std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
-        5, 2, 3, 3
-    };*/
+    //ComputeStage upsample0, upsample1, upsample2, add; // Used by exposure fusion
+    //AttachmentPyramid upsampled0, upsampled1;
+
+    ExposureFusion();
 };
 
 struct ComputePass {
@@ -213,8 +232,6 @@ struct ComputePass {
     ExposureFusion fusion;
 
     ComputeStage toneMapping;
-
-    
 };
 
 struct ShadowPass {

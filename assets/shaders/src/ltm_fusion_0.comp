@@ -7,20 +7,16 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;
-
-layout (set = 0, binding = 1) 
+layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inImage;
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inImage;
 
-layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D chrominanceImage;
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D chrominanceImage;
 
-layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D luminanceImage;
-layout (rgba32f, set = 0, binding = 5) uniform writeonly image2D weightImage;
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D luminanceImage;
+layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D weightImage;
 
 const float WHITE_POINT = 10.0;
 
@@ -36,8 +32,8 @@ vec3 applyToneMapping(vec3 col) {
 	return outCol;
 }
 
-const float shadowExp = exp2(1.5);
-const float highlightExp = exp2(-2.0);
+//const float shadowExp = exp2(1.5);
+//const float highlightExp = exp2(-2.0);
 
 const float exposure = 1.0;
 
@@ -54,12 +50,12 @@ void main() {
 
 		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
 
-		float highlights = dot(clamp(applyToneMapping(inpColor * highlightExp), 0.0, 1.0), RGB_TO_LUM);
+		float highlights = dot(clamp(applyToneMapping(inpColor * ub.highlightsExposure), 0.0, 1.0), RGB_TO_LUM);
 
 		//float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
         float midtones   = dot(midtonesColor, RGB_TO_LUM);
 
-        float shadows	 = dot(clamp(applyToneMapping(inpColor * shadowExp), 0.0, 1.0), RGB_TO_LUM);
+        float shadows	 = dot(clamp(applyToneMapping(inpColor * ub.shadowsExposure), 0.0, 1.0), RGB_TO_LUM);
 
 		vec3 lums  = vec3(highlights, midtones, shadows);
 		vec3 chrom = midtonesColor / midtones; //midtonesSquare;
@@ -67,6 +63,7 @@ void main() {
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 diff = lums - vec3(0.5);
         vec3 weights = vec3(exp(-0.5 * diff * diff * sigmaSq));
+
 		// Normalize weights
         weights /= dot(weights, vec3(1.0)) + 0.00001;
 

@@ -6,20 +6,16 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;
-
-layout (set = 0, binding = 1) 
+layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
 
 #include "incl/compPC.incl"
 pc;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inMips[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inMips[MAX_VIEWPORT_MIPS];
 
-layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D outMips[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D outMips[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {

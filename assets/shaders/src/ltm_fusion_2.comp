@@ -1,0 +1,47 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inLaplacianMips[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inWeightMips[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D blendedLaplacian[MAX_VIEWPORT_MIPS];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	uvec2 dim = imageSize(inLaplacianMips[0]).xy; // Mip level 0 corresponds to full-res image
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        ivec2 coords = ivec2(gl_GlobalInvocationID.xy); 
+
+		vec3 laplacianSum = vec3(0);
+		for (int i = 0; i < ub.numOfViewportMips; ++i) {
+			ivec2 dimMip = imageSize(inLaplacianMips[i]).xy;
+			coords.x = min(coords.x, dimMip.x-1);
+			coords.y = min(coords.y, dimMip.y-1);
+
+			vec3 laplac  = imageLoad(inLaplacianMips[i], coords).rgb;
+			vec3 weights = imageLoad(inWeightMips[i], coords).rgb;
+			//weights /= i+1;
+
+			float blended = dot(laplac, weights);
+
+			//laplacianSum += dot(laplac, weights);
+
+			imageStore(blendedLaplacian[i], coords, vec4(vec3(blended), 1.0));
+
+			coords >>= 1;
+		}
+
+		//ivec2 initialCoords = ivec2(gl_GlobalInvocationID.xy);
+		//imageStore(laplacianSumImage, initialCoords, vec4(laplacianSum, 1.0));
+	}
+}

@@ -203,8 +203,8 @@ private:
     std::unordered_map<std::string, Mesh> _meshes;
     std::unordered_map<std::string, Attachment> _textures;
 
-    vkutil::DescriptorAllocator* _descriptorAllocator;
-    vkutil::DescriptorLayoutCache* _descriptorLayoutCache;
+    DescriptorAllocator* _descriptorAllocator;
+    DescriptorLayoutCache* _descriptorLayoutCache;
 
     VkDescriptorSetLayout _globalSetLayout;
     VkDescriptorSetLayout _diffuseTextureSetLayout;
