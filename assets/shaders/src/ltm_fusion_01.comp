@@ -21,8 +21,6 @@ layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D chrominanceImag
 
 layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D luminanceImage;
 layout (rgba32f, set = 0, binding = 5) uniform writeonly image2D weightImage;
-//layout (rgba32f, set = 0, binding = 6) uniform writeonly image2D laplacianSumImage;
-layout (rgba32f, set = 0, binding = 6) uniform writeonly image2D laplacianImage; // Lowest laplacian mip (highest-res)
 
 const float WHITE_POINT = 10.0;
 
@@ -56,15 +54,15 @@ void main() {
 
 		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
 
-		float highlights = sqrt(dot(clamp(applyToneMapping(inpColor * highlightExp), 0.0, 1.0), RGB_TO_LUM));
+		float highlights = dot(clamp(applyToneMapping(inpColor * highlightExp), 0.0, 1.0), RGB_TO_LUM);
 
-		float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
-        float midtones   = sqrt(midtonesSquare);
+		//float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
+        float midtones   = dot(midtonesColor, RGB_TO_LUM);
 
-        float shadows	 = sqrt(dot(clamp(applyToneMapping(inpColor * shadowExp), 0.0, 1.0), RGB_TO_LUM));
+        float shadows	 = dot(clamp(applyToneMapping(inpColor * shadowExp), 0.0, 1.0), RGB_TO_LUM);
 
 		vec3 lums  = vec3(highlights, midtones, shadows);
-		vec3 chrom = midtonesColor / midtonesSquare;
+		vec3 chrom = midtonesColor / midtones; //midtonesSquare;
 
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 diff = lums - vec3(0.5);
@@ -72,19 +70,9 @@ void main() {
 		// Normalize weights
         weights /= dot(weights, vec3(1.0)) + 0.00001;
 
-		// Blend luminances by weights
-		//float blended = dot(lums, weights);
-
 		imageStore(luminanceImage, coords, vec4(lums, 1.0));
 		imageStore(chrominanceImage, coords, vec4(chrom, 1.0));
 
 		imageStore(weightImage, coords, vec4(weights, 1.0));
-		/* Store blended luminance to the final sum.
-		   Evidently this is only done for mip level 0, 
-		   for next levels laplacian will be added to sum instead of luminance * weights blend */
-		//imageStore(laplacianSumImage, coords, vec4(vec3(blended), 1.0));
-
-		// Write luminance to laplacian mip 0 to add the blended luminance later to laplacian sum
-		imageStore(laplacianImage, coords, vec4(lums, 1.0));
 	}
 }

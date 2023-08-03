@@ -957,7 +957,7 @@ Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, c
 		.pipelineLayout = layout
 	};
 
-	utils::setDebugName(_device, VK_OBJECT_TYPE_PIPELINE, pipeline, name);
+	setDebugName(VK_OBJECT_TYPE_PIPELINE, pipeline, name);
 
 	_deletionStack.push([&]() { 
 		vkDestroyPipeline(_device, mat.pipeline, nullptr);

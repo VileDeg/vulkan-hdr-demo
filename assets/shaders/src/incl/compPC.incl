@@ -1,0 +1,6 @@
+layout(push_constant) uniform PushConstants {
+	int mipIndex;
+    bool horizontalPass;
+    int _pad0;
+    int _pad1;
+}

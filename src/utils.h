@@ -47,9 +47,6 @@ namespace utils {
 
 	VkBool32 formatHasStencil(VkFormat format);
 
-
 	std::vector<char> readShaderBinary(const std::string& filename);
 	bool createShaderModule(VkDevice device, const std::vector<char>& code, VkShaderModule* module);
-
-	void setDebugName(VkDevice device, VkObjectType type, void* handle, const std::string name);
 }

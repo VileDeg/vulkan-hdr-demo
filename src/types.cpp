@@ -144,7 +144,7 @@ bool RenderObject::HasMoved() {
 }
 
 void ComputeStage::Create(VkDevice device, VkSampler sampler,
-	const std::string& shaderBinName) 
+	const std::string& shaderBinName, bool usePushConstants/* = false*/)
 {
 	this->device = device;
 	this->sampler = sampler;
@@ -169,7 +169,20 @@ void ComputeStage::Create(VkDevice device, VkSampler sampler,
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 1,
 		.pSetLayouts = &setLayout,
+		.pushConstantRangeCount = 0,
+		.pPushConstantRanges = nullptr
 	};
+
+	if (usePushConstants) {
+		VkPushConstantRange pcRange = {
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0,
+			.size = sizeof(GPUCompPC),
+		};
+
+		layoutInfo.pushConstantRangeCount = 1;
+		layoutInfo.pPushConstantRanges = &pcRange;
+	}
 
 	VKASSERT(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout));
 
@@ -184,24 +197,25 @@ void ComputeStage::Create(VkDevice device, VkSampler sampler,
 	vkDestroyShaderModule(device, comp.module, nullptr);
 
 	imageBindings.reserve(MAX_IMAGE_UPDATES);
-	/*descImageInfo.reserve(MAX_IMAGE_UPDATES);
-	writes.reserve(MAX_IMAGE_UPDATES);*/
 }
 
-ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd) {
+ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd) 
+{
 	commandBuffer = cmd;
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImage(VkImageView view, uint32_t binding) {
+ComputeStage& ComputeStage::UpdateImage(VkImageView view, uint32_t binding) 
+{
 	imageBindings.push_back({ { view }, binding });
 	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
 
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImage(Attachment att, uint32_t binding) {
+ComputeStage& ComputeStage::UpdateImage(Attachment att, uint32_t binding) 
+{
 	imageBindings.push_back({ { att.view }, binding });
 	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
 
@@ -216,14 +230,15 @@ ComputeStage& ComputeStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t 
 	return *this;
 }
 
-ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i) {
+ComputeStage& ComputeStage::WriteSets(int set_i)
+{
 	if (!imageBindings.empty()) {
 		// Need to create vector for image infos to hold data until update command is executed
 		std::vector<std::vector<VkDescriptorImageInfo>> imageInfos;
 		imageInfos.resize(imageBindings.size());
 
 		std::vector<VkWriteDescriptorSet> writes;
-		int i = 0; 
+		int i = 0;
 		for (auto& ib : imageBindings) {
 			for (auto& v : ib.views) {
 				VkDescriptorImageInfo imgInfo{
@@ -253,6 +268,13 @@ ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set
 		imageBindings.clear();
 	}
 
+	return *this;
+}
+
+ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i) 
+{
+	WriteSets(set_i);
+
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &sets[set_i], 0, nullptr);
 
 	ASSERT(MAX_LUMINANCE_BINS == 256);
@@ -263,18 +285,15 @@ ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set
 	return *this;
 }
 
-void ComputeStage::Barrier() {
-#if ENABLE_SYNC == 1
-	// Computed luminance is used by next compute shader so sync needed
+void ComputeStage::Barrier() 
+{
 	utils::memoryBarrier(commandBuffer,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-#elif ENABLE_SYNC == 2
-	s_fullBarrier(commandBuffer);
-#endif
 }
 
-void ComputeStage::Destroy() {
+void ComputeStage::Destroy() 
+{
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 }

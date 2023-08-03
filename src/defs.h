@@ -64,4 +64,3 @@
 
 
 #define MAX_FRAMES_IN_FLIGHT 3
-#define ENABLE_SYNC 1

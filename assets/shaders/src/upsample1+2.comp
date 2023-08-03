@@ -1,0 +1,42 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D upsample0[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D upsample1[MAX_VIEWPORT_MIPS];
+
+
+// 1D part of the pyramid filter, as defined in Merten's implementation:
+// https://github.com/Mericam/exposure-fusion
+const float[5] f = { .0625, .25, .375, .25, .0625 };
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int i = pc.mipIndex;
+	uvec2 dim = imageSize(upsample0[i]).xy;
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+		ivec2 dir = pc.horizontalPass ? ivec2(1, 0) : ivec2(0, 1);
+
+		vec3 px = vec3(0);
+		for (int j = -2; j < 3; ++j) {
+			px += imageLoad(upsample0[i], coords + dir * j).rgb * f[j + 2];
+		}
+
+		imageStore(upsample1[i], coords, vec4(px, 1.0));
+	}	
+}

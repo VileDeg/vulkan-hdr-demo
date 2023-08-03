@@ -138,8 +138,8 @@ void Engine::createAttachment(
 
     VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &att.view));
 
-    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
-    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "ATTACHMENT::VIEW::" + debugName);
+    setDebugName(VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
+    setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "ATTACHMENT::VIEW::" + debugName);
 
     att.allocImage.descInfo = {
         .sampler = _linearSampler,
@@ -169,7 +169,7 @@ void Engine::createAttachmentPyramid(
     };
     vmaCreateImage(_allocator, &imgInfo, &imgAllocinfo, &att.allocImage.image, &att.allocImage.allocation, nullptr);
 
-    utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
+    setDebugName(VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
 
     // Create image view for each mip level
     for (uint32_t i = 0; i < numOfMipLevels; ++i) {
@@ -177,7 +177,7 @@ void Engine::createAttachmentPyramid(
 
         VkImageView view;
         VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &view));
-        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, view, "ATTACHMENT::VIEW::" + debugName);
+        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, view, "ATTACHMENT::VIEW::" + debugName);
 
         att.views.push_back(view);
     }
@@ -245,12 +245,12 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
         //allocate and create the image
         VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
-        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
-        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
     }
 
     { // Compute attachments
@@ -264,7 +264,9 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             );
         }
 
-        int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
+        //int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
+        // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
+        int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
         _renderContext.comp.numOfViewportMips = numOfViewportMips;
 
         createAttachment(
@@ -312,6 +314,14 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             numOfViewportMips,
             _compute.fusion.laplacian, "COMPUTE::FUSION::LAPLACIAN"
         );
+
+       /* createAttachment(
+            _viewport.colorFormat,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            _compute.fusion.filter0, "COMPUTE::FUSION::FILTER_0"
+        );*/
     }
 }
 
@@ -342,6 +352,8 @@ void Engine::cleanupViewportResources()
     _compute.fusion.luminance.Cleanup(_device, _allocator);
     _compute.fusion.weight.Cleanup(_device, _allocator);
     _compute.fusion.laplacian.Cleanup(_device, _allocator);
+
+    //_compute.fusion.filter0.Cleanup(_device, _allocator);
 
     for (auto& imageView : _viewport.imageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
@@ -616,7 +628,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
         VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
 
 
-        utils::setDebugName(_device, VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
+        setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
 
 
 
@@ -693,53 +705,6 @@ void Engine::initFrame(FrameData& f, int frame_i)
 
                     builder.build(_compute.durand.stages[i].sets[frame_i], _compute.durand.stages[i].setLayout);
                 }
-
-                //auto builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
-
-                //for (int i = 2; i < 5; ++i) {
-                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-                //}
-                //    //// In
-                //    //.bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                //    //// Out
-                //    //.bind_image(3, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                //    //.bind_image(4, &_compute.durand.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-
-                //builder.build(_compute.durand.stages[0].sets[frame_i], _compute.durand.stages[0].setLayout);
-
-                //builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
-                //for (int i = 2; i < 5; ++i) {
-                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-                //}
-                //    // In
-                //    //.bind_image(2, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                //    //// Out
-                //    //.bind_image(3, &_compute.durand.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                //    //.bind_image(4, &_compute.durand.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-
-                //builder.build(_compute.durand.stages[1].sets[frame_i], _compute.durand.stages[1].setLayout);
-
-                //builder = vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                //    .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                //    .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data;
-
-                //for (int i = 2; i < 7; ++i) {
-                //    builder.bind_image(i, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-                //}
-
-                //    // In
-                //    //.bind_image(2, &_compute.durand.att[0].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                //    //.bind_image(3, &_compute.durand.att[1].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                //    //.bind_image(4, &_compute.durand.att[2].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                //    //.bind_image(5, &_compute.durand.att[3].allocImage.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-                //    //// Out
-                //    //.bind_image(6, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Out Image
-
-                //builder.build(_compute.durand.stages[2].sets[frame_i], _compute.durand.stages[2].setLayout);
             }
 
             {
@@ -751,7 +716,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
                     .bind_image_empty(3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
                     .bind_image_empty(4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
                     .bind_image_empty(5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
-                    .bind_image_empty(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+                    //.bind_image_empty(6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
 
                     .build(_compute.fusion.stages[0].sets[frame_i], _compute.fusion.stages[0].setLayout);
 
@@ -791,6 +756,14 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(_compute.toneMapping.sets[frame_i], _compute.toneMapping.setLayout);
+
+            // Downsample
+            vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                .bind_buffer(0, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                // In-out
+                .bind_image_empty(1, MAX_VIEWPORT_MIPS, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT)
+
+                .build(_compute.fusion.downsample.sets[frame_i], _compute.fusion.downsample.setLayout);
         }
     }
 
@@ -819,3 +792,56 @@ void Engine::createFrameData()
     }
 }
 
+#if ENABLE_VALIDATION == 1
+
+void Engine::setDebugName(VkObjectType type, void* handle, const std::string name)
+{
+    VkDebugUtilsObjectNameInfoEXT name_info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = type,
+        .objectHandle = (uint64_t)handle,
+        .pObjectName = name.c_str()
+    };
+
+    vkSetDebugUtilsObjectNameEXT(_device, &name_info);
+}
+
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color)
+{
+    VkDebugUtilsLabelEXT debugLabel = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+        .pLabelName = label.c_str(),
+        .color = { color.r, color.g, color.b, color.a }
+    };
+
+    vkCmdBeginDebugUtilsLabelEXT(cmd, &debugLabel);
+}
+
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label)
+{
+    static glm::vec4 initialColor = { 0.988, 0.678, 0.011, 1 };
+    //static glm::vec4 changeFactor = { 0.1, 0.05, 0.001, 0 };
+    static glm::vec4 changeFactor = { 0.1, 0, 0, 0 };
+
+    beginCmdDebugLabel(cmd, label, glm::abs(initialColor));
+    initialColor = initialColor - changeFactor;
+
+    // Wrap the values
+    initialColor.r += initialColor.r < -1 ? 1 : 0;
+    initialColor.b += initialColor.b < -1 ? 1 : 0;
+    initialColor.g += initialColor.g < -1 ? 1 : 0;
+}
+
+void Engine::endCmdDebugLabel(VkCommandBuffer cmd)
+{
+    vkCmdEndDebugUtilsLabelEXT(cmd);
+}
+
+#else
+
+void Engine::setDebugName(VkObjectType type, void* handle, const std::string name);
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color);
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label);
+void Engine::endCmdDebugLabel(VkCommandBuffer cmd);
+
+#endif

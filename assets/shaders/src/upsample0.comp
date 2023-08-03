@@ -1,0 +1,41 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D mipChain[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D upsample0[MAX_VIEWPORT_MIPS];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int i = pc.mipIndex;
+	uvec2 dim = imageSize(mipChain[i]).xy;
+	// Ignore threads that map to areas beyond the bounds of our image
+	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+		vec3 px = imageLoad(mipChain[i], coords).rgb;
+		// For normalization
+		px *= 4;
+
+		// Increase size by 2
+		coords <<= 1;
+		// Clamp to border
+		ivec2 dimHigher = imageSize(mipChain[i-1]).xy;
+		coords.x = min(coords.x, dimHigher.x-1);
+		coords.y = min(coords.y, dimHigher.y-1);
+
+		imageStore(upsample0[i-1], coords, vec4(px, 1.0));
+	}	
+}

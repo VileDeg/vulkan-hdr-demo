@@ -109,6 +109,13 @@ struct GPUSceneSSBO {
     GPUObject objects[MAX_OBJECTS]{};
 };
 
+struct GPUCompPC {
+    int mipIndex;
+    bool horizontalPass;
+    int _pad0;
+    int _pad1;
+};
+
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
     float targetAverageLuminance = 1.f;
@@ -134,7 +141,7 @@ struct GPUCompUB {
 
     GPUBool enableToneMapping = false; // true
     int toneMappingMode{ 3 };
-    GPUBool enableAdaptation = true;
+    GPUBool enableAdaptation = false;
     int gammaMode{ 1 };
 
     GPUBool enableLTM = true;

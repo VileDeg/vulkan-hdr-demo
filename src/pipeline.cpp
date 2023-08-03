@@ -176,11 +176,13 @@ void Engine::createPipelines()
         _compute.durand.stages[2].Create(_device, _linearSampler, "ltm_durand_reconstruct.comp.spv");
 
         _compute.fusion.stages[0].Create(_device, _linearSampler, "ltm_fusion_01.comp.spv");
-        _compute.fusion.stages[1].Create(_device, _linearSampler, "ltm_fusion_02.comp.spv");
+        _compute.fusion.stages[1].Create(_device, _linearSampler, "ltm_fusion_02.comp.spv", true); // Use push constants
         _compute.fusion.stages[2].Create(_device, _linearSampler, "ltm_fusion_03.comp.spv");
         _compute.fusion.stages[3].Create(_device, _linearSampler, "ltm_fusion_04.comp.spv");
 
         _compute.toneMapping.Create(_device, _linearSampler, "tonemap.comp.spv");
+
+        _compute.fusion.downsample.Create(_device, _linearSampler, "downsample.comp.spv", true); // Use push constants
     }
 
     _deletionStack.push([=]() mutable {
@@ -196,5 +198,7 @@ void Engine::createPipelines()
         }
 
         _compute.toneMapping.Destroy();
+
+        _compute.fusion.downsample.Destroy();
     });
 }

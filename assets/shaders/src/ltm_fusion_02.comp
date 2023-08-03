@@ -14,38 +14,38 @@ layout (set = 0, binding = 1)
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inLuminanceMips[MAX_VIEWPORT_MIPS];
+#include "incl/compPC.incl"
+pc;
 
-layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D laplacianMips[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inMips[MAX_VIEWPORT_MIPS];
 
-const float sigmaSq = 5 * 5;
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D outMips[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-	uvec2 dim = imageSize(inLuminanceMips[0]).xy; // Mip level 0 corresponds to full-res images
+	int i = pc.mipIndex;
+	uvec2 dim = imageSize(inMips[i]).xy; // Mip level 0 corresponds to full-res images
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
-		for (int i = 0; i < ub.numOfViewportMips-1; ++i) {
-			vec3 lum = imageLoad(inLuminanceMips[i], coords).rgb;
+		vec3 higher = imageLoad(inMips[i], coords).rgb;
+		
+		ivec2 coordsLower = coords >> 1;
+		// Since our initial viewport image doesn't have dimensions which are power of 2, 
+		// there will be missalignment between different mip levels
+		// so we just use CLAMP_TO_BORDER approach when we sample outside of mip dimensions
+		ivec2 dimLower = imageSize(inMips[i+1]).xy;
+		coordsLower.x = min(coordsLower.x, dimLower.x-1);
+		coordsLower.y = min(coordsLower.y, dimLower.y-1);
 
-			//ivec2 coordsI = coords + ivec2(1);
-			ivec2 coordsNext = ivec2(coords.x >> 1, coords.y >> 1);
+		vec3 lower = imageLoad(inMips[i+1], coordsLower).rgb;
 
-			// Since our initial viewport image doesn't have dimensions which are power of 2, 
-			// we will he missalignment between different mip levels
-			// so we just use CLAMP_TO_BORDER approach when we sample outside of mip dimensions
-			ivec2 dimNext = imageSize(inLuminanceMips[i+1]).xy;
-			coordsNext.x = min(coordsNext.x, dimNext.x-1);
-			coordsNext.y = min(coordsNext.y, dimNext.y-1);
+		vec3 diff = higher - lower;
+		imageStore(outMips[i], coords, vec4(diff, 1.0));
 
-			vec3 lumNext = imageLoad(inLuminanceMips[i+1], coordsNext).rgb;
-
-			vec3 laplacian = lum - lumNext;
-			imageStore(laplacianMips[i+1], coordsNext, vec4(laplacian, 1.0));
-
-			coords = coordsNext;
+		if (i == ub.numOfViewportMips-2) {
+			imageStore(outMips[i+1], coordsLower, vec4(lower, 1.0));
 		}
-	}
+	}	
 }

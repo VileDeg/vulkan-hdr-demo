@@ -160,7 +160,7 @@ struct ComputeStage {
     VkSampler sampler;
 
     void Create(VkDevice device, VkSampler sampler,
-        const std::string& shaderBinName);
+        const std::string& shaderBinName, bool usePushConstants = false);
     void Destroy();
 
     ComputeStage& Bind(VkCommandBuffer cmd);
@@ -169,6 +169,8 @@ struct ComputeStage {
     ComputeStage& UpdateImage(Attachment att, uint32_t binding);
 
     ComputeStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
+
+    ComputeStage& WriteSets(int set_i);
 
     ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
     void Barrier();
@@ -194,10 +196,13 @@ struct ExposureFusion {
     Attachment chrominance, laplacianSum;
     AttachmentPyramid luminance, weight, laplacian;
 
+    ComputeStage downsample; // Used by exposure fusion
+    //Attachment filter0;
+    AttachmentPyramid upsample0, upsample1;
 
-    std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
+    /*std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
         5, 2, 3, 3
-    };
+    };*/
 };
 
 struct ComputePass {
@@ -208,6 +213,8 @@ struct ComputePass {
     ExposureFusion fusion;
 
     ComputeStage toneMapping;
+
+    
 };
 
 struct ShadowPass {

@@ -29,8 +29,8 @@ void main() {
 		vec3 laplacianSum = vec3(0);
 		for (int i = 0; i < ub.numOfViewportMips; ++i) {
 			ivec2 dimMip = imageSize(inLaplacianMips[i]).xy;
-			coords.x = min(coords.x, dimMip.x-1);
-			coords.y = min(coords.y, dimMip.y-1);
+			//coords.x = min(coords.x, dimMip.x-1);
+			//coords.y = min(coords.y, dimMip.y-1);
 
 			vec3 laplac  = imageLoad(inLaplacianMips[i], coords).rgb;
 			vec3 weights = imageLoad(inWeightMips[i], coords).rgb;

@@ -15,23 +15,52 @@ layout (set = 0, binding = 1)
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inChrominanceImage;
+//layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inChrominanceImage;
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inOriginalImage;
 layout (rgba32f, set = 0, binding = 3) uniform readonly image2D inLaplacianSumImage;
 
 layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D finalImage;
 
+const float WHITE_POINT = 10.0;
+
+vec3 applyToneMapping(vec3 col) {
+	vec3 outCol = col;
+	switch (ub.toneMappingMode) {
+        case 0: outCol = ReinhardExtended(col, WHITE_POINT); break;
+        case 1: outCol = Reinhard(col); break;
+        case 2: outCol = Uncharted2Filmic(col); break;
+        case 3: outCol = ACESFilm(col); break;
+        case 4: outCol = ACESFitted(col); break;
+    }
+	return outCol;
+}
+
+const float exposure = 1.0;
+
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-	uvec2 dim = imageSize(inChrominanceImage).xy; // Mip level 0 corresponds to full-res image
+	uvec2 dim = imageSize(inOriginalImage).xy; // Mip level 0 corresponds to full-res image
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
-		vec3  chrom  = imageLoad(inChrominanceImage, coords).rgb;
+		//vec3  chrom = imageLoad(inChrominanceImage, coords).rgb;
 		float laplacianSum = imageLoad(inLaplacianSumImage, coords).r; // Since it's luminance we only need one channel
+        
+		vec3 orig = max(applyToneMapping(imageLoad(inOriginalImage, coords).rgb * exposure), 0.0);
+        float luminance = dot(orig, RGB_TO_LUM) + 0.00001;
 
-		vec3 outColor = chrom * laplacianSum;
+        //float finalMultiplier = max(luminance, 0.0) / luminance;
+        // This is a hack to prevent super dark pixels getting boosted by a lot and showing compression artifacts.
+        //float lerpToUnityThreshold = 0.007;
+        //finalMultiplier = luminance > lerpToUnityThreshold ? finalMultiplier : 
+        //    mix(1.0, finalMultiplier, (luminance / lerpToUnityThreshold) * (luminance / lerpToUnityThreshold));
+            
+        //vec3 final = max(applyToneMapping(imageLoad(inOriginalImage, coords).rgb * exposure * finalMultiplier), 0.0);
 
-		imageStore(finalImage, coords, vec4(outColor, 1.0));
+        vec3 chrom = orig / luminance;
+        vec3 final = chrom * laplacianSum;
+
+		imageStore(finalImage, coords, vec4(final, 1.0));
 	}
 }

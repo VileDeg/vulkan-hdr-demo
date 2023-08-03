@@ -36,7 +36,6 @@ private: /* Methods used from Init directly */
     void prepareMainPass();
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
     void prepareShadowPass();
-    void prepareComputePass();
 
     void createPipelines();
     void createFrameData();
@@ -143,6 +142,13 @@ private:  // UI
     bool _isViewportHovered = true;
 
     std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
+private:
+    void setDebugName(VkObjectType type, void* handle, const std::string name);
+
+    void beginCmdDebugLabel(VkCommandBuffer cmd, std::string label);
+    void beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color);
+
+    void endCmdDebugLabel(VkCommandBuffer cmd);
 
 private:
     float _fovY = 90.f; // degrees
@@ -223,6 +229,9 @@ private:
     PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
 
 private:
     std::vector<const char*> _enabledValidationLayers;

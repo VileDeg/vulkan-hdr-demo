@@ -205,6 +205,9 @@ void Engine::loadInstanceExtensionFunctions()
     if (ENABLE_VALIDATION) {
         DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
         DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
+        DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
+        DYNAMIC_LOAD(vkCmdBeginDebugUtilsLabelEXT, _instance);
+        DYNAMIC_LOAD(vkCmdEndDebugUtilsLabelEXT, _instance);
     }
 }
 
@@ -405,7 +408,7 @@ void Engine::createLogicalDevice()
     vkGetDeviceQueue(_device, _graphicsQueueFamily, 0, &_graphicsQueue);
     vkGetDeviceQueue(_device, _presentQueueFamily, 0, &_presentQueue);
 
-    utils::setDebugName(_device, VK_OBJECT_TYPE_QUEUE, _graphicsQueue, "Main and only queue");
+    setDebugName(VK_OBJECT_TYPE_QUEUE, _graphicsQueue, "Main and only queue");
 
     loadDeviceExtensionFunctions();
 }

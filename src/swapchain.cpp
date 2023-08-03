@@ -161,7 +161,7 @@ void Engine::createSwapchain()
     vkGetSwapchainImagesKHR(_device, _swapchain.handle, &imageCount, _swapchain.images.data());
 
     for (int i = 0; i < _swapchain.images.size(); ++i) {
-        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE, _swapchain.images[i], "Swapchain Image " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.images[i], "Swapchain Image " + std::to_string(i));
         
     }
 }
@@ -198,7 +198,7 @@ void Engine::prepareMainPass() {
         };
 
         VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
-        utils::setDebugName(_device, VK_OBJECT_TYPE_IMAGE_VIEW, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
+        setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
     }
 }
 

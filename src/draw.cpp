@@ -367,6 +367,7 @@ static void s_fullBarrier(VkCommandBuffer& cmd) {
 	);
 }
 
+#if 1
 static void generateMips(VkCommandBuffer& cmd, VkImage& image, int numOfMips, uint32_t width, uint32_t height) 
 {
 	int32_t w = width;
@@ -483,7 +484,71 @@ static void generateMips(VkCommandBuffer& cmd, VkImage& image, int numOfMips, ui
 
 		dstRange);
 }
+#else
+static void generateMips(VkCommandBuffer& cmd, AttachmentPyramid& pyramid, int numOfMips, uint32_t width, uint32_t height, ComputeStage& cs, int dsetIndex)
+{
+	VkImageSubresourceRange range = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = VK_REMAINING_MIP_LEVELS,
+		.baseArrayLayer = 0,
+		.layerCount = VK_REMAINING_ARRAY_LAYERS
+	};
 
+	int rw_mask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+
+	utils::memoryBarrier(cmd,
+		rw_mask, rw_mask,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+	int32_t w = width;
+	int32_t h = height;
+
+	// Only need to update descriptor sets if frame was changed
+	// This to insure that we don't update the sets multiple times per frame which is not valid
+	static int lastIndex = -1;
+	if (lastIndex != dsetIndex) {
+		cs.Bind(cmd)
+			.UpdateImagePyramid(pyramid, 1)
+			.WriteSets(dsetIndex);
+
+		lastIndex = dsetIndex;
+	}
+
+	for (int i = 0; i < numOfMips - 1; ++i) {
+		uint32_t threadsXY = 32;
+
+		uint32_t groupsX = w / threadsXY + 1;
+		uint32_t groupsY = h / threadsXY + 1;
+
+		
+
+		cs.Bind(cmd); {
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, cs.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			cs.Dispatch(groupsX, groupsY, dsetIndex)
+				.Barrier();
+
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, cs.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			cs.Dispatch(groupsX, groupsY, dsetIndex)
+				.Barrier();
+		}
+
+		w >>= 1;
+		h >>= 1;
+	}
+
+	utils::memoryBarrier(cmd,
+		rw_mask, rw_mask,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+}
+#endif
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 {
 	loadDataToGPU();
@@ -501,6 +566,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 #if 1
 	{ // Shadow pass
+		beginCmdDebugLabel(f.cmd, "SHADOW_PASS");
 		cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
 		bool anyMoved = false;
@@ -527,12 +593,12 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 			for (uint32_t face = 0; face < 6; ++face) {
 				updateCubeFace(f, i, face);
+				
 			}
 			anyMoved = true;
 		}
 
 		if (anyMoved) {
-#if ENABLE_SYNC == 1
 			// Wait for shadow cubemap array to render before rendering the scene
 			utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -545,10 +611,9 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 
 				range);
-#elif ENABLE_SYNC == 2
-			s_fullBarrier(f.cmd);
-#endif
 		}
+
+		endCmdDebugLabel(f.cmd);
 	}
 #endif
 
@@ -604,11 +669,13 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		};
 
 		// Viewport pass
+		beginCmdDebugLabel(f.cmd, "VIEWPORT_PASS");
 		vkCmdBeginRendering(f.cmd, &renderingInfo);
 		{
 			drawObjects(f.cmd, _renderables);
 		}
 		vkCmdEndRendering(f.cmd);
+		endCmdDebugLabel(f.cmd);
 	}
 
 	// If the adaptation is disabled we are synchronizing straight to compute tone mapping step which also needs write acess
@@ -631,30 +698,34 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		range);
 
 	{ // Compute step
-#if 1
+		beginCmdDebugLabel(f.cmd, "COMPUTE_PASS");
 		if (_renderContext.comp.enableAdaptation) {
-			// Compute luminance histogram
-			ASSERT(MAX_LUMINANCE_BINS == 256);
-			_compute.histogram.Bind(f.cmd)
-				.UpdateImage(_viewport.imageViews[imageIndex], 2)
-				.Dispatch(_viewport.imageExtent.width / 16 + 1, _viewport.imageExtent.height / 16 + 1, imageIndex)
-				.Barrier();
-#endif
+			beginCmdDebugLabel(f.cmd, "EYE_ADAPTATION");
+			{
+				// Compute luminance histogram
+				ASSERT(MAX_LUMINANCE_BINS == 256);
+				_compute.histogram.Bind(f.cmd)
+					.UpdateImage(_viewport.imageViews[imageIndex], 2)
+					.Dispatch(_viewport.imageExtent.width / 16 + 1, _viewport.imageExtent.height / 16 + 1, imageIndex)
+					.Barrier();
 
-#if 1
-			// Compute average luminance
-			_compute.averageLuminance.Bind(f.cmd)
-				.Dispatch(1, 1, imageIndex)
-				.Barrier();
-#endif
+				// Compute average luminance
+				_compute.averageLuminance.Bind(f.cmd)
+					.Dispatch(1, 1, imageIndex)
+					.Barrier();
+			}
+			endCmdDebugLabel(f.cmd);
 		}
 		
-#if 1
 		if (_renderContext.comp.enableLTM) {
-			int threadsXY = 32;
+			std::string ltm_str = "LTM::FUSION";
+			glm::vec4 col = { 1, 0, 1, 1 };
+			beginCmdDebugLabel(f.cmd, ltm_str);
 
-			int groupsX = _viewport.imageExtent.width  / threadsXY + 1;
-			int groupsY = _viewport.imageExtent.height / threadsXY + 1;
+			uint32_t threadsXY = 32;
+
+			uint32_t groupsX = _viewport.imageExtent.width  / threadsXY + 1;
+			uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
 #if 0
 			_compute.durand.stages[0].Bind(f.cmd)
 				// In
@@ -688,69 +759,119 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 #else
-			_compute.fusion.stages[0].Bind(f.cmd)
-				// In
-				.UpdateImage(_viewport.imageViews[imageIndex], 2)
-				// Out
-				.UpdateImage(_compute.fusion.chrominance, 3)
-				.UpdateImage(_compute.fusion.luminance.views[0], 4)
-				.UpdateImage(_compute.fusion.weight.views[0], 5)
-				.UpdateImage(_compute.fusion.laplacian.views[0], 6)
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_0");
+			{
+				_compute.fusion.stages[0].Bind(f.cmd)
+					// In
+					.UpdateImage(_viewport.imageViews[imageIndex], 2)
+					// Out
+					.UpdateImage(_compute.fusion.chrominance, 3)
+					.UpdateImage(_compute.fusion.luminance.views[0], 4)
+					.UpdateImage(_compute.fusion.weight.views[0], 5)
+					//.UpdateImage(_compute.fusion.laplacian.views[0], 6)
 
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+			}
+			endCmdDebugLabel(f.cmd);
+#if 1
+			col.r -= 0.1;
+			beginCmdDebugLabel(f.cmd, ltm_str + "::GEN_MIPS::LUM");
+			{
+				generateMips(f.cmd, _compute.fusion.luminance.allocImage.image,
+					_renderContext.comp.numOfViewportMips,
+					_viewport.imageExtent.width, _viewport.imageExtent.height);
+			}
+			endCmdDebugLabel(f.cmd);
 
-
-			generateMips(f.cmd, _compute.fusion.luminance.allocImage.image, 
-				_renderContext.comp.numOfViewportMips, 
-				_viewport.imageExtent.width, _viewport.imageExtent.height);
-
-			generateMips(f.cmd, _compute.fusion.weight.allocImage.image,
-				_renderContext.comp.numOfViewportMips,
-				_viewport.imageExtent.width, _viewport.imageExtent.height);
-
-			_compute.fusion.stages[1].Bind(f.cmd)
-				// In
-				.UpdateImagePyramid(_compute.fusion.luminance, 2)
-				// Out
-				.UpdateImagePyramid(_compute.fusion.laplacian, 3)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			_compute.fusion.stages[2].Bind(f.cmd)
-				// In
-				.UpdateImagePyramid(_compute.fusion.laplacian, 2)
-				.UpdateImagePyramid(_compute.fusion.weight, 3)
-				// Out
-				.UpdateImage(_compute.fusion.laplacianSum, 4)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			_compute.fusion.stages[3].Bind(f.cmd)
-				// In
-				.UpdateImage(_compute.fusion.chrominance, 2)
-				.UpdateImage(_compute.fusion.laplacianSum, 3)
-				// Out
-				.UpdateImage(_viewport.imageViews[imageIndex], 4)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
+			col.r -= 0.1;
+			beginCmdDebugLabel(f.cmd, ltm_str + "::GEN_MIPS::WEIGHT");
+			{
+				generateMips(f.cmd, _compute.fusion.weight.allocImage.image,
+					_renderContext.comp.numOfViewportMips,
+					_viewport.imageExtent.width, _viewport.imageExtent.height);
+			}
+			endCmdDebugLabel(f.cmd);
 #endif
+
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_1");
+			{
+				ComputeStage& cs = _compute.fusion.stages[1];
+				cs.Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(_compute.fusion.luminance, 2)
+					// Out
+					.UpdateImagePyramid(_compute.fusion.laplacian, 3);
+
+				uint32_t w = _viewport.imageExtent.width;
+				uint32_t h = _viewport.imageExtent.height;
+				for (int i = 0; i < _renderContext.comp.numOfViewportMips-1; ++i) {
+					uint32_t groupsX = w / threadsXY + 1;
+					uint32_t groupsY = h / threadsXY + 1;
+
+					GPUCompPC pc = {
+						.mipIndex = i
+					};
+					vkCmdPushConstants(f.cmd, cs.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					// Compute laplacians
+					cs.Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+
+					w >>= 1;
+					h >>= 1;
+				}
+			}
+			endCmdDebugLabel(f.cmd);
+
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2");
+			{
+				ComputeStage& cs = _compute.fusion.stages[2];
+				cs.Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(_compute.fusion.laplacian, 2)
+					.UpdateImagePyramid(_compute.fusion.weight, 3)
+					// Out
+					.UpdateImage(_compute.fusion.laplacianSum, 4)
+
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+			}
+			endCmdDebugLabel(f.cmd);
+
+			// Restore color
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_3");
+			{
+				_compute.fusion.stages[3].Bind(f.cmd)
+					// In
+					//.UpdateImage(_compute.fusion.chrominance, 2)
+					.UpdateImage(_viewport.imageViews[imageIndex], 2)
+					.UpdateImage(_compute.fusion.laplacianSum, 3)
+					// Out
+					.UpdateImage(_viewport.imageViews[imageIndex], 4)
+
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+			}
+			endCmdDebugLabel(f.cmd);
+#endif
+			endCmdDebugLabel(f.cmd); // end of LTM
 		}
-#endif
 
-#if 1	
-		// Compute tone mapping
-		_compute.toneMapping.Bind(f.cmd)
-			.UpdateImage(_viewport.imageViews[imageIndex], 2)
-			.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex);
-#endif
+		beginCmdDebugLabel(f.cmd, "COMPUTE_FINAL");
+		{
+			// Compute final viewport image
+			_compute.toneMapping.Bind(f.cmd)
+				.UpdateImage(_viewport.imageViews[imageIndex], 2)
+				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex);
+		}
+		endCmdDebugLabel(f.cmd);
+
+		endCmdDebugLabel(f.cmd); // end of compute
 	}
 
 
-#if ENABLE_SYNC == 1
 	// Post-processing must finish because viewport image is sampled from during swapchain pass
 	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 		VK_ACCESS_SHADER_WRITE_BIT,
@@ -764,9 +885,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 
 		range);
-#elif ENABLE_SYNC == 2
-	s_fullBarrier(f.cmd);
-#endif
 
 	{
 		// Traslate to required layout
@@ -781,7 +899,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 
 			range);
-
 
 		VkClearValue clearValues[2];
 		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -809,12 +926,14 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		};
 		
 		// Swapchain pass
+		beginCmdDebugLabel(f.cmd, "SWAPCHAIN_PASS");
 		vkCmdBeginRendering(f.cmd, &renderingInfo);
 		{
 			// Record dear imgui primitives into command buffer
 			imguiOnRenderPassEnd(f.cmd);
 		}
 		vkCmdEndRendering(f.cmd);
+		endCmdDebugLabel(f.cmd);
 
 		// Translate to required layout for presentation on screen
 		utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
@@ -838,6 +957,7 @@ void Engine::drawFrame()
 	// we set the pointers to current frame's descriptor set buffers
 	_gpu.Reset(f);
 
+	
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	imguiUpdate();
 	imguiOnDrawStart();
@@ -853,7 +973,6 @@ void Engine::drawFrame()
 
 	VKASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
 	VKASSERT(vkResetFences(_device, 1, &f.inFlightFence));
-
 	{ // Command buffer
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
