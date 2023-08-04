@@ -24,6 +24,11 @@ uniform ComputeUB {
     float sigmaR;
     int numOfViewportMips;
     float shadowsExposure;
+    float midtonesExposure;
+
     float highlightsExposure;
+    float exposednessWeightSigma;
+    int _pad0;
+    int _pad1;
 }
 

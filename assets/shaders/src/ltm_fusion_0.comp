@@ -35,9 +35,9 @@ vec3 applyToneMapping(vec3 col) {
 //const float shadowExp = exp2(1.5);
 //const float highlightExp = exp2(-2.0);
 
-const float exposure = 1.0;
+//const float exposure = 0.0;
 
-const float sigmaSq = 5 * 5;
+//const float sigmaSq = 5 * 5;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -46,23 +46,29 @@ void main() {
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
-		inpColor *= exposure;
+		//inpColor *= exp2(exposure);
 
-		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
-
-		float highlights = dot(clamp(applyToneMapping(inpColor * ub.highlightsExposure), 0.0, 1.0), RGB_TO_LUM);
+		
+#if 1
+		vec3 midtonesColor = clamp(applyToneMapping(inpColor) * exp2(ub.midtonesExposure), 0.0, 1.0);
+		float highlights = dot(clamp(applyToneMapping(inpColor * exp2(ub.highlightsExposure)), 0.0, 1.0), RGB_TO_LUM);
 
 		//float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
         float midtones   = dot(midtonesColor, RGB_TO_LUM);
 
-        float shadows	 = dot(clamp(applyToneMapping(inpColor * ub.shadowsExposure), 0.0, 1.0), RGB_TO_LUM);
-
+        float shadows	 = dot(clamp(applyToneMapping(inpColor * exp2(ub.shadowsExposure)), 0.0, 1.0), RGB_TO_LUM);
+#else
+		vec3 midtonesColor = inpColor;
+		float highlights = dot(inpColor * exp2(ub.highlightsExposure), RGB_TO_LUM);
+        float midtones   = dot(inpColor * exp2(ub.midtonesExposure), RGB_TO_LUM);
+        float shadows	 = dot(inpColor * exp2(ub.shadowsExposure), RGB_TO_LUM);
+#endif
 		vec3 lums  = vec3(highlights, midtones, shadows);
-		vec3 chrom = midtonesColor / midtones; //midtonesSquare;
+		vec3 chrom = midtonesColor / midtones;
 
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 diff = lums - vec3(0.5);
-        vec3 weights = vec3(exp(-0.5 * diff * diff * sigmaSq));
+        vec3 weights = vec3(exp(-0.5 * diff * diff * ub.exposednessWeightSigma * ub.exposednessWeightSigma));
 
 		// Normalize weights
         weights /= dot(weights, vec3(1.0)) + 0.00001;

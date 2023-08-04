@@ -11,8 +11,8 @@ layout (set = 0, binding = 0)
 #include "incl/computeUB.incl" 
 ub;
 
-//layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inChrominanceImage;
-layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inOriginalImage;
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inChrominanceImage;
+//layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inOriginalImage;
 layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inLaplacianSumImage;
 
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D finalImage;
@@ -35,17 +35,17 @@ const float exposure = 1.0;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-	uvec2 dim = imageSize(inOriginalImage).xy; // Mip level 0 corresponds to full-res image
+	uvec2 dim = imageSize(inLaplacianSumImage).xy; // Mip level 0 corresponds to full-res image
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (coords.x < dim.x && coords.y < dim.y) {
         
 
-		//vec3  chrom = imageLoad(inChrominanceImage, coords).rgb;
+		vec3  chrom = imageLoad(inChrominanceImage, coords).rgb;
 		float laplacianSum = imageLoad(inLaplacianSumImage, coords).r; // Since it's luminance we only need one channel
         
-		vec3 orig = max(applyToneMapping(imageLoad(inOriginalImage, coords).rgb * exposure), 0.0);
-        float luminance = dot(orig, RGB_TO_LUM) + 0.00001;
+		//vec3 orig = max(applyToneMapping(imageLoad(inOriginalImage, coords).rgb * exposure), 0.0);
+        //float luminance = dot(orig, RGB_TO_LUM) + 0.00001;
 
         //float finalMultiplier = max(luminance, 0.0) / luminance;
         // This is a hack to prevent super dark pixels getting boosted by a lot and showing compression artifacts.
@@ -55,7 +55,7 @@ void main() {
             
         //vec3 final = max(applyToneMapping(imageLoad(inOriginalImage, coords).rgb * exposure * finalMultiplier), 0.0);
 
-        vec3 chrom = orig / luminance;
+        //vec3 chrom = orig / luminance;
         vec3 final = chrom * laplacianSum;
         //vec3 final = vec3(laplacianSum) * RGB_TO_LUM;
 

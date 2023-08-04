@@ -341,6 +341,9 @@ void Engine::loadDataToGPU()
 		float avg = (_viewport.imageExtent.width + _viewport.imageExtent.height) / 2;
 		_renderContext.comp.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
 
+		/*_renderContext.comp.shadowsExposure = std::exp2(_renderContext.comp.shadowsExposure);
+		_renderContext.comp.highlightsExposure = std::exp2(_renderContext.comp.highlightsExposure);*/
+
 		memcpy(_gpu.compUB, &_renderContext.comp, sizeof(GPUCompUB));
 
 		// Reset luminance from previous frame
@@ -712,25 +715,154 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			endCmdDebugLabel(f.cmd);
 #if 1
 			col.r -= 0.1;
-			beginCmdDebugLabel(f.cmd, ltm_str + "::GEN_MIPS::LUM");
+			beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::LUM");
 			{
-				generateMips(f.cmd, fs.pyr["lum"].allocImage.image,
+				/*generateMips(f.cmd, fs.pyr["lum"].allocImage.image,
 					_renderContext.comp.numOfViewportMips,
-					_viewport.imageExtent.width, _viewport.imageExtent.height);
+					_viewport.imageExtent.width, _viewport.imageExtent.height);*/
+
+				fs.stages["downsample0_lum"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["lum"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
+					.WriteSets(imageIndex);
+
+				fs.stages["downsample1_lum"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
+					.WriteSets(imageIndex);
+
+				fs.stages["downsample2_lum"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["lum"], 2)
+					.WriteSets(imageIndex);
+
+				int first_i = 0;
+				uint32_t w = _viewport.imageExtent.width >> first_i;
+				uint32_t h = _viewport.imageExtent.height >> first_i;
+
+				for (int i = first_i; i < _renderContext.comp.numOfViewportMips-1; ++i) {
+					beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::LUM::MIP_" + std::to_string(i));
+
+					uint32_t grpsX = w / threadsXY + 1;
+					uint32_t grpsY = h / threadsXY + 1;
+
+					GPUCompPC pc = {
+						.mipIndex = i,
+						.horizontalPass = true
+					};
+					vkCmdPushConstants(f.cmd, fs.stages["downsample0_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					fs.stages["downsample0_lum"].Bind(f.cmd)
+						.Dispatch(grpsX, grpsY, imageIndex)
+						.Barrier();
+
+					pc.horizontalPass = false;
+					vkCmdPushConstants(f.cmd, fs.stages["downsample1_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					fs.stages["downsample1_lum"].Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+
+
+					fs.stages["downsample2_lum"].Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+
+					w >>= 1;
+					h >>= 1;
+
+					endCmdDebugLabel(f.cmd);
+				}
 			}
 			endCmdDebugLabel(f.cmd);
 
 			col.r -= 0.1;
-			beginCmdDebugLabel(f.cmd, ltm_str + "::GEN_MIPS::WEIGHT");
+			beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::WEIGHT");
 			{
-				generateMips(f.cmd, fs.pyr["weight"].allocImage.image,
+				/*generateMips(f.cmd, fs.pyr["weight"].allocImage.image,
 					_renderContext.comp.numOfViewportMips,
-					_viewport.imageExtent.width, _viewport.imageExtent.height);
+					_viewport.imageExtent.width, _viewport.imageExtent.height);*/
+
+				fs.stages["downsample0_weight"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["weight"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
+					.WriteSets(imageIndex);
+
+				fs.stages["downsample1_weight"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
+					.WriteSets(imageIndex);
+
+				fs.stages["downsample2_weight"].Bind(f.cmd)
+					// In
+					.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
+					// Out
+					.UpdateImagePyramid(fs.pyr["weight"], 2)
+					.WriteSets(imageIndex);
+
+				int first_i = 0;
+				uint32_t w = _viewport.imageExtent.width >> first_i;
+				uint32_t h = _viewport.imageExtent.height >> first_i;
+
+				for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
+					beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::WEIGHT::MIP_" + std::to_string(i));
+
+					uint32_t grpsX = w / threadsXY + 1;
+					uint32_t grpsY = h / threadsXY + 1;
+
+					GPUCompPC pc = {
+						.mipIndex = i,
+						.horizontalPass = true
+					};
+					vkCmdPushConstants(f.cmd, fs.stages["downsample0_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					fs.stages["downsample0_weight"].Bind(f.cmd)
+						.Dispatch(grpsX, grpsY, imageIndex)
+						.Barrier();
+
+					pc.horizontalPass = false;
+					vkCmdPushConstants(f.cmd, fs.stages["downsample1_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					fs.stages["downsample1_weight"].Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+
+
+					fs.stages["downsample2_weight"].Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+
+					w >>= 1;
+					h >>= 1;
+
+					endCmdDebugLabel(f.cmd);
+				}
 			}
 			endCmdDebugLabel(f.cmd);
 #endif
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_1::LAPLACIANS");
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_1::UPSAMPLE::LAPLACIANS");
 			{
+				// Move highest lum mip (low-pass residual) to highest laplacian mip
+				fs.stages["move"].Bind(f.cmd)
+					// In
+					.UpdateImage(fs.pyr["lum"].views[_renderContext.comp.numOfViewportMips-1], 1)
+					// Out
+					.UpdateImage(fs.pyr["laplac"].views[_renderContext.comp.numOfViewportMips-1], 2)
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+
+
+
 				fs.stages["upsample0_sub"].Bind(f.cmd)
 					// In
 					.UpdateImagePyramid(fs.pyr["lum"], 1)
@@ -754,10 +886,10 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 				fs.stages["subtract"].Bind(f.cmd)
 					// In
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
-					.UpdateImagePyramid(fs.pyr["lum"], 2)
+					.UpdateImagePyramid(fs.pyr["upsampled0"], 1) // Src
+					.UpdateImagePyramid(fs.pyr["lum"], 2) // Value
 					// Out
-					.UpdateImagePyramid(fs.pyr["laplac"], 3)
+					.UpdateImagePyramid(fs.pyr["laplac"], 3) // Dst
 					.WriteSets(imageIndex);
 
 				int first_i = _renderContext.comp.numOfViewportMips - 2;
@@ -803,7 +935,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			}
 			endCmdDebugLabel(f.cmd);
 
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2");
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2::BLEND_LAPLACIANS");
 			{
 				ComputeStage& cs = fs.stages["2"];
 				cs.Bind(f.cmd)
@@ -818,7 +950,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			}
 			endCmdDebugLabel(f.cmd);
 
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2.1::UPSAMPLE_FILTER_ADD");
+			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2.1::UPSAMPLE::SUM");
 			{
 				
 				fs.stages["upsample0_add"].Bind(f.cmd)
@@ -849,6 +981,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 					.UpdateImagePyramid(fs.pyr["blendedLaplac"], 2)
 					.WriteSets(imageIndex);
 
+				// TODO:numMips - 1 and change upsample0.comp instead
 				int first_i = _renderContext.comp.numOfViewportMips - 2;
 				uint32_t w = _viewport.imageExtent.width >> first_i;
 				uint32_t h = _viewport.imageExtent.height >> first_i;
@@ -895,17 +1028,17 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			// Restore color
 			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_3");
 			{
-				fs.stages["4"].Bind(f.cmd);
+				fs.stages["4"].Bind(f.cmd)
 					// In
-					//.UpdateImage(fs.chrominance, 2)
-				fs.stages["4"].UpdateImage(_viewport.imageViews[imageIndex], 1);
+					.UpdateImage(fs.att["chrom"], 1)
+					//.UpdateImage(_viewport.imageViews[imageIndex], 1)
 					//.UpdateImage(fs.att["laplacSum"], 2)
-				fs.stages["4"].UpdateImage(fs.pyr["blendedLaplac"].views[0], 2);
+					.UpdateImage(fs.pyr["blendedLaplac"].views[0], 2)
 					// Out
-				fs.stages["4"].UpdateImage(_viewport.imageViews[imageIndex], 3);
+					.UpdateImage(_viewport.imageViews[imageIndex], 3)
 
-				fs.stages["4"].Dispatch(groupsX, groupsY, imageIndex);
-				fs.stages["4"].Barrier();
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
 			}
 			endCmdDebugLabel(f.cmd);
 

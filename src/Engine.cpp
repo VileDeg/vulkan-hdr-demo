@@ -746,8 +746,7 @@ void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec
 void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label)
 {
     static glm::vec4 initialColor = { 0.988, 0.678, 0.011, 1 };
-    //static glm::vec4 changeFactor = { 0.1, 0.05, 0.001, 0 };
-    static glm::vec4 changeFactor = { 0.1, 0, 0, 0 };
+    static glm::vec4 changeFactor = { 0.13, 0.0, 0.0, 0 };
 
     beginCmdDebugLabel(cmd, label, glm::abs(initialColor));
     initialColor = initialColor - changeFactor;

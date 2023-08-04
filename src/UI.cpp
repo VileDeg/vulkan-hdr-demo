@@ -217,16 +217,27 @@ void Engine::uiUpdateHDR()
 					_renderContext.comp.enableToneMapping = false;
 				}
 			}
-			ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 1.f);
-			ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
 
-			//ImGui::SliderFloat("Spacial sigma", &_renderContext.comp.sigmaS, 3.f, 50.0f);
-			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _renderContext.comp.sigmaS);
-			ImGui::SliderFloat("Range sigma", &_renderContext.comp.sigmaR, 0.1f, 2.0f);
+			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 1.f);
+				ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
 
+				//ImGui::SliderFloat("Spacial sigma", &_renderContext.comp.sigmaS, 3.f, 50.0f);
+				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _renderContext.comp.sigmaS);
+				ImGui::SliderFloat("Range sigma", &_renderContext.comp.sigmaR, 0.1f, 2.0f);
 
-			ImGui::SliderFloat("Shadows Exposure", &_renderContext.comp.shadowsExposure, exp2(0), exp2(5));
-			ImGui::SliderFloat("Highlights Exposure", &_renderContext.comp.highlightsExposure, exp2(-5), exp2(0));
+				ImGui::TreePop();
+			}
+
+			if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGui::SliderFloat("Shadows Exposure", &_renderContext.comp.shadowsExposure, 0, 10);
+				ImGui::SliderFloat("Midtones Exposure", &_renderContext.comp.midtonesExposure, -10, 5);
+				ImGui::SliderFloat("Highlights Exposure", &_renderContext.comp.highlightsExposure, -20, 0);
+
+				ImGui::SliderFloat("Exposedness Weight Sigma", &_renderContext.comp.exposednessWeightSigma, 0.01, 10);
+
+				ImGui::TreePop();
+			}
 
 			ImGui::TreePop();
 		}
@@ -234,12 +245,17 @@ void Engine::uiUpdateHDR()
 		if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 			{ // Gamma correction
-				/*const char* items[] = {
+				/*bool gammaON = _renderContext.comp.gammaMode != 0;
+				if (ImGui::Checkbox("Enable Gamma Correction", &gammaON)) {
+
+				}*/
+
+				const char* items[] = {
 					"No gamma correction", "Gamma correction", "Inverse gamma correction" };
 				static int item_current = _renderContext.comp.gammaMode;
 				if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
 					_renderContext.comp.gammaMode = item_current;
-				}*/
+				}
 
 				ImGui::SliderFloat("Gamma", &_renderContext.comp.gamma, 0.5f, 3.f);
 			}
@@ -284,100 +300,102 @@ void Engine::uiUpdateHDR()
 		}
 	
 		if (ImGui::TreeNodeEx("Plots", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::TreeNodeEx("Adaptation Window")) {
+			if (_renderContext.comp.enableAdaptation) {
+				if (ImGui::TreeNodeEx("Adaptation Window")) {
 				
-				ImGui::Separator();
+					ImGui::Separator();
 
-				static RollingBuffer rdata, rdata1;
+					static RollingBuffer rdata, rdata1;
 
-				ImGui::SliderFloat("Adaptation time coefficient", &_renderContext.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+					ImGui::SliderFloat("Adaptation time coefficient", &_renderContext.eyeAdaptationTimeCoefficient, 1.f, 10.f);
 
-				static float t = 0;
-				t += ImGui::GetIO().DeltaTime;
+					static float t = 0;
+					t += ImGui::GetIO().DeltaTime;
 
-				static float history = 30.0f;
-				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+					static float history = 30.0f;
+					ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
 
-				rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
-				rdata.Span = history;
+					rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
+					rdata.Span = history;
 
-				rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
-				rdata1.Span = history;
+					rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
+					rdata1.Span = history;
 
-				static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+					static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
 
-				if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
-					static float maxY = 0;
-					maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
+					if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+						static float maxY = 0;
+						maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
 
-					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+						ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 
-					ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
+						ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+						ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
 
-					std::string label = "Adaptation (actual)";
-					ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
+						std::string label = "Adaptation (actual)";
+						ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
 
-					label = "Adaptation (target)";
-					ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
+						label = "Adaptation (target)";
+						ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
 
-					ImPlot::EndPlot();
+						ImPlot::EndPlot();
+					}
+
+					ImGui::TreePop();
 				}
+				if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
+					if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
+						// We have to wait for GPU to finish execution because compute shader 
+						// might have not finished operating on current _gpu.compSSBO buffer
+						// even though the command was already recorded to queue.
+						// This is probably a temporary solution as it is very inefficient.
+						// If we don't use this, histogram will be very laggy most of the time.
+						vkDeviceWaitIdle(_device);
 
-				ImGui::TreePop();
-			}
-			if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
-				if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-					// We have to wait for GPU to finish execution because compute shader 
-					// might have not finished operating on current _gpu.compSSBO buffer
-					// even though the command was already recorded to queue.
-					// This is probably a temporary solution as it is very inefficient.
-					// If we don't use this, histogram will be very laggy most of the time.
-					vkDeviceWaitIdle(_device);
+						uint32_t bins = MAX_LUMINANCE_BINS;
 
-					uint32_t bins = MAX_LUMINANCE_BINS;
-
-					std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
-					std::iota(xs.begin(), xs.end(), 0);
+						std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
+						std::iota(xs.begin(), xs.end(), 0);
 					
 
-					for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-						xs[i] = i;
-					}
-
-					uint32_t maxBin = 0;
-					for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-						if (_gpu.compSSBO->luminance[i] > maxBin) {
-							maxBin = _gpu.compSSBO->luminance[i];
+						for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+							xs[i] = i;
 						}
+
+						uint32_t maxBin = 0;
+						for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+							if (_gpu.compSSBO->luminance[i] > maxBin) {
+								maxBin = _gpu.compSSBO->luminance[i];
+							}
+						}
+
+						ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+						ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+
+						ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+						ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always);
+
+						ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
+
+
+						ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
+
+						uint32_t start_i = _renderContext.comp.lumLowerIndex;
+						uint32_t end_i   = _renderContext.comp.lumUpperIndex;
+
+						std::vector<uint32_t> xs1(end_i - start_i);
+						std::iota(xs1.begin(), xs1.end(), start_i);
+
+						std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
+
+						ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+						ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
+
+
+						ImPlot::EndPlot();
 					}
-
-					ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-					ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-
-					ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-					ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always);
-
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
-
-
-					ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
-
-					uint32_t start_i = _renderContext.comp.lumLowerIndex;
-					uint32_t end_i   = _renderContext.comp.lumUpperIndex;
-
-					std::vector<uint32_t> xs1(end_i - start_i);
-					std::iota(xs1.begin(), xs1.end(), start_i);
-
-					std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
-
-					ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-					ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
-
-
-					ImPlot::EndPlot();
+					ImGui::TreePop();
 				}
-				ImGui::TreePop();
 			}
 			
 			ImGui::TreePop();

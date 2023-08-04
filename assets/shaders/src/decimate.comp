@@ -1,0 +1,38 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inFilteredImage[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D decimatedImage[MAX_VIEWPORT_MIPS];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int i = pc.mipIndex;
+	ivec2 dim = imageSize(inFilteredImage[i]).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+		ivec2 coordsLower = borderClamp(coords >> 1, imageSize(decimatedImage[i+1]).xy);
+		// Select only upper left pixel out of 4
+		// Store black color otherwise to overwrite garbage values in texture
+		if (mod(coords.x, 2) != 0 || mod(coords.y, 2) != 0) {
+			imageStore(decimatedImage[i+1], coordsLower, vec4(vec3(0), 1.0));
+			return;
+		}
+		vec3 px = imageLoad(inFilteredImage[i], coords).rgb;
+
+		imageStore(decimatedImage[i+1], coordsLower, vec4(px, 1.0));
+	}
+}

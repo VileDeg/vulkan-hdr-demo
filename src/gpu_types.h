@@ -142,7 +142,7 @@ struct GPUCompUB {
     GPUBool enableToneMapping = false; // true
     int toneMappingMode{ 3 };
     GPUBool enableAdaptation = false;
-    int gammaMode{ 1 };
+    int gammaMode{ 0 }; // 0 - off, 1 - on, 2 - inverse
 
     GPUBool enableLTM = true;
     float baseScale = 0.45;
@@ -151,6 +151,11 @@ struct GPUCompUB {
 
     float sigmaR = 0.4;
     int numOfViewportMips;
-    float shadowsExposure = (float)std::exp2(1.5);
-    float highlightsExposure = (float)std::exp2(-2.0);
+    float shadowsExposure = 2.8;
+    float midtonesExposure = 0.0;
+
+    float highlightsExposure = -1.6;
+    float exposednessWeightSigma = 5;
+    int _pad0;
+    int _pad1;
 };

@@ -45,11 +45,11 @@ void main() {
         }
 
         // Gamma correction
-        /*switch (ub.gammaMode) {
+        switch (ub.gammaMode) {
             case 0: outColor = outColor; break;
             case 1: outColor = pow(outColor, vec3(ub.gamma)); break;
             case 2: outColor = pow(outColor, vec3(1.0 / ub.gamma)); break;
-        }*/
+        }
 
         outColor = pow(outColor, vec3(ub.gamma));
 

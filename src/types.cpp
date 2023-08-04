@@ -328,28 +328,44 @@ void ComputeStage::Destroy()
 	vkDestroyPipeline(device, pipeline, nullptr);
 }
 
-ExposureFusion::ExposureFusion() {
+ExposureFusion::ExposureFusion() 
+{
 	stages["0"] = { .shaderName = "ltm_fusion_0.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
 	stages["1"] = { .shaderName = "ltm_fusion_1.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
 	stages["2"] = { .shaderName = "ltm_fusion_2.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR} };
 	//stages["3"] = { .shaderName = "ltm_fusion_3.comp.spv", .dsetBindings = { UB, PYR, IMG} };
 	stages["4"] = { .shaderName = "ltm_fusion_4.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
 
-	stages["upsample0_sub"] = { .shaderName = "upsample0.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["upsample1_sub"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["upsample2_sub"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };// Was update2 shader
+	// TODO: change naming to "_filter_horiz/vert"
+	stages["upsample0_sub"] = { .shaderName = "upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample1_sub"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample2_sub"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
-	stages["upsample0_add"] = { .shaderName = "upsample0.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["upsample1_add"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["upsample2_add"] = { .shaderName = "upsample1.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };// Was update2 shader
+	stages["upsample0_add"] = { .shaderName = "upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample1_add"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["upsample2_add"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
 	stages["add"]	   = { .shaderName = "mipmap_add.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 	stages["subtract"] = { .shaderName = "mipmap_subtract.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR}, .usesPushConstants = true };
 
+	stages["move"] = { .shaderName = "move.comp.spv", .dsetBindings = { UB, IMG, IMG }};
+
+	// TODO: change naming to "_filter_horiz/vert"
+	stages["downsample0_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample1_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample2_lum"] = { .shaderName = "decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+
+	stages["downsample0_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample1_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample2_weight"] = { .shaderName = "decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+
 	att["chrom"] = att["laplacSum"] = {};
 
 	pyr["lum"] = pyr["weight"] = pyr["laplac"] = pyr["blendedLaplac"] = {};
+	// Pyramid that will hold intermediate filtered images when upsampling
 	pyr["upsampled0"] = pyr["upsampled1"] = {};
+	// Pyramid that will hold intermediate filtered images when downsampling
+	pyr["downsampled0"] = pyr["downsampled1"] = {};
 }
 
 
