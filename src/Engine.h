@@ -99,6 +99,9 @@ private: /* Secondary methods */
     void updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
 
     void loadDataToGPU();
+    void durand2002(VkCommandBuffer& cmd, int imageIndex);
+    void exposureFusion(VkCommandBuffer& cmd, int imageIndex);
+
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
     void drawFrame();

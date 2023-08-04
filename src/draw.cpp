@@ -370,121 +370,409 @@ static void s_fullBarrier(VkCommandBuffer& cmd) {
 	);
 }
 
-static void generateMips(VkCommandBuffer& cmd, VkImage& image, int numOfMips, uint32_t width, uint32_t height) 
+void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 {
-	int32_t w = width;
-	int32_t h = height;
+	std::string ltm_str = "LTM::DURAND";
+	beginCmdDebugLabel(cmd, ltm_str);
+	uint32_t threadsXY = 32;
 
-	VkImageSubresourceRange srcRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-	};
-	VkImageSubresourceRange dstRange = srcRange;
+	uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
+	uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+	_compute.durand.stages[0].Bind(cmd)
+		// In
+		.UpdateImage(_viewport.imageViews[imageIndex], 2)
+		// Out
+		.UpdateImage(_compute.durand.att[0].view, 3)
+		.UpdateImage(_compute.durand.att[1].view, 4)
 
-	utils::imageMemoryBarrier(cmd, image,
-		VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-		VK_ACCESS_TRANSFER_READ_BIT,
+		.Dispatch(groupsX, groupsY, imageIndex)
+		.Barrier();
 
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	_compute.durand.stages[1].Bind(cmd)
+		// In
+		.UpdateImage(_compute.durand.att[0].view, 2)
+		// Out
+		.UpdateImage(_compute.durand.att[2].view, 3)
+		.UpdateImage(_compute.durand.att[3].view, 4)
 
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		.Dispatch(groupsX, groupsY, imageIndex)
+		.Barrier();
 
-		srcRange);
+	_compute.durand.stages[2].Bind(cmd)
+		// In
+		.UpdateImage(_compute.durand.att[0].view, 2)
+		.UpdateImage(_compute.durand.att[1].view, 3)
+		.UpdateImage(_compute.durand.att[2].view, 4)
+		.UpdateImage(_compute.durand.att[3].view, 5)
+		// Out
+		.UpdateImage(_viewport.imageViews[imageIndex], 6)
+
+		.Dispatch(groupsX, groupsY, imageIndex)
+		.Barrier();
+
+	endCmdDebugLabel(cmd);
+}
+
+void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
+{
+	uint32_t threadsXY = 32;
+
+	std::string ltm_str = "LTM::FUSION";
+	beginCmdDebugLabel(cmd, ltm_str);
+	auto& fs = _compute.fusion;
+
+	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_0");
+	{
+		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+
+		fs.stages["0"].Bind(cmd)
+			// In
+			.UpdateImage(_viewport.imageViews[imageIndex], 1)
+			// Out
+			.UpdateImage(fs.att["chrom"], 2)
+			.UpdateImage(fs.pyr["lum"].views[0], 3)
+			.UpdateImage(fs.pyr["weight"].views[0], 4)
+
+			.Dispatch(groupsX, groupsY, imageIndex)
+			.Barrier();
+	}
+	endCmdDebugLabel(cmd);
+
+	beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::LUM");
+	{
+		fs.stages["downsample0_lum"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["lum"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample1_lum"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample2_lum"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["lum"], 2)
+			.WriteSets(imageIndex);
+
+		int first_i = 0;
+		uint32_t w = _viewport.imageExtent.width >> first_i;
+		uint32_t h = _viewport.imageExtent.height >> first_i;
+
+		for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
+			beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::LUM::MIP_" + std::to_string(i));
+
+			uint32_t groupsX = w / threadsXY + 1;
+			uint32_t groupsY = h / threadsXY + 1;
+
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, fs.stages["downsample0_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample0_lum"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, fs.stages["downsample1_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample1_lum"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			// Decimate is run over higher mip so need to change mip index and groups number
+			pc.mipIndex = i + 1;
+			vkCmdPushConstants(cmd, fs.stages["downsample2_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+			fs.stages["downsample2_lum"].Bind(cmd)
+				.Dispatch((w >> 1) / threadsXY + 1, (h >> 1) / threadsXY + 1, imageIndex)
+				.Barrier();
+
+			w >>= 1;
+			h >>= 1;
+
+			endCmdDebugLabel(cmd);
+		}
+	}
+	endCmdDebugLabel(cmd);
+
+	beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::WEIGHT");
+	{
+		fs.stages["downsample0_weight"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["weight"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample1_weight"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample2_weight"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["weight"], 2)
+			.WriteSets(imageIndex);
+
+		int first_i = 0;
+		uint32_t w = _viewport.imageExtent.width >> first_i;
+		uint32_t h = _viewport.imageExtent.height >> first_i;
+
+		for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
+			beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::WEIGHT::MIP_" + std::to_string(i));
+
+			uint32_t groupsX = w / threadsXY + 1;
+			uint32_t groupsY = h / threadsXY + 1;
+
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, fs.stages["downsample0_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample0_weight"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, fs.stages["downsample1_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample1_weight"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
 
 
-	int32_t w_mip = w;
-	int32_t h_mip = h;
-	for (uint32_t i = 0; i < numOfMips - 1; ++i) {
-		VkImageBlit region = {
-			.srcSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			},
-			.srcOffsets = {
-				{ 0, 0, 0 },
-				{ w_mip, h_mip, 1 }
-			},
-			.dstSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = i + 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1,
-			},
-			.dstOffsets = {
-				{ 0, 0, 0 },
-				{ w_mip >> 1, h_mip >> 1, 1 }
-			}
-		};
+			// Decimate is run over higher mip so need to change mip index and groups number
+			pc.mipIndex = i + 1;
+			vkCmdPushConstants(cmd, fs.stages["downsample2_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+			fs.stages["downsample2_weight"].Bind(cmd)
+				.Dispatch((w >> 1) / threadsXY + 1, (h >> 1) / threadsXY + 1, imageIndex)
+				.Barrier();
 
-		srcRange.baseMipLevel = i;
-		dstRange.baseMipLevel = i + 1;
+			w >>= 1;
+			h >>= 1;
 
-		if (i > 0) {
-			utils::imageMemoryBarrier(cmd, image,
-				VK_ACCESS_TRANSFER_WRITE_BIT,
-				VK_ACCESS_TRANSFER_READ_BIT,
+			endCmdDebugLabel(cmd);
+		}
+	}
+	endCmdDebugLabel(cmd);
 
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_1::UPSAMPLE::LAPLACIANS");
+	{
+		{
+			uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
+			uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
 
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-
-				srcRange);
+			// Move highest lum mip (low-pass residual) to highest laplacian mip
+			fs.stages["move"].Bind(cmd)
+				// In
+				.UpdateImage(fs.pyr["lum"].views[_renderContext.comp.numOfViewportMips - 1], 1)
+				// Out
+				.UpdateImage(fs.pyr["laplac"].views[_renderContext.comp.numOfViewportMips - 1], 2)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
 		}
 
-		utils::imageMemoryBarrier(cmd, image,
-			VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
 
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		fs.stages["upsample0_sub"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["lum"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
+			.WriteSets(imageIndex);
+		// Horiz filter
+		fs.stages["upsample1_sub"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled1"], 2)
+			.WriteSets(imageIndex);
+		// Vert filter
+		fs.stages["upsample2_sub"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled1"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
+			.WriteSets(imageIndex);
 
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
+		fs.stages["subtract"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 1) // Src
+			.UpdateImagePyramid(fs.pyr["lum"], 2) // Value
+			// Out
+			.UpdateImagePyramid(fs.pyr["laplac"], 3) // Dst
+			.WriteSets(imageIndex);
 
-			dstRange);
+		int first_i = _renderContext.comp.numOfViewportMips - 2;
+		uint32_t w = _viewport.imageExtent.width >> first_i;
+		uint32_t h = _viewport.imageExtent.height >> first_i;
 
-		vkCmdBlitImage(cmd,
-			image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1, &region, VK_FILTER_LINEAR
-		);
+		for (int i = first_i; i >= 0; --i) {
+			beginCmdDebugLabel(cmd, ltm_str + "::STAGE_1::LAPLACIANS::MIP_" + std::to_string(i));
 
-		utils::imageMemoryBarrier(cmd, image,
-			VK_ACCESS_TRANSFER_READ_BIT,
-			VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+			uint32_t groupsX = w / threadsXY + 1;
+			uint32_t groupsY = h / threadsXY + 1;
 
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			VK_IMAGE_LAYOUT_GENERAL,
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, fs.stages["upsample1_sub"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
 
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			fs.stages["upsample0_sub"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
 
-			srcRange);
+			fs.stages["upsample1_sub"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
 
-		w_mip >>= 1;
-		h_mip >>= 1;
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, fs.stages["upsample2_sub"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["upsample2_sub"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			fs.stages["subtract"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			w <<= 1;
+			h <<= 1;
+
+			endCmdDebugLabel(cmd);
+		}
 	}
+	endCmdDebugLabel(cmd);
 
-	utils::imageMemoryBarrier(cmd, image,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2::BLEND_LAPLACIANS");
+	{
+		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_GENERAL,
+		ComputeStage& cs = fs.stages["2"];
+		cs.Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["laplac"], 1)
+			.UpdateImagePyramid(fs.pyr["weight"], 2)
+			// Out
+			.UpdateImagePyramid(fs.pyr["blendedLaplac"], 3)
 
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			.Dispatch(groupsX, groupsY, imageIndex)
+			.Barrier();
+	}
+	endCmdDebugLabel(cmd);
 
-		dstRange);
+	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2.1::UPSAMPLE::SUM");
+	{
+
+		fs.stages["upsample0_add"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["blendedLaplac"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["upsample1_add"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled1"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["upsample2_add"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled1"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["add"].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["blendedLaplac"], 2)
+			.WriteSets(imageIndex);
+
+		// TODO:numMips - 1 and change upsample0.comp instead
+		int first_i = _renderContext.comp.numOfViewportMips - 2;
+		uint32_t w = _viewport.imageExtent.width >> first_i;
+		uint32_t h = _viewport.imageExtent.height >> first_i;
+
+		for (int i = first_i; i >= 0; --i) {
+			beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2::SUM_LAPLACIANS::MIP_" + std::to_string(i));
+
+			uint32_t groupsX = w / threadsXY + 1;
+			uint32_t groupsY = h / threadsXY + 1;
+
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, fs.stages["upsample1_add"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["upsample0_add"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			fs.stages["upsample1_add"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, fs.stages["upsample2_add"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["upsample2_add"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			fs.stages["add"].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			w <<= 1;
+			h <<= 1;
+
+			endCmdDebugLabel(cmd);
+		}
+	}
+	endCmdDebugLabel(cmd);
+
+	// Restore color
+	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_3");
+	{
+		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+
+		fs.stages["4"].Bind(cmd)
+			// In
+			.UpdateImage(fs.att["chrom"], 1)
+			//.UpdateImage(_viewport.imageViews[imageIndex], 1)
+			//.UpdateImage(fs.att["laplacSum"], 2)
+			.UpdateImage(fs.pyr["blendedLaplac"].views[0], 2)
+			// Out
+			.UpdateImage(_viewport.imageViews[imageIndex], 3)
+
+			.Dispatch(groupsX, groupsY, imageIndex)
+			.Barrier();
+	}
+	endCmdDebugLabel(cmd);
+
+	endCmdDebugLabel(cmd); // end of LTM::FUSION
 }
 
 void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
@@ -654,396 +942,21 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		}
 		
 		if (_renderContext.comp.enableLTM) {
-			std::string ltm_str = "LTM::FUSION";
-			glm::vec4 col = { 1, 0, 1, 1 };
-			beginCmdDebugLabel(f.cmd, ltm_str);
-
-			uint32_t threadsXY = 32;
-
-	
-
-			uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-			uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
-#if 0
-			_compute.durand.stages[0].Bind(f.cmd)
-				// In
-				.UpdateImage(_viewport.imageViews[imageIndex], 2)
-				// Out
-				.UpdateImage(_compute.durand.att[0].view, 3)
-				.UpdateImage(_compute.durand.att[1].view, 4)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			_compute.durand.stages[1].Bind(f.cmd)
-				// In
-				.UpdateImage(_compute.durand.att[0].view, 2)
-				// Out
-				.UpdateImage(_compute.durand.att[2].view, 3)
-				.UpdateImage(_compute.durand.att[3].view, 4)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			_compute.durand.stages[2].Bind(f.cmd)
-				// In
-				.UpdateImage(_compute.durand.att[0].view, 2)
-				.UpdateImage(_compute.durand.att[1].view, 3)
-				.UpdateImage(_compute.durand.att[2].view, 4)
-				.UpdateImage(_compute.durand.att[3].view, 5)
-				// Out
-				.UpdateImage(_viewport.imageViews[imageIndex], 6)
-
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-#else
-			auto& fs = _compute.fusion;
-
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_0");
-			{
-				fs.stages["0"].Bind(f.cmd)
-					// In
-					.UpdateImage(_viewport.imageViews[imageIndex], 1)
-					// Out
-					.UpdateImage(fs.att["chrom"], 2)
-					.UpdateImage(fs.pyr["lum"].views[0], 3)
-					.UpdateImage(fs.pyr["weight"].views[0], 4)
-
-					.Dispatch(groupsX, groupsY, imageIndex)
-					.Barrier();
+			// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
+			utils::memoryBarrier(f.cmd,
+				VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+			
+			if (_renderContext.localToneMappingMode == 0) {
+				durand2002(f.cmd, imageIndex);
+			} else {
+				exposureFusion(f.cmd, imageIndex);
 			}
-			endCmdDebugLabel(f.cmd);
-#if 1
-			col.r -= 0.1;
-			beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::LUM");
-			{
-				/*generateMips(f.cmd, fs.pyr["lum"].allocImage.image,
-					_renderContext.comp.numOfViewportMips,
-					_viewport.imageExtent.width, _viewport.imageExtent.height);*/
 
-				fs.stages["downsample0_lum"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["lum"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["downsample1_lum"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["downsample2_lum"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["lum"], 2)
-					.WriteSets(imageIndex);
-
-				int first_i = 0;
-				uint32_t w = _viewport.imageExtent.width >> first_i;
-				uint32_t h = _viewport.imageExtent.height >> first_i;
-
-				for (int i = first_i; i < _renderContext.comp.numOfViewportMips-1; ++i) {
-					beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::LUM::MIP_" + std::to_string(i));
-
-					uint32_t grpsX = w / threadsXY + 1;
-					uint32_t grpsY = h / threadsXY + 1;
-
-					GPUCompPC pc = {
-						.mipIndex = i,
-						.horizontalPass = true
-					};
-					vkCmdPushConstants(f.cmd, fs.stages["downsample0_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["downsample0_lum"].Bind(f.cmd)
-						.Dispatch(grpsX, grpsY, imageIndex)
-						.Barrier();
-
-					pc.horizontalPass = false;
-					vkCmdPushConstants(f.cmd, fs.stages["downsample1_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["downsample1_lum"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-
-					fs.stages["downsample2_lum"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					w >>= 1;
-					h >>= 1;
-
-					endCmdDebugLabel(f.cmd);
-				}
-			}
-			endCmdDebugLabel(f.cmd);
-
-			col.r -= 0.1;
-			beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::WEIGHT");
-			{
-				/*generateMips(f.cmd, fs.pyr["weight"].allocImage.image,
-					_renderContext.comp.numOfViewportMips,
-					_viewport.imageExtent.width, _viewport.imageExtent.height);*/
-
-				fs.stages["downsample0_weight"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["weight"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["downsample1_weight"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["downsample2_weight"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["weight"], 2)
-					.WriteSets(imageIndex);
-
-				int first_i = 0;
-				uint32_t w = _viewport.imageExtent.width >> first_i;
-				uint32_t h = _viewport.imageExtent.height >> first_i;
-
-				for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
-					beginCmdDebugLabel(f.cmd, ltm_str + "::DOWNSAMPLE::WEIGHT::MIP_" + std::to_string(i));
-
-					uint32_t grpsX = w / threadsXY + 1;
-					uint32_t grpsY = h / threadsXY + 1;
-
-					GPUCompPC pc = {
-						.mipIndex = i,
-						.horizontalPass = true
-					};
-					vkCmdPushConstants(f.cmd, fs.stages["downsample0_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["downsample0_weight"].Bind(f.cmd)
-						.Dispatch(grpsX, grpsY, imageIndex)
-						.Barrier();
-
-					pc.horizontalPass = false;
-					vkCmdPushConstants(f.cmd, fs.stages["downsample1_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["downsample1_weight"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-
-					fs.stages["downsample2_weight"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					w >>= 1;
-					h >>= 1;
-
-					endCmdDebugLabel(f.cmd);
-				}
-			}
-			endCmdDebugLabel(f.cmd);
-#endif
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_1::UPSAMPLE::LAPLACIANS");
-			{
-				// Move highest lum mip (low-pass residual) to highest laplacian mip
-				fs.stages["move"].Bind(f.cmd)
-					// In
-					.UpdateImage(fs.pyr["lum"].views[_renderContext.comp.numOfViewportMips-1], 1)
-					// Out
-					.UpdateImage(fs.pyr["laplac"].views[_renderContext.comp.numOfViewportMips-1], 2)
-					.Dispatch(groupsX, groupsY, imageIndex)
-					.Barrier();
-
-
-
-				fs.stages["upsample0_sub"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["lum"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
-					.WriteSets(imageIndex);
-				// Horiz filter
-				fs.stages["upsample1_sub"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled1"], 2)
-					.WriteSets(imageIndex);
-				// Vert filter
-				fs.stages["upsample2_sub"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled1"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["subtract"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 1) // Src
-					.UpdateImagePyramid(fs.pyr["lum"], 2) // Value
-					// Out
-					.UpdateImagePyramid(fs.pyr["laplac"], 3) // Dst
-					.WriteSets(imageIndex);
-
-				int first_i = _renderContext.comp.numOfViewportMips - 2;
-				uint32_t w = _viewport.imageExtent.width >> first_i;
-				uint32_t h = _viewport.imageExtent.height >> first_i;
-
-				for (int i = first_i; i >= 0; --i) {
-					beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_1::LAPLACIANS::MIP_" + std::to_string(i));
-
-					uint32_t grpsX = w / threadsXY + 1;
-					uint32_t grpsY = h / threadsXY + 1;
-
-					GPUCompPC pc = {
-						.mipIndex = i,
-						.horizontalPass = true
-					};
-					vkCmdPushConstants(f.cmd, fs.stages["upsample1_sub"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["upsample0_sub"].Bind(f.cmd)
-						.Dispatch(grpsX, grpsY, imageIndex)
-						.Barrier();
-
-					fs.stages["upsample1_sub"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					pc.horizontalPass = false;
-					vkCmdPushConstants(f.cmd, fs.stages["upsample2_sub"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["upsample2_sub"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					fs.stages["subtract"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					w <<= 1;
-					h <<= 1;
-
-					endCmdDebugLabel(f.cmd);
-				}
-			}
-			endCmdDebugLabel(f.cmd);
-
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2::BLEND_LAPLACIANS");
-			{
-				ComputeStage& cs = fs.stages["2"];
-				cs.Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["laplac"], 1)
-					.UpdateImagePyramid(fs.pyr["weight"], 2)
-					// Out
-					.UpdateImagePyramid(fs.pyr["blendedLaplac"], 3)
-
-					.Dispatch(groupsX, groupsY, imageIndex)
-					.Barrier();
-			}
-			endCmdDebugLabel(f.cmd);
-
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2.1::UPSAMPLE::SUM");
-			{
-				
-				fs.stages["upsample0_add"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["blendedLaplac"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["upsample1_add"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled1"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["upsample2_add"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled1"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 2)
-					.WriteSets(imageIndex);
-
-				fs.stages["add"].Bind(f.cmd)
-					// In
-					.UpdateImagePyramid(fs.pyr["upsampled0"], 1)
-					// Out
-					.UpdateImagePyramid(fs.pyr["blendedLaplac"], 2)
-					.WriteSets(imageIndex);
-
-				// TODO:numMips - 1 and change upsample0.comp instead
-				int first_i = _renderContext.comp.numOfViewportMips - 2;
-				uint32_t w = _viewport.imageExtent.width >> first_i;
-				uint32_t h = _viewport.imageExtent.height >> first_i;
-
-				for (int i = first_i; i >= 0; --i) {
-					beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_2::SUM_LAPLACIANS::MIP_" + std::to_string(i));
-
-					uint32_t grpsX = w / threadsXY + 1;
-					uint32_t grpsY = h / threadsXY + 1;
-
-					GPUCompPC pc = {
-						.mipIndex = i,
-						.horizontalPass = true
-					};
-					vkCmdPushConstants(f.cmd, fs.stages["upsample1_add"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["upsample0_add"].Bind(f.cmd)
-						.Dispatch(grpsX, grpsY, imageIndex)
-						.Barrier();
-
-					fs.stages["upsample1_add"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					pc.horizontalPass = false;
-					vkCmdPushConstants(f.cmd, fs.stages["upsample2_add"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					fs.stages["upsample2_add"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					fs.stages["add"].Bind(f.cmd)
-						.Dispatch(groupsX, groupsY, imageIndex)
-						.Barrier();
-
-					w <<= 1;
-					h <<= 1;
-
-					endCmdDebugLabel(f.cmd);
-				}
-			}
-			endCmdDebugLabel(f.cmd);
-	
-			// Restore color
-			beginCmdDebugLabel(f.cmd, ltm_str + "::STAGE_3");
-			{
-				fs.stages["4"].Bind(f.cmd)
-					// In
-					.UpdateImage(fs.att["chrom"], 1)
-					//.UpdateImage(_viewport.imageViews[imageIndex], 1)
-					//.UpdateImage(fs.att["laplacSum"], 2)
-					.UpdateImage(fs.pyr["blendedLaplac"].views[0], 2)
-					// Out
-					.UpdateImage(_viewport.imageViews[imageIndex], 3)
-
-					.Dispatch(groupsX, groupsY, imageIndex)
-					.Barrier();
-			}
-			endCmdDebugLabel(f.cmd);
-
-#endif
-			endCmdDebugLabel(f.cmd); // end of LTM
+			// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
+			utils::memoryBarrier(f.cmd,
+				VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 		}
 
 		beginCmdDebugLabel(f.cmd, "COMPUTE_FINAL");
@@ -1057,7 +970,6 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 		endCmdDebugLabel(f.cmd); // end of compute
 	}
-
 
 	// Post-processing must finish because viewport image is sampled from during swapchain pass
 	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,

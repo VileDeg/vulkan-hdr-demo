@@ -31,7 +31,8 @@ void main() {
 			return;
 		}
 
-		ivec2 coordsLower = borderClamp(coords >> 1, imageSize(inBlendedLaplacian[i+1]).xy);
+		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(inBlendedLaplacian[i+1]).xy);
+		ivec2 coordsLower = coords >> 1;
 		// For normalization multiply by 4
 		vec3 px = imageLoad(inBlendedLaplacian[i+1], coordsLower).rgb * 4;
 

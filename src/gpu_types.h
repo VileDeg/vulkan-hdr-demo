@@ -145,11 +145,11 @@ struct GPUCompUB {
     int gammaMode{ 0 }; // 0 - off, 1 - on, 2 - inverse
 
     GPUBool enableLTM = true;
-    float baseScale = 0.45;
-    float baseOffset = 0.42;
-    float sigmaS = 20; // should always equal to 2% of image size
+    float baseScale = 0.288;
+    float baseOffset = -0.999;
+    float sigmaS = 20; // Is automatically set to 2% of image size
 
-    float sigmaR = 0.4;
+    float sigmaR = 0.2;
     int numOfViewportMips;
     float shadowsExposure = 2.8;
     float midtonesExposure = 0.0;

@@ -24,7 +24,8 @@ void main() {
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 	if (coords.x < dim.x && coords.y < dim.y) {
-		ivec2 coordsLower = borderClamp(coords >> 1, imageSize(decimatedImage[i+1]).xy);
+		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(decimatedImage[i+1]).xy);
+		ivec2 coordsLower = coords >> 1;
 		// Select only upper left pixel out of 4
 		// Store black color otherwise to overwrite garbage values in texture
 		if (mod(coords.x, 2) != 0 || mod(coords.y, 2) != 0) {

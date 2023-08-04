@@ -218,6 +218,12 @@ void Engine::uiUpdateHDR()
 				}
 			}
 
+			const char* items[] = { "Durand 2002", "Exposure fusion" };
+			static int item_current = _renderContext.localToneMappingMode;
+			if (ImGui::Combo("LTM Mode", &item_current, items, IM_ARRAYSIZE(items))) {
+				_renderContext.localToneMappingMode = item_current;
+			}
+
 			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 1.f);
 				ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
@@ -717,9 +723,16 @@ void Engine::imguiUpdate()
 			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
 			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 		}
-
+		
 		ImGui::Begin("Config");
 		{
+			// Most "big" widgets share a common width settings by default. See 'Demo->Layout->Widgets Width' for details.
+			// e.g. Use 2/3 of the space for widgets and 1/3 for labels (right align)
+			//ImGui::PushItemWidth(-ImGui::GetWindowWidth() * 0.35f);
+			// e.g. Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
+			ImGui::PushItemWidth(ImGui::GetFontSize() * -13); //-12
+			//ImGui::PushItemWidth(-ImGui::GetContentRegionAvail().x * 0.5f);
+
 			uiUpdateScene();
 			uiUpdateHDR();
 			uiUpdateRenderContext();
@@ -730,6 +743,8 @@ void Engine::imguiUpdate()
 
 			_frameRate = io.Framerate;
 			_deltaTime = io.DeltaTime;
+
+			ImGui::PopItemWidth();
 		}
 		ImGui::End();
 	

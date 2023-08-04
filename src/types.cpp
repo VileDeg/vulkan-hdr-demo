@@ -353,11 +353,11 @@ ExposureFusion::ExposureFusion()
 	// TODO: change naming to "_filter_horiz/vert"
 	stages["downsample0_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 	stages["downsample1_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["downsample2_lum"] = { .shaderName = "decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample2_lum"] = { .shaderName = "decimate_new.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
 	stages["downsample0_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 	stages["downsample1_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-	stages["downsample2_weight"] = { .shaderName = "decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+	stages["downsample2_weight"] = { .shaderName = "decimate_new.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
 	att["chrom"] = att["laplacSum"] = {};
 

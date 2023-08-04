@@ -381,6 +381,8 @@ struct RenderContext {
     bool enableSkybox = true;
     bool displayLightSourceObjects = true;
 
+    int localToneMappingMode = 1; // 0 - Durand2002, 1 - Exposure fusion
+
     float zNear = 0.1f;
     float zFar = 64.0f;
 
