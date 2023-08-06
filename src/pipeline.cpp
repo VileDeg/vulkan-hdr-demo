@@ -168,40 +168,14 @@ void Engine::createPipelines()
     }
 
     { // Compute 
-        _compute.histogram.Create(_device, _linearSampler, "histogram.comp.spv");
-        _compute.averageLuminance.Create(_device, _linearSampler, "average_luminance.comp.spv");
-
-        for (auto& stage : _compute.durand.stages) {
+        for (auto& stage : _compute.stages) {
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }
-
-        for (auto& stage : _compute.fusion.stages) {
-            stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
-        }
-
-        for (auto& stage : _compute.bloom.stages) {
-            stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
-        }
-
-        _compute.toneMapping.Create(_device, _linearSampler, "tonemap.comp.spv");
     }
 
     _deletionStack.push([=]() mutable {
-        _compute.histogram.Destroy();
-        _compute.averageLuminance.Destroy();
-
-        for (auto& stage : _compute.durand.stages) {
+        for (auto& stage : _compute.stages) {
             stage.second.Destroy();
         }
-
-        for (auto& stage : _compute.fusion.stages) {
-            stage.second.Destroy();
-        }
-
-        for (auto& stage : _compute.bloom.stages) {
-            stage.second.Destroy();
-        }
-
-        _compute.toneMapping.Destroy();
     });
 }

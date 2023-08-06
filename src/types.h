@@ -302,6 +302,14 @@ struct RenderContext {
     bool enableBloom = true;
     int numOfBloomBlurPasses = 5;
 
+    float gamma = 2.2f;
+    int gammaMode = 0; // 0 - forward, 1 - inverse
+
+    bool enableGlobalToneMapping = false;
+    bool enableGammaCorrection = false;
+    bool enableAdaptation = false;
+    bool enableLocalToneMapping = true;
+
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold = 1.f / 255.f;
 

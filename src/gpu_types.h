@@ -141,28 +141,20 @@ struct GPUCompUB {
 
     glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
 
-    GPUBool enableBloom = true;
-    float bloomThreshold = 1.f;
-    int _pad0;
-    int _pad1;
-
-    GPUBool enableToneMapping = false; // true
-    int toneMappingMode{ 3 };
-    GPUBool enableAdaptation = false;
-    int gammaMode{ 0 }; // 0 - off, 1 - on, 2 - inverse
-
-    GPUBool enableLTM = true;
+    float bloomThreshold = 0.95f;
+    int toneMappingMode = 3;
+    int gammaMode = 0; // 0 - off, 1 - on, 2 - inverse
     float baseScale = 0.288;
+
     float baseOffset = -0.999;
     float sigmaS = 20; // Is automatically set to 2% of image size
-
     float sigmaR = 0.2;
     int numOfViewportMips;
+
     float shadowsExposure = 2.8;
     float midtonesExposure = 0.0;
-
     float highlightsExposure = -1.6;
     float exposednessWeightSigma = 5;
-    int _pad2;
-    int _pad3;
+
+    float bloomHighlightsWeight = 0.628f;
 };

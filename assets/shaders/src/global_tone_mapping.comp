@@ -7,10 +7,6 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-/*layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;*/
-
 layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
@@ -18,7 +14,6 @@ ub;
 layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
 
 const float WHITE_POINT = 10.0;
-//const float GAMMA = 2.2;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -29,21 +24,12 @@ void main() {
         vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
         
         // Apply tone mapping
-        if (ub.enableToneMapping) { // If enable tone mapping
-            switch (ub.toneMappingMode) {
-                case 0: outColor = ReinhardExtended(outColor, WHITE_POINT); break;
-                case 1: outColor = Reinhard(outColor); break;
-                case 2: outColor = Uncharted2Filmic(outColor); break;
-                case 3: outColor = ACESFilm(outColor); break;
-                case 4: outColor = ACESFitted(outColor); break;
-            }
-        }
-
-        // Gamma correction
-        switch (ub.gammaMode) {
-            case 0: outColor = outColor; break;
-            case 1: outColor = pow(outColor, vec3(ub.gamma)); break;
-            case 2: outColor = pow(outColor, vec3(1.0 / ub.gamma)); break;
+        switch (ub.toneMappingMode) {
+            case 0: outColor = ReinhardExtended(outColor, WHITE_POINT); break;
+            case 1: outColor = Reinhard(outColor); break;
+            case 2: outColor = Uncharted2Filmic(outColor); break;
+            case 3: outColor = ACESFilm(outColor); break;
+            case 4: outColor = ACESFitted(outColor); break;
         }
 
         // Store final color

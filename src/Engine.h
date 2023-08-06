@@ -103,7 +103,7 @@ private: /* Secondary methods */
     void loadDataToGPU();
     void durand2002(VkCommandBuffer& cmd, int imageIndex);
 
-    void exposureFusion_Downsample(VkCommandBuffer& cmd, ExposureFusion fs, int imageIndex, std::string suffix);
+    void exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix);
     void exposureFusion(VkCommandBuffer& cmd, int imageIndex);
 
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);

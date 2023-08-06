@@ -256,22 +256,13 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     { // Compute attachments
 
-        for (auto& att : _compute.durand.att) {
-            createAttachment(
-                _viewport.colorFormat,
-                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-                extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_GENERAL,
-                att.second, "COMPUTE::FUSION::" + att.first
-            );
-        }
-
-        //int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
+         //int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
         // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
         _renderContext.comp.numOfViewportMips = numOfViewportMips;
 
-        for (auto& att : _compute.fusion.att) {
+
+        for (auto& att : _compute.att) {
             createAttachment(
                 _viewport.colorFormat,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
@@ -280,8 +271,8 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
                 att.second, "COMPUTE::FUSION::" + att.first
             );
         }
-
-        for (auto& att : _compute.fusion.pyr) {
+    
+        for (auto& att : _compute.pyr) {
             createAttachmentPyramid(
                 _viewport.colorFormat,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
@@ -293,15 +284,6 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             );
         }
 
-        for (auto& att : _compute.bloom.att) {
-            createAttachment(
-                _viewport.colorFormat,
-                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-                extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_GENERAL,
-                att.second, "COMPUTE::BLOOM::" + att.first
-            );
-        }
     }
 }
 
@@ -323,22 +305,14 @@ void Engine::cleanupViewportResources()
     //Destroy depth image
     _viewport.depth.Cleanup(_device, _allocator);
 
-    for (auto& a : _compute.durand.att) {
+    for (auto& a : _compute.att) {
         a.second.Cleanup(_device, _allocator);
     }
 
-
-    for (auto& att : _compute.fusion.att) {
+    for (auto& att : _compute.pyr) {
         att.second.Cleanup(_device, _allocator);
     }
 
-    for (auto& att : _compute.fusion.pyr) {
-        att.second.Cleanup(_device, _allocator);
-    }
-
-    for (auto& att : _compute.bloom.att) {
-        att.second.Cleanup(_device, _allocator);
-    }
 
     for (auto& imageView : _viewport.imageViews) {
         vkDestroyImageView(_device, imageView, nullptr);
@@ -649,6 +623,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 .bind_image(3, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap sampler (Skybox will be passed later when loaded)
                 .bind_image(4, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap sampler
                 .build(f.globalSet, _globalSetLayout);
+            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.globalSet, "DESCRIPTOR_SET::VIEWPORT_GLOBAL::FRAME_" + std::to_string(frame_i));
         }
 
         { // Shadow pass descriptor set
@@ -657,46 +632,17 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
                 .build(f.shadowPassSet, _shadowSetLayout);
+            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.globalSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
         }
 
         { // Compute descriptor sets
             f.compSSBO = allocateBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.compUB = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            f.compUB   = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            // Create layout and write descriptor set for COMPUTE histogram step
-            DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image
-                .build(_compute.histogram.sets[frame_i], _compute.histogram.setLayout);
-
-            // Create layout and write descriptor set for COMPUTE average luminance step
-            DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .build(_compute.averageLuminance.sets[frame_i], _compute.averageLuminance.setLayout);
-
-            for (auto& stage : _compute.durand.stages) {
+            for (auto& stage : _compute.stages) {
                 stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
-                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::DURAND::" + stage.first + "::FRAME_" + std::to_string(frame_i));
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::COMPUTE::" + stage.first + "::FRAME_" + std::to_string(frame_i));
             }
-
-            for (auto& stage : _compute.fusion.stages) {
-                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
-                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::FUSION::" + stage.first + "::FRAME_" + std::to_string(frame_i));
-            }
-
-            for (auto& stage : _compute.bloom.stages) {
-                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
-                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::BLOOM::" + stage.first + "::FRAME_" + std::to_string(frame_i));
-            }
-
-
-            // Create layout and write descriptor set for COMPUTE tone mapping step
-            DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(1, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
-                .build(_compute.toneMapping.sets[frame_i], _compute.toneMapping.setLayout);
         }
     }
 

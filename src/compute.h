@@ -59,39 +59,20 @@ struct ComputeStage {
         FrameData& f, int frame_i);
 };
 
-struct Durand2002 {
-    std::map<std::string, ComputeStage> stages;
-    std::map<std::string, Attachment> att;
-
-    Durand2002();
+enum Effect {
+    EXPADP, DURAND, FUSION, BLOOM, GTMO, GAMMA
 };
 
-struct ExposureFusion {
+struct ComputePass {
     std::map<std::string, ComputeStage> stages;
     std::map<std::string, Attachment> att;
     std::map<std::string, AttachmentPyramid> pyr;
 
-    ExposureFusion();
-};
+    ComputePass();
 
-struct Bloom {
-    std::map<std::string, ComputeStage> stages;
-    std::map<std::string, Attachment> att;
+    ComputeStage& Stage(Effect fct, std::string key);
+    Attachment& Att(Effect fct, std::string key);
+    AttachmentPyramid& Pyr(Effect fct, std::string key);
 
-    Bloom();
-};
-
-struct ComputePass {
-    ComputeStage histogram;
-    ComputeStage averageLuminance;
-
-    Durand2002 durand;
-    ExposureFusion fusion;
-
-    Bloom bloom;
-
-    /*ComputeStage bloom;
-    Attachment bloomHighlights;*/
-
-    ComputeStage toneMapping;
+    std::string getEffectPrefix(Effect fct);
 };

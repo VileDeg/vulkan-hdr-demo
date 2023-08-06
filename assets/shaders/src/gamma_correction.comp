@@ -1,0 +1,30 @@
+// Based on https://bruop.github.io/exposure/
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/tone_mapping.glsl"
+
+#define THREADS_X  32
+#define THREADS_Y  32
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+    uvec2 dim = imageSize(inOutHDRImage).xy;
+ 
+    // Ignore threads that map to areas beyond the bounds of our HDR image
+    if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
+        vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
+
+        // Gamma correction
+        outColor = pow(outColor, vec3(ub.gamma));
+
+        // Store final color
+        imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(outColor, 1.0));
+    }
+}

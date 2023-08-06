@@ -187,15 +187,17 @@ void Engine::uiUpdateHDR()
 			ImGui::Checkbox("Enable bloom", &_renderContext.enableBloom);
 
 			ImGui::SliderInt("Number of blur passes", &_renderContext.numOfBloomBlurPasses, 0, 20);
-			ImGui::SliderFloat("Bloom threshold", &_renderContext.comp.bloomThreshold, 0.1, 10);
+			ImGui::SliderFloat("Bloom Threshold", &_renderContext.comp.bloomThreshold, 0.1, 10);
+
+			ImGui::SliderFloat("Bloom Hightlights Weight", &_renderContext.comp.bloomHighlightsWeight, 0.1, 1.f);
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable global tone mapping", &_renderContext.comp.enableToneMapping)) {
-				if (_renderContext.comp.enableToneMapping) {
-					_renderContext.comp.enableLTM = false;
+			if (ImGui::Checkbox("Enable global tone mapping", &_renderContext.enableGlobalToneMapping)) {
+				if (_renderContext.enableGlobalToneMapping) {
+					_renderContext.enableLocalToneMapping = false;
 				}
 			}
 
@@ -221,9 +223,9 @@ void Engine::uiUpdateHDR()
 		}
 
 		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable local tone mapping", &_renderContext.comp.enableLTM)) {
-				if (_renderContext.comp.enableLTM) {
-					_renderContext.comp.enableToneMapping = false;
+			if (ImGui::Checkbox("Enable local tone mapping", &_renderContext.enableLocalToneMapping)) {
+				if (_renderContext.enableLocalToneMapping) {
+					_renderContext.enableGlobalToneMapping = false;
 				}
 			}
 
@@ -246,7 +248,7 @@ void Engine::uiUpdateHDR()
 
 			if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGui::SliderFloat("Shadows Exposure", &_renderContext.comp.shadowsExposure, 0, 10);
-				ImGui::SliderFloat("Midtones Exposure", &_renderContext.comp.midtonesExposure, -10, 5);
+				//ImGui::SliderFloat("Midtones Exposure", &_renderContext.comp.midtonesExposure, -10, 5);
 				ImGui::SliderFloat("Highlights Exposure", &_renderContext.comp.highlightsExposure, -20, 0);
 
 				ImGui::SliderFloat("Exposedness Weight Sigma", &_renderContext.comp.exposednessWeightSigma, 0.01, 10);
@@ -260,17 +262,20 @@ void Engine::uiUpdateHDR()
 		if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 			{ // Gamma correction
-				/*bool gammaON = _renderContext.comp.gammaMode != 0;
-				if (ImGui::Checkbox("Enable Gamma Correction", &gammaON)) {
+				ImGui::Checkbox("Enable Gamma Correction", &_renderContext.enableGammaCorrection);
 
-				}*/
-
-				const char* items[] = {
-					"No gamma correction", "Gamma correction", "Inverse gamma correction" };
-				static int item_current = _renderContext.comp.gammaMode;
+				/*const char* items[] = {
+					"Gamma correction", "Inverse gamma correction" };*/
+				/*static int item_current = _renderContext.gammaMode;
 				if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
-					_renderContext.comp.gammaMode = item_current;
-				}
+					_renderContext.gammaMode = item_current;
+
+					if (_renderContext.gammaMode == 1) {
+						_renderContext.comp.gamma = 1 / _renderContext.gamma;
+					} else {
+						_renderContext.comp.gamma = _renderContext.gamma;
+					}
+				}*/
 
 				ImGui::SliderFloat("Gamma", &_renderContext.comp.gamma, 0.5f, 3.f);
 			}
@@ -279,7 +284,7 @@ void Engine::uiUpdateHDR()
 		}
 
 		if (ImGui::TreeNodeEx("Temporal eye adaptation", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable eye adaptation", &_renderContext.comp.enableAdaptation);
+			ImGui::Checkbox("Enable eye adaptation", &_renderContext.enableAdaptation);
 
 			if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
@@ -315,7 +320,7 @@ void Engine::uiUpdateHDR()
 		}
 	
 		if (ImGui::TreeNodeEx("Plots", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (_renderContext.comp.enableAdaptation) {
+			if (_renderContext.enableAdaptation) {
 				if (ImGui::TreeNodeEx("Adaptation Window")) {
 				
 					ImGui::Separator();
