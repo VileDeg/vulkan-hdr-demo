@@ -229,7 +229,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 		}
 
-		ASSERTMSG(pixel_ptr != nullptr, "Failed to load cubemap face " + std::to_string(i) + ", path: " + path);
+		ASSERT_MSG(pixel_ptr != nullptr, "Failed to load cubemap face " + std::to_string(i) + ", path: " + path);
 		if (i == 0) {
 			baseTexW = texW;
 			baseTexH = texH;
@@ -295,7 +295,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	//allocate and create the image
-	VKASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr));
+	VK_ASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr));
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
@@ -325,7 +325,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				offset += imageSize;
 			}
 
-			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
 				0, 
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 
@@ -340,7 +340,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				static_cast<uint32_t>(bufferCopyRegions.size()), bufferCopyRegions.data());
 
-			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
 				VK_ACCESS_TRANSFER_WRITE_BIT, 
 				VK_ACCESS_SHADER_READ_BIT,
 
@@ -362,7 +362,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 		.subresourceRange = subresourceRange,
 	};
 
-	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
+	VK_ASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
 
 	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.view, nullptr);
@@ -698,7 +698,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 				.imageExtent = imageExtent
 			};
 
-			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
 				0,
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 
@@ -712,7 +712,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 			//copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
 
@@ -728,7 +728,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	VkImageViewCreateInfo imageinfo =
 		vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, newTexture.allocImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	VKASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
+	VK_ASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
 
 	_sceneDisposeStack.push([=]() mutable {
 		vkDestroyImageView(_device, newTexture.view, nullptr);
@@ -858,7 +858,7 @@ void Engine::createSamplers() {
 	// Create samplers for textures
 	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
 
-	VKASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
+	VK_ASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
 	_deletionStack.push([=]() {
 		vkDestroySampler(_device, _linearSampler, nullptr);
 		});

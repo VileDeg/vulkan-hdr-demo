@@ -1,6 +1,6 @@
 #pragma once
 
-namespace utils {
+namespace vk_utils {
 	// Create an image memory barrier for changing the layout of
 	// an image and put it into an active command buffer
 	void setImageLayout(

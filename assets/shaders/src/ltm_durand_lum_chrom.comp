@@ -1,23 +1,20 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/durand_defs.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
 #define THREADS_Y  32
 
-layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;
-
-layout (set = 0, binding = 1) 
+layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inImage;
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inImage;
 
-layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D logLumImage;
-layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D chrominanceImage;
+layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D logLumImage;
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D chrominanceImage;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -29,7 +26,11 @@ void main() {
 
 		//float lum = 1.0 / 61.0 * inpColor.r * 20 + inpColor.g * 40 + inpColor.b;
 		float lum = dot(inpColor, RGB_TO_LUM);
+#if CONVERT_LAB == 0
 		vec3 chrom = inpColor / lum;
+#else
+		vec3 chrom = rgb2lab(inpColor);
+#endif
 		float log2Lum = log2(lum); // + 1.0
 		//float log2Lum = lum;
 		

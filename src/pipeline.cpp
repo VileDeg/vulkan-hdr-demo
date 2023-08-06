@@ -6,16 +6,16 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 {
     PipelineShaders shaders{};
 
-    shaders.vert.code = utils::readShaderBinary(Engine::SHADER_PATH + vertName);
-    shaders.frag.code = utils::readShaderBinary(Engine::SHADER_PATH + fragName);
+    shaders.vert.code = vk_utils::readShaderBinary(Engine::SHADER_PATH + vertName);
+    shaders.frag.code = vk_utils::readShaderBinary(Engine::SHADER_PATH + fragName);
 
-    if (utils::createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
+    if (vk_utils::createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load vertex shader");
     }
 
-    if (utils::createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
+    if (vk_utils::createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
         std::cout << "Fragment shader successfully loaded." << std::endl;
     } else {
         PRWRN("Failed to load fragment shader");
@@ -93,7 +93,7 @@ static void s_createGraphicsPipeline(
         .pPushConstantRanges = &pushConstantRange
     };
 
-    VKASSERT(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout));
+    VK_ASSERT(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout));
 
 
     VkPipelineRenderingCreateInfo renderingInfo{
@@ -121,7 +121,7 @@ static void s_createGraphicsPipeline(
         .basePipelineHandle = VK_NULL_HANDLE
     };
 
-    VKASSERT(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+    VK_ASSERT(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
     shaders.cleanup(device);
 }
@@ -129,7 +129,7 @@ static void s_createGraphicsPipeline(
 void Engine::createPipelines()
 {
     // Find a suitable depth format
-    VkBool32 validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
+    VkBool32 validDepthFormat = vk_utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
     assert(validDepthFormat);
 
     {
@@ -171,26 +171,18 @@ void Engine::createPipelines()
         _compute.histogram.Create(_device, _linearSampler, "histogram.comp.spv");
         _compute.averageLuminance.Create(_device, _linearSampler, "average_luminance.comp.spv");
 
-        _compute.durand.stages[0].Create(_device, _linearSampler, "ltm_durand_lum_chrom.comp.spv");
-        _compute.durand.stages[1].Create(_device, _linearSampler, "ltm_durand_bilateral_base.comp.spv");
-        _compute.durand.stages[2].Create(_device, _linearSampler, "ltm_durand_reconstruct.comp.spv");
+        for (auto& stage : _compute.durand.stages) {
+            stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
+        }
 
         for (auto& stage : _compute.fusion.stages) {
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }
 
-        /*_compute.fusion.stages["0"].Create(_device, _linearSampler, "ltm_fusion_0.comp.spv");
-        _compute.fusion.stages["1"].Create(_device, _linearSampler, "ltm_fusion_1.comp.spv", true);
-        _compute.fusion.stages["2"].Create(_device, _linearSampler, "ltm_fusion_2.comp.spv");
-        _compute.fusion.stages["3"].Create(_device, _linearSampler, "ltm_fusion_3.comp.spv");
-        _compute.fusion.stages["4"].Create(_device, _linearSampler, "ltm_fusion_4.comp.spv");
+        for (auto& stage : _compute.bloom.stages) {
+            stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
+        }
 
-        _compute.fusion.stages["upsample0"].Create(_device, _linearSampler, "upsample0.comp.spv", true);
-        _compute.fusion.stages["upsample1"].Create(_device, _linearSampler, "upsample1.comp.spv", true);
-        _compute.fusion.stages["upsample2"].Create(_device, _linearSampler, "upsample2.comp.spv", true);
-
-        _compute.fusion.stages["add"].Create(_device, _linearSampler, "mipmap_add.comp.spv", true);*/
-        
         _compute.toneMapping.Create(_device, _linearSampler, "tonemap.comp.spv");
     }
 
@@ -199,17 +191,17 @@ void Engine::createPipelines()
         _compute.averageLuminance.Destroy();
 
         for (auto& stage : _compute.durand.stages) {
-            stage.Destroy();
+            stage.second.Destroy();
         }
 
         for (auto& stage : _compute.fusion.stages) {
             stage.second.Destroy();
         }
 
-        _compute.toneMapping.Destroy();
+        for (auto& stage : _compute.bloom.stages) {
+            stage.second.Destroy();
+        }
 
-        /*_compute.fusion.upsample0.Destroy();
-        _compute.fusion.upsample1.Destroy();
-        _compute.fusion.upsample2.Destroy();*/
+        _compute.toneMapping.Destroy();
     });
 }

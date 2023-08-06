@@ -51,7 +51,7 @@ void Engine::initImgui()
 	};
 
 	VkDescriptorPool imguiPool;
-	VKASSERT(vkCreateDescriptorPool(_device, &pool_info, nullptr, &imguiPool));
+	VK_ASSERT(vkCreateDescriptorPool(_device, &pool_info, nullptr, &imguiPool));
 
 	// 2: initialize imgui library
 
@@ -182,6 +182,15 @@ void Engine::uiUpdateScene()
 void Engine::uiUpdateHDR()
 {
 	if (ImGui::TreeNodeEx("HDR", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+		if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Checkbox("Enable bloom", &_renderContext.enableBloom);
+
+			ImGui::SliderInt("Number of blur passes", &_renderContext.numOfBloomBlurPasses, 0, 20);
+			ImGui::SliderFloat("Bloom threshold", &_renderContext.comp.bloomThreshold, 0.1, 10);
+
+			ImGui::TreePop();
+		}
 
 		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
 			if (ImGui::Checkbox("Enable global tone mapping", &_renderContext.comp.enableToneMapping)) {
@@ -649,8 +658,8 @@ void Engine::uiUpdateViewport()
 	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
 	static int step = 32;
 
-	usX = math::roundUpPw2(usX, step);
-	usY = math::roundUpPw2(usY, step);
+	usX = math_utils::roundUpPw2(usX, step);
+	usY = math_utils::roundUpPw2(usY, step);
 
 	if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
 		// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images

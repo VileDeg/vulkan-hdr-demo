@@ -116,6 +116,8 @@ struct GPUCompPC {
     int _pad1;
 };
 
+
+
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
     float targetAverageLuminance = 1.f;
@@ -139,6 +141,11 @@ struct GPUCompUB {
 
     glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
 
+    GPUBool enableBloom = true;
+    float bloomThreshold = 1.f;
+    int _pad0;
+    int _pad1;
+
     GPUBool enableToneMapping = false; // true
     int toneMappingMode{ 3 };
     GPUBool enableAdaptation = false;
@@ -156,6 +163,6 @@ struct GPUCompUB {
 
     float highlightsExposure = -1.6;
     float exposednessWeightSigma = 5;
-    int _pad0;
-    int _pad1;
+    int _pad2;
+    int _pad3;
 };

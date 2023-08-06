@@ -222,7 +222,7 @@ void Engine::createInstance()
         throw std::runtime_error("There are unsupported instance extensions.");
     }
 
-    ASSERTMSG(!ENABLE_VALIDATION || checkValidationLayerSupport(_enabledValidationLayers),
+    ASSERT_MSG(!ENABLE_VALIDATION || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
 
     VkApplicationInfo appInfo{
@@ -256,13 +256,13 @@ void Engine::createInstance()
         .ppEnabledExtensionNames = _instanceExtensions.data()
     };
 
-    VKASSERT(vkCreateInstance(&instanceInfo, nullptr, &_instance));
+    VK_ASSERT(vkCreateInstance(&instanceInfo, nullptr, &_instance));
     _deletionStack.push([&]() { vkDestroyInstance(_instance, nullptr); });
 
     loadInstanceExtensionFunctions();
 
     if (ENABLE_VALIDATION) {
-        VKASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
+        VK_ASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
 
         _deletionStack.push([&]() {
             vkDestroyDebugUtilsMessengerEXT(_instance, _debugMessenger, nullptr);
@@ -272,7 +272,7 @@ void Engine::createInstance()
 
 void Engine::createSurface()
 {
-    VKASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
+    VK_ASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
         "GLFW: Failed to create window surface");
 
     _deletionStack.push([&]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
@@ -285,7 +285,7 @@ void Engine::pickPhysicalDevice()
     // Repository: https://github.com/pc-john/VulkanTutorial/
 
     auto compatibleDevices = findCompatibleDevices(_instance, _surface, _deviceExtensions);
-    ASSERTMSG(!compatibleDevices.empty(), "No compatible devices found");
+    ASSERT_MSG(!compatibleDevices.empty(), "No compatible devices found");
 
     // print compatible devices
 #ifndef NDEBUG
@@ -298,7 +298,7 @@ void Engine::pickPhysicalDevice()
 
     // choose the best device
     auto bestDevice = compatibleDevices.begin();
-    ASSERTMSG(bestDevice != compatibleDevices.end(), "No compatible devices found");
+    ASSERT_MSG(bestDevice != compatibleDevices.end(), "No compatible devices found");
 
     constexpr const std::array deviceTypeScore = {
         10, // VK_PHYSICAL_DEVICE_TYPE_OTHER          - lowest score
@@ -401,7 +401,7 @@ void Engine::createLogicalDevice()
         .ppEnabledExtensionNames = _deviceExtensions.data()
     };
 
-    VKASSERT(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_device));
+    VK_ASSERT(vkCreateDevice(_physicalDevice, &deviceCreateInfo, nullptr, &_device));
 
     _deletionStack.push([&]() { vkDestroyDevice(_device, nullptr); });
 

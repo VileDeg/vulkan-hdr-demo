@@ -2,7 +2,6 @@
 
 #include "gpu_types.h"
 
-
 struct DeletionStack {
     std::stack<std::function<void()>> deletors;
 
@@ -137,102 +136,6 @@ struct SwapchainPass {
 };
 
 
-struct ComputeStageImageBinding {
-    std::vector<VkImageView> views;
-    uint32_t binding;
-};
-
-// Compute stage bindings
-enum {
-    UB, SSBO, IMG, PYR
-};
-
-// Forward declaration
-class DescriptorLayoutCache;
-class DescriptorAllocator;
-
-struct ComputeStage {
-    std::string tag = "";
-
-    VkDescriptorSetLayout setLayout;
-
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
-
-    std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> sets;
-
-    std::vector<ComputeStageImageBinding> imageBindings;
-
-    static constexpr int MAX_IMAGE_UPDATES = 64;
-
-    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-    VkDevice device;
-    VkSampler sampler;
-
-    std::string shaderName;
-    std::vector<int> dsetBindings;
-    bool usesPushConstants;
-
-    //int lastSetUpdateIndex = -1;
-
-    void Create(VkDevice device, VkSampler sampler,
-        const std::string& shaderBinName, bool usePushConstants = false);
-    void Destroy();
-
-    ComputeStage& Bind(VkCommandBuffer cmd);
-
-    ComputeStage& UpdateImage(VkImageView view, uint32_t binding);
-    ComputeStage& UpdateImage(Attachment att, uint32_t binding);
-
-    ComputeStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
-
-    ComputeStage& WriteSets(int set_i);
-
-    ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
-    void Barrier();
-
-    void InitDescriptorSets(
-        DescriptorLayoutCache* dLayoutCache, DescriptorAllocator* dAllocator,
-        FrameData& f, int frame_i);
-};
-
-struct Durand2002 {
-    constexpr static uint32_t STAGES_COUNT = 3;
-    std::array<ComputeStage, STAGES_COUNT> stages;
-    constexpr static uint32_t ATTACMENTS_COUNT = 4;
-    std::array<Attachment, ATTACMENTS_COUNT> att;
-
-    std::array<uint32_t, STAGES_COUNT> numOfImageAttachmentsUsed {
-        3, 3, 5
-    };
-};
-
-struct ExposureFusion {
-    /*constexpr static uint32_t STAGES_COUNT = 5;
-    std::array<ComputeStage, STAGES_COUNT> stages;*/
-    std::map<std::string, ComputeStage> stages;
-    std::map<std::string, Attachment> att;
-    std::map<std::string, AttachmentPyramid> pyr;
-
-    //Attachment chrominance, laplacianSum;
-
-    //AttachmentPyramid luminance, weight, laplacian, blendedLaplacian;
-
-    //ComputeStage upsample0, upsample1, upsample2, add; // Used by exposure fusion
-    //AttachmentPyramid upsampled0, upsampled1;
-
-    ExposureFusion();
-};
-
-struct ComputePass {
-    ComputeStage histogram;
-    ComputeStage averageLuminance;
-
-    Durand2002 durand;
-    ExposureFusion fusion;
-
-    ComputeStage toneMapping;
-};
 
 struct ShadowPass {
     // Texture properties
@@ -395,6 +298,9 @@ struct RenderContext {
 
     float maxLogLuminance = 4.7f;
     float eyeAdaptationTimeCoefficient = 2.2f;
+
+    bool enableBloom = true;
+    int numOfBloomBlurPasses = 5;
 
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold = 1.f / 255.f;

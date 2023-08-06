@@ -136,7 +136,7 @@ void Engine::createAttachment(
 
     VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, att.allocImage.image, aspect);
 
-    VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &att.view));
+    VK_ASSERT(vkCreateImageView(_device, &view_info, nullptr, &att.view));
 
     setDebugName(VK_OBJECT_TYPE_IMAGE, att.allocImage.image, "ATTACHMENT::IMAGE::" + debugName);
     setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, att.view, "ATTACHMENT::VIEW::" + debugName);
@@ -148,7 +148,7 @@ void Engine::createAttachment(
     };
 
     immediate_submit([&](VkCommandBuffer cmd) {
-        utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
+        vk_utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
     });
 }
 
@@ -176,7 +176,7 @@ void Engine::createAttachmentPyramid(
         VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, att.allocImage.image, aspect, i);
 
         VkImageView view;
-        VKASSERT(vkCreateImageView(_device, &view_info, nullptr, &view));
+        VK_ASSERT(vkCreateImageView(_device, &view_info, nullptr, &view));
         setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, view, "ATTACHMENT::VIEW::" + debugName);
 
         att.views.push_back(view);
@@ -190,7 +190,7 @@ void Engine::createAttachmentPyramid(
     };*/
 
     immediate_submit([&](VkCommandBuffer cmd) {
-        utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
+        vk_utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
         });
 }
 
@@ -201,8 +201,8 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     //extentX = extentY = 1024;
 
     _viewport.imageExtent = { extentX, extentY };
-    bool anyFormats = utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
-    ASSERTMSG(anyFormats, "Physical device has no supported depth formats");
+    bool anyFormats = vk_utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
+    ASSERT_MSG(anyFormats, "Physical device has no supported depth formats");
     
     VkExtent3D extent3D = {
         extentX,
@@ -245,23 +245,24 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         //allocate and create the image
-        VKASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
+        VK_ASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
         setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
 
-        VKASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
+        VK_ASSERT(vkCreateImageView(_device, &dview_info, nullptr, &_viewport.imageViews[i]));
         setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _viewport.imageViews[i], "Viewport Image View " + std::to_string(i));
     }
 
     { // Compute attachments
-        for (int i = 0; i < _compute.durand.att.size(); ++i) {
+
+        for (auto& att : _compute.durand.att) {
             createAttachment(
-                _viewport.colorFormat, 
+                _viewport.colorFormat,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                 extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_GENERAL,
-                _compute.durand.att[i], "COMPUTE::DURAND" + std::to_string(i)
+                att.second, "COMPUTE::FUSION::" + att.first
             );
         }
 
@@ -291,6 +292,16 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
                 att.second, "COMPUTE::FUSION::" + att.first
             );
         }
+
+        for (auto& att : _compute.bloom.att) {
+            createAttachment(
+                _viewport.colorFormat,
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_GENERAL,
+                att.second, "COMPUTE::BLOOM::" + att.first
+            );
+        }
     }
 }
 
@@ -313,7 +324,7 @@ void Engine::cleanupViewportResources()
     _viewport.depth.Cleanup(_device, _allocator);
 
     for (auto& a : _compute.durand.att) {
-        a.Cleanup(_device, _allocator);
+        a.second.Cleanup(_device, _allocator);
     }
 
 
@@ -322,6 +333,10 @@ void Engine::cleanupViewportResources()
     }
 
     for (auto& att : _compute.fusion.pyr) {
+        att.second.Cleanup(_device, _allocator);
+    }
+
+    for (auto& att : _compute.bloom.att) {
         att.second.Cleanup(_device, _allocator);
     }
 
@@ -344,8 +359,8 @@ void Engine::prepareShadowPass()
     _shadow.width = ShadowPass::TEX_DIM;
     _shadow.height = ShadowPass::TEX_DIM;
 
-    bool validDepthFormat = utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
-    ASSERTMSG(validDepthFormat, "Physical device has no supported depth formats");
+    bool validDepthFormat = vk_utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
+    ASSERT_MSG(validDepthFormat, "Physical device has no supported depth formats");
 
     Attachment& cubemap = _shadow.cubemapArray;
     // 32 bit float format for higher precision
@@ -374,7 +389,7 @@ void Engine::prepareShadowPass()
     };
 
     //create cubemap image
-    VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
+    VK_ASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
         &cubemap.allocImage.image, &cubemap.allocImage.allocation, nullptr));
 
     // Image barrier for optimal image (target)
@@ -385,7 +400,7 @@ void Engine::prepareShadowPass()
     subresourceRange.layerCount = cubeArrayLayerCount;
 
     immediate_submit([&](VkCommandBuffer cmd) {
-        utils::setImageLayout(
+        vk_utils::setImageLayout(
             cmd,
             cubemap.allocImage.image,
             VK_IMAGE_LAYOUT_UNDEFINED,
@@ -402,7 +417,7 @@ void Engine::prepareShadowPass()
     arrayView.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
     arrayView.subresourceRange.layerCount = cubeArrayLayerCount;
     arrayView.image = cubemap.allocImage.image;
-    VKASSERT(vkCreateImageView(_device, &arrayView, nullptr, &cubemap.view));
+    VK_ASSERT(vkCreateImageView(_device, &arrayView, nullptr, &cubemap.view));
 
     // Create sampler
     VkSamplerCreateInfo sampler = {};
@@ -419,7 +434,7 @@ void Engine::prepareShadowPass()
     sampler.minLod = 0.0f;
     sampler.maxLod = 1.0f;
     sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-    VKASSERT(vkCreateSampler(_device, &sampler, nullptr, &_shadow.sampler));
+    VK_ASSERT(vkCreateSampler(_device, &sampler, nullptr, &_shadow.sampler));
 
 
     auto& depth = _shadow.depth;
@@ -448,16 +463,16 @@ void Engine::prepareShadowPass()
                 .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
         };
 
-        VKASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
+        VK_ASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
             &depth.allocImage.image, &depth.allocImage.allocation, nullptr));
 
         VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (utils::formatHasStencil(_shadow.depthFormat)) {
+        if (vk_utils::formatHasStencil(_shadow.depthFormat)) {
             aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
 
         immediate_submit([&](VkCommandBuffer cmd) {
-            utils::setImageLayout(
+            vk_utils::setImageLayout(
                 cmd,
                 depth.allocImage.image,
                 aspectMask,
@@ -477,7 +492,7 @@ void Engine::prepareShadowPass()
         depthStencilView.subresourceRange.baseArrayLayer = 0;
         depthStencilView.subresourceRange.layerCount = 1;
         depthStencilView.image = depth.allocImage.image;
-        VKASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &depth.view));
+        VK_ASSERT(vkCreateImageView(_device, &depthStencilView, nullptr, &depth.view));
     }
 
     VkImageView attachments[2];
@@ -498,7 +513,7 @@ void Engine::prepareShadowPass()
         for (uint32_t face = 0; face < 6; ++face)
         {
             view.subresourceRange.baseArrayLayer = i * 6 + face;
-            VKASSERT(vkCreateImageView(_device, &view, nullptr, &faceViews[face]));
+            VK_ASSERT(vkCreateImageView(_device, &view, nullptr, &faceViews[face]));
         }
 
         // Cleanup all shadow pass resources for current light
@@ -556,16 +571,16 @@ void Engine::initDescriptors()
 void Engine::initUploadContext()
 {
     VkFenceCreateInfo uploadFenceCreateInfo = vkinit::fence_create_info();
-    VKASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
+    VK_ASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
 
     VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily);
     //create pool for upload context
-    VKASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
+    VK_ASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
 
     //allocate the default command buffer that we will use for the instant commands
     VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
 
-    VKASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
+    VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
 
     _deletionStack.push([&]() {
         vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
@@ -584,7 +599,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
             .queueFamilyIndex = _graphicsQueueFamily
         };
 
-        VKASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
+        VK_ASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
 
 
         // Main command buffer
@@ -595,7 +610,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
             .commandBufferCount = 1
         };
 
-        VKASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
+        VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
 
 
         setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
@@ -606,10 +621,10 @@ void Engine::initFrame(FrameData& f, int frame_i)
         VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
         VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
 
-        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
-        VKASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
+        VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
+        VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
 
-        VKASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
+        VK_ASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
     }
 
     {
@@ -661,34 +676,26 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
                 .build(_compute.averageLuminance.sets[frame_i], _compute.averageLuminance.setLayout);
 
-            { // Create layout and write descriptor set for COMPUTE LTM Durand step
-                // 0 - lum, 1 - chrom, 2 - base
-
-                for (int i = 0; i < _compute.durand.stages.size(); ++i) {
-                    auto builder = DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                        .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                        .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT); // SSBO for luminance histogram data
-
-                    for (int j = 2; j < 2 + _compute.durand.numOfImageAttachmentsUsed[i]; ++j) {
-                        builder.bind_image(j, nullptr, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-                    }
-
-                    builder.build(_compute.durand.stages[i].sets[frame_i], _compute.durand.stages[i].setLayout);
-                }
+            for (auto& stage : _compute.durand.stages) {
+                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::DURAND::" + stage.first + "::FRAME_" + std::to_string(frame_i));
             }
 
-            { // Fusion
-                for (auto& stage : _compute.fusion.stages) {
-                    stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
-                    setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::FUSION::" + stage.first + "::" + std::to_string(frame_i));
-                }
+            for (auto& stage : _compute.fusion.stages) {
+                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::FUSION::" + stage.first + "::FRAME_" + std::to_string(frame_i));
             }
+
+            for (auto& stage : _compute.bloom.stages) {
+                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::BLOOM::" + stage.first + "::FRAME_" + std::to_string(frame_i));
+            }
+
 
             // Create layout and write descriptor set for COMPUTE tone mapping step
             DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.compSSBO.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_buffer(1, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
-                .bind_image(2, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
+                .bind_buffer(0, &f.compUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT) // SSBO for luminance histogram data
+                .bind_image(1, &_viewport.images[0].descInfo, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT) // Viewport HDR image (imageInfo bound later, every frame)
                 .build(_compute.toneMapping.sets[frame_i], _compute.toneMapping.setLayout);
         }
     }

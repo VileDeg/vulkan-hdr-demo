@@ -1,7 +1,7 @@
 #include "stdafx.h"
-#include "utils.h"
+#include "vk_utils.h"
 
-namespace utils {
+namespace vk_utils {
 	void setImageLayout(
 		VkCommandBuffer cmdbuffer,
 		VkImage image,
@@ -268,7 +268,7 @@ namespace utils {
 	std::vector<char> readShaderBinary(const std::string& filename)
 	{
 		std::ifstream file(filename, std::ios::ate | std::ios::binary);
-		ASSERTMSG(file.is_open(), "Failed to open file: " << filename);
+		ASSERT_MSG(file.is_open(), "Failed to open file: " << filename);
 
 		size_t fileSize = (size_t)file.tellg();
 		std::vector<char> buffer(fileSize);

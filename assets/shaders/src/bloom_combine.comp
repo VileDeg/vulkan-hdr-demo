@@ -1,0 +1,41 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define THREADS_X  32
+#define THREADS_Y  32
+
+/*layout (std430, set = 0, binding = 0) 
+#include "incl/computeSSBO.incl" 
+ssbo;*/
+
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 1) uniform image2D inOutImage;
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D bloomImage;
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	uvec2 dim = imageSize(inOutImage).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+		vec3 outColor = imageLoad(inOutImage, coords).rgb;
+		vec3 bloom = imageLoad(bloomImage, coords).rgb;
+
+		// Apply bloom
+		if (ub.enableBloom) {
+			outColor += bloom;
+		}
+
+		// Apply eye adaptation
+		/*if (ub.enableAdaptation) {
+            outColor = outColor / (9.6 * ssbo.averageLuminance + 0.0001);
+            //outColor = outColor * ssbo.averageLuminance;
+        }*/
+
+		imageStore(inOutImage, coords, vec4(outColor, 1.0));
+	}
+}

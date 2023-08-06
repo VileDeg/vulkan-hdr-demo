@@ -74,18 +74,18 @@ void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& functio
     //begin the command buffer recording. We will use this command buffer exactly once before resetting, so we tell vulkan that
     VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    VKASSERT(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+    VK_ASSERT(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
     //execute the function
     function(cmd);
 
-    VKASSERT(vkEndCommandBuffer(cmd));
+    VK_ASSERT(vkEndCommandBuffer(cmd));
 
     VkSubmitInfo submit = vkinit::submit_info(&cmd);
 
     //submit command buffer to the queue and execute it.
     // _uploadFence will now block until the graphic commands finish execution
-    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submit, _uploadContext.uploadFence));
+    VK_ASSERT(vkQueueSubmit(_graphicsQueue, 1, &submit, _uploadContext.uploadFence));
 
     vkWaitForFences(_device, 1, &_uploadContext.uploadFence, true, 9999999999);
     vkResetFences(_device, 1, &_uploadContext.uploadFence);
@@ -95,7 +95,7 @@ void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& functio
 }
 
 void AllocatedBuffer::create(VmaAllocator allocator, VkBufferCreateInfo bufferInfo, VmaAllocationCreateInfo allocInfo) {
-    VKASSERT(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+    VK_ASSERT(vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
         &buffer, &allocation, nullptr));
 
     if (allocInfo.usage == VMA_MEMORY_USAGE_CPU_ONLY ||
@@ -103,7 +103,7 @@ void AllocatedBuffer::create(VmaAllocator allocator, VkBufferCreateInfo bufferIn
         allocInfo.usage == VMA_MEMORY_USAGE_GPU_TO_CPU)
     {
         hostVisible = true;
-        VKASSERT(vmaMapMemory(allocator, allocation, &gpu_ptr));
+        VK_ASSERT(vmaMapMemory(allocator, allocation, &gpu_ptr));
     } else {
         hostVisible = false;
     }

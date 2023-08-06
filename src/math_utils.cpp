@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "math_utils.h"
 
-namespace math {
+namespace math_utils {
     int roundUpPw2(int numToRound, int multiple)
     {
         //From https://stackoverflow.com/questions/3407012/rounding-up-to-the-nearest-multiple-of-a-number

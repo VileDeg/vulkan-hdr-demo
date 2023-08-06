@@ -2,6 +2,7 @@
 
 #include "incl/defs.glsl"
 #include "incl/tone_mapping.glsl"
+#include "incl/color_spaces.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
@@ -32,39 +33,6 @@ vec3 applyToneMapping(vec3 col) {
 	return outCol;
 }
 
-// From https://www.shadertoy.com/view/4syfRc
-vec3 rgb2xyz( vec3 c ) {
-    vec3 tmp;
-    tmp.x = ( c.r > 0.04045 ) ? pow( ( c.r + 0.055 ) / 1.055, 2.4 ) : c.r / 12.92;
-    tmp.y = ( c.g > 0.04045 ) ? pow( ( c.g + 0.055 ) / 1.055, 2.4 ) : c.g / 12.92,
-    tmp.z = ( c.b > 0.04045 ) ? pow( ( c.b + 0.055 ) / 1.055, 2.4 ) : c.b / 12.92;
-    return 100.0 * tmp *
-        mat3( 0.4124, 0.3576, 0.1805,
-              0.2126, 0.7152, 0.0722,
-              0.0193, 0.1192, 0.9505 );
-}
-// From https://www.shadertoy.com/view/4syfRc
-vec3 xyz2lab( vec3 c ) {
-    vec3 n = c / vec3( 95.047, 100, 108.883 );
-    vec3 v;
-    v.x = ( n.x > 0.008856 ) ? pow( n.x, 1.0 / 3.0 ) : ( 7.787 * n.x ) + ( 16.0 / 116.0 );
-    v.y = ( n.y > 0.008856 ) ? pow( n.y, 1.0 / 3.0 ) : ( 7.787 * n.y ) + ( 16.0 / 116.0 );
-    v.z = ( n.z > 0.008856 ) ? pow( n.z, 1.0 / 3.0 ) : ( 7.787 * n.z ) + ( 16.0 / 116.0 );
-    return vec3(( 116.0 * v.y ) - 16.0, 500.0 * ( v.x - v.y ), 200.0 * ( v.y - v.z ));
-}
-// From https://www.shadertoy.com/view/4syfRc
-vec3 rgb2lab(vec3 c) {
-    vec3 lab = xyz2lab( rgb2xyz( c ) );
-    return vec3( lab.x / 100.0, 0.5 + 0.5 * ( lab.y / 127.0 ), 0.5 + 0.5 * ( lab.z / 127.0 ));
-}
-
-//const float shadowExp = exp2(1.5);
-//const float highlightExp = exp2(-2.0);
-
-//const float exposure = 0.0;
-
-//const float sigmaSq = 5 * 5;
-
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	uvec2 dim = imageSize(inImage).xy;
@@ -72,11 +40,9 @@ void main() {
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
-		//inpColor *= exp2(exposure);
-
-		
+		//inpColor *= exp2(ub.midtonesExposure);
 #if 1
-		vec3 midtonesColor = clamp(applyToneMapping(inpColor) * exp2(ub.midtonesExposure), 0.0, 1.0);
+		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
 		float highlights = dot(clamp(applyToneMapping(inpColor * exp2(ub.highlightsExposure)), 0.0, 1.0), RGB_TO_LUM);
 
 		//float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
@@ -84,9 +50,9 @@ void main() {
 
         float shadows	 = dot(clamp(applyToneMapping(inpColor * exp2(ub.shadowsExposure)), 0.0, 1.0), RGB_TO_LUM);
 #else
-		vec3 midtonesColor = inpColor;
+		vec3 midtonesColor = inpColor * exp2(ub.midtonesExposure);
 		float highlights = dot(inpColor * exp2(ub.highlightsExposure), RGB_TO_LUM);
-        float midtones   = dot(inpColor * exp2(ub.midtonesExposure), RGB_TO_LUM);
+        float midtones   = dot(inpColor, RGB_TO_LUM);
         float shadows	 = dot(inpColor * exp2(ub.shadowsExposure), RGB_TO_LUM);
 #endif
 		vec3 lums  = vec3(highlights, midtones, shadows);
@@ -98,6 +64,7 @@ void main() {
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 diff = lums - vec3(0.5);
         vec3 weights = vec3(exp(-0.5 * diff * diff * ub.exposednessWeightSigma * ub.exposednessWeightSigma));
+        //vec3 weights = vec3(exp(-1 * diff * diff / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma)));
 
 		// Normalize weights
         weights /= dot(weights, vec3(1.0)) + 0.00001;

@@ -4,18 +4,18 @@
 #include "incl/defs.glsl"
 #include "incl/tone_mapping.glsl"
 
-layout (std430, set = 0, binding = 0) 
-#include "incl/computeSSBO.incl" 
-ssbo;
+#define THREADS_X  32
+#define THREADS_Y  32
 
-layout (set = 0, binding = 1) 
+/*layout (std430, set = 0, binding = 0) 
+#include "incl/computeSSBO.incl" 
+ssbo;*/
+
+layout (set = 0, binding = 0) 
 #include "incl/computeUB.incl" 
 ub;
 
-#define THREADS_X 32
-#define THREADS_Y 32
-
-layout (rgba32f, set = 0, binding = 2) uniform image2D inOutHDRImage;
+layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
 
 const float WHITE_POINT = 10.0;
 //const float GAMMA = 2.2;
@@ -26,13 +26,8 @@ void main() {
  
     // Ignore threads that map to areas beyond the bounds of our HDR image
     if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-        vec3 hdrColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
-        // Apply eye adaptation
-        vec3 outColor = hdrColor;
-        if (ub.enableAdaptation) {
-            outColor = outColor / (9.6 * ssbo.averageLuminance + 0.0001);
-            //outColor = outColor * ssbo.averageLuminance;
-        }
+        vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
+        
         // Apply tone mapping
         if (ub.enableToneMapping) { // If enable tone mapping
             switch (ub.toneMappingMode) {
@@ -50,8 +45,6 @@ void main() {
             case 1: outColor = pow(outColor, vec3(ub.gamma)); break;
             case 2: outColor = pow(outColor, vec3(1.0 / ub.gamma)); break;
         }
-
-        outColor = pow(outColor, vec3(ub.gamma));
 
         // Store final color
         imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(outColor, 1.0));

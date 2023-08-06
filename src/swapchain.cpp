@@ -32,13 +32,13 @@ static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevi
 
     uint32_t formatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-    ASSERTMSG(formatCount != 0, "No surface formats supported");
+    ASSERT_MSG(formatCount != 0, "No surface formats supported");
     support.formats.resize(formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, support.formats.data());
 
     uint32_t presentModeCount;
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-    ASSERTMSG(presentModeCount != 0, "No present modes supported");
+    ASSERT_MSG(presentModeCount != 0, "No present modes supported");
     support.presentModes.resize(presentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, support.presentModes.data());
 
@@ -147,7 +147,7 @@ void Engine::createSwapchain()
     }
 
     VkSwapchainKHR newSwapchain{};
-    VKASSERT(vkCreateSwapchainKHR(_device, &swapchainInfo, nullptr, &newSwapchain));
+    VK_ASSERT(vkCreateSwapchainKHR(_device, &swapchainInfo, nullptr, &newSwapchain));
  
     //Because we are using the old swapchain to create the new one, 
     //we only delete it after the new one is created
@@ -197,7 +197,7 @@ void Engine::prepareMainPass() {
             }
         };
 
-        VKASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
+        VK_ASSERT(vkCreateImageView(_device, &createInfo, nullptr, &_swapchain.imageViews[i]));
         setDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, _swapchain.imageViews[i], "Swapchain Image View " + std::to_string(i));
     }
 }

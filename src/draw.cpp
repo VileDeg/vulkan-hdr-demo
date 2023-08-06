@@ -20,7 +20,9 @@ static constexpr int ACCESS_MASK_ALL =
 	VK_ACCESS_HOST_READ_BIT |
 	VK_ACCESS_HOST_WRITE_BIT;
 
-
+#define COMPUTE_THREADS_XY 32
+#define FUSION_DBG_PREF std::string("LTM::FUSION")
+#define DURAND_DBG_PREF std::string("LTM::DURAND")
 
 static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h) 
 {
@@ -150,7 +152,7 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 	depth_range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
 	// Translate to required layout
-	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+	vk_utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
 		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -243,7 +245,7 @@ void Engine::updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceInde
 	vkCmdEndRendering(f.cmd);
 
 	// Translate to back to optimal layout for sampling
-	utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+	vk_utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
 
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -372,40 +374,39 @@ static void s_fullBarrier(VkCommandBuffer& cmd) {
 
 void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 {
-	std::string ltm_str = "LTM::DURAND";
-	beginCmdDebugLabel(cmd, ltm_str);
+	beginCmdDebugLabel(cmd, DURAND_DBG_PREF);
 	uint32_t threadsXY = 32;
 
-	uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-	uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
-	_compute.durand.stages[0].Bind(cmd)
+	uint32_t groupsX = _viewport.imageExtent.width  / COMPUTE_THREADS_XY + 1;
+	uint32_t groupsY = _viewport.imageExtent.height / COMPUTE_THREADS_XY + 1;
+	_compute.durand.stages["0"].Bind(cmd)
 		// In
-		.UpdateImage(_viewport.imageViews[imageIndex], 2)
+		.UpdateImage(_viewport.imageViews[imageIndex], 1)
 		// Out
-		.UpdateImage(_compute.durand.att[0].view, 3)
-		.UpdateImage(_compute.durand.att[1].view, 4)
+		.UpdateImage(_compute.durand.att["lum"].view, 2)
+		.UpdateImage(_compute.durand.att["chrom"].view, 3)
 
 		.Dispatch(groupsX, groupsY, imageIndex)
 		.Barrier();
 
-	_compute.durand.stages[1].Bind(cmd)
+	_compute.durand.stages["1"].Bind(cmd)
 		// In
-		.UpdateImage(_compute.durand.att[0].view, 2)
+		.UpdateImage(_compute.durand.att["lum"].view, 1)
 		// Out
-		.UpdateImage(_compute.durand.att[2].view, 3)
-		.UpdateImage(_compute.durand.att[3].view, 4)
+		.UpdateImage(_compute.durand.att["base"].view, 2)
+		.UpdateImage(_compute.durand.att["detail"].view, 3)
 
 		.Dispatch(groupsX, groupsY, imageIndex)
 		.Barrier();
 
-	_compute.durand.stages[2].Bind(cmd)
+	_compute.durand.stages["2"].Bind(cmd)
 		// In
-		.UpdateImage(_compute.durand.att[0].view, 2)
-		.UpdateImage(_compute.durand.att[1].view, 3)
-		.UpdateImage(_compute.durand.att[2].view, 4)
-		.UpdateImage(_compute.durand.att[3].view, 5)
+		.UpdateImage(_compute.durand.att["lum"].view, 1)
+		.UpdateImage(_compute.durand.att["chrom"].view, 2)
+		.UpdateImage(_compute.durand.att["base"].view, 3)
+		.UpdateImage(_compute.durand.att["detail"].view, 4)
 		// Out
-		.UpdateImage(_viewport.imageViews[imageIndex], 6)
+		.UpdateImage(_viewport.imageViews[imageIndex], 5)
 
 		.Dispatch(groupsX, groupsY, imageIndex)
 		.Barrier();
@@ -413,18 +414,84 @@ void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 	endCmdDebugLabel(cmd);
 }
 
+
+void Engine::exposureFusion_Downsample(VkCommandBuffer& cmd, ExposureFusion fs, int imageIndex, std::string suffix)
+{
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE::" + cpp_utils::str_toupper(suffix));
+	{
+		fs.stages["downsample0_"+suffix].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr[suffix], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample1_"+suffix].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
+			.WriteSets(imageIndex);
+
+		fs.stages["downsample2_"+suffix].Bind(cmd)
+			// In
+			.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
+			// Out
+			.UpdateImagePyramid(fs.pyr[suffix], 2)
+			.WriteSets(imageIndex);
+
+		int first_i = 0;
+		uint32_t w = _viewport.imageExtent.width >> first_i;
+		uint32_t h = _viewport.imageExtent.height >> first_i;
+
+		for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
+			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE::" + cpp_utils::str_toupper(suffix) + "::MIP_" + std::to_string(i));
+
+			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
+
+			GPUCompPC pc = {
+				.mipIndex = i,
+				.horizontalPass = true
+			};
+			vkCmdPushConstants(cmd, fs.stages["downsample0_"+suffix].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample0_"+suffix].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			pc.horizontalPass = false;
+			vkCmdPushConstants(cmd, fs.stages["downsample1_"+suffix].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			fs.stages["downsample1_"+suffix].Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			// Decimate is run over higher mip so need to change mip index and groups number
+			pc.mipIndex = i + 1;
+			vkCmdPushConstants(cmd, fs.stages["downsample2_"+suffix].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+			fs.stages["downsample2_"+suffix].Bind(cmd)
+				.Dispatch((w >> 1) / COMPUTE_THREADS_XY + 1, (h >> 1) / COMPUTE_THREADS_XY + 1, imageIndex)
+				.Barrier();
+
+			w >>= 1;
+			h >>= 1;
+
+			endCmdDebugLabel(cmd);
+		}
+	}
+	endCmdDebugLabel(cmd);
+}
+
 void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 {
-	uint32_t threadsXY = 32;
-
-	std::string ltm_str = "LTM::FUSION";
-	beginCmdDebugLabel(cmd, ltm_str);
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF);
 	auto& fs = _compute.fusion;
 
-	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_0");
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LUM_CHROM_WEIGHT");
 	{
-		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+		uint32_t groupsX = _viewport.imageExtent.width / COMPUTE_THREADS_XY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / COMPUTE_THREADS_XY + 1;
 
 		fs.stages["0"].Bind(cmd)
 			// In
@@ -439,142 +506,14 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	}
 	endCmdDebugLabel(cmd);
 
-	beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::LUM");
-	{
-		fs.stages["downsample0_lum"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["lum"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
-			.WriteSets(imageIndex);
-
-		fs.stages["downsample1_lum"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
-			.WriteSets(imageIndex);
-
-		fs.stages["downsample2_lum"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["lum"], 2)
-			.WriteSets(imageIndex);
-
-		int first_i = 0;
-		uint32_t w = _viewport.imageExtent.width >> first_i;
-		uint32_t h = _viewport.imageExtent.height >> first_i;
-
-		for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
-			beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::LUM::MIP_" + std::to_string(i));
-
-			uint32_t groupsX = w / threadsXY + 1;
-			uint32_t groupsY = h / threadsXY + 1;
-
-			GPUCompPC pc = {
-				.mipIndex = i,
-				.horizontalPass = true
-			};
-			vkCmdPushConstants(cmd, fs.stages["downsample0_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			fs.stages["downsample0_lum"].Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			pc.horizontalPass = false;
-			vkCmdPushConstants(cmd, fs.stages["downsample1_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			fs.stages["downsample1_lum"].Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			// Decimate is run over higher mip so need to change mip index and groups number
-			pc.mipIndex = i + 1;
-			vkCmdPushConstants(cmd, fs.stages["downsample2_lum"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-			fs.stages["downsample2_lum"].Bind(cmd)
-				.Dispatch((w >> 1) / threadsXY + 1, (h >> 1) / threadsXY + 1, imageIndex)
-				.Barrier();
-
-			w >>= 1;
-			h >>= 1;
-
-			endCmdDebugLabel(cmd);
-		}
-	}
-	endCmdDebugLabel(cmd);
-
-	beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::WEIGHT");
-	{
-		fs.stages["downsample0_weight"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["weight"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["downsampled0"], 2)
-			.WriteSets(imageIndex);
-
-		fs.stages["downsample1_weight"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["downsampled0"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["downsampled1"], 2)
-			.WriteSets(imageIndex);
-
-		fs.stages["downsample2_weight"].Bind(cmd)
-			// In
-			.UpdateImagePyramid(fs.pyr["downsampled1"], 1)
-			// Out
-			.UpdateImagePyramid(fs.pyr["weight"], 2)
-			.WriteSets(imageIndex);
-
-		int first_i = 0;
-		uint32_t w = _viewport.imageExtent.width >> first_i;
-		uint32_t h = _viewport.imageExtent.height >> first_i;
-
-		for (int i = first_i; i < _renderContext.comp.numOfViewportMips - 1; ++i) {
-			beginCmdDebugLabel(cmd, ltm_str + "::DOWNSAMPLE::WEIGHT::MIP_" + std::to_string(i));
-
-			uint32_t groupsX = w / threadsXY + 1;
-			uint32_t groupsY = h / threadsXY + 1;
-
-			GPUCompPC pc = {
-				.mipIndex = i,
-				.horizontalPass = true
-			};
-			vkCmdPushConstants(cmd, fs.stages["downsample0_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			fs.stages["downsample0_weight"].Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			pc.horizontalPass = false;
-			vkCmdPushConstants(cmd, fs.stages["downsample1_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			fs.stages["downsample1_weight"].Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-
-			// Decimate is run over higher mip so need to change mip index and groups number
-			pc.mipIndex = i + 1;
-			vkCmdPushConstants(cmd, fs.stages["downsample2_weight"].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-			fs.stages["downsample2_weight"].Bind(cmd)
-				.Dispatch((w >> 1) / threadsXY + 1, (h >> 1) / threadsXY + 1, imageIndex)
-				.Barrier();
-
-			w >>= 1;
-			h >>= 1;
-
-			endCmdDebugLabel(cmd);
-		}
-	}
-	endCmdDebugLabel(cmd);
-
-	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_1::UPSAMPLE::LAPLACIANS");
+	exposureFusion_Downsample(cmd, fs, imageIndex, "lum");
+	exposureFusion_Downsample(cmd, fs, imageIndex, "weight");
+	
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LAPLACIANS_MIPS");
 	{
 		{
-			uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-			uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+			uint32_t groupsX = _viewport.imageExtent.width  / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsY = _viewport.imageExtent.height / COMPUTE_THREADS_XY + 1;
 
 			// Move highest lum mip (low-pass residual) to highest laplacian mip
 			fs.stages["move"].Bind(cmd)
@@ -621,10 +560,10 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		uint32_t h = _viewport.imageExtent.height >> first_i;
 
 		for (int i = first_i; i >= 0; --i) {
-			beginCmdDebugLabel(cmd, ltm_str + "::STAGE_1::LAPLACIANS::MIP_" + std::to_string(i));
+			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LAPLACIANS_MIPS::MIP_" + std::to_string(i));
 
-			uint32_t groupsX = w / threadsXY + 1;
-			uint32_t groupsY = h / threadsXY + 1;
+			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
 
 			GPUCompPC pc = {
 				.mipIndex = i,
@@ -659,10 +598,10 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	}
 	endCmdDebugLabel(cmd);
 
-	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2::BLEND_LAPLACIANS");
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::BLEND_LAPLACIANS");
 	{
-		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+		uint32_t groupsX = _viewport.imageExtent.width  / COMPUTE_THREADS_XY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / COMPUTE_THREADS_XY + 1;
 
 		ComputeStage& cs = fs.stages["2"];
 		cs.Bind(cmd)
@@ -677,7 +616,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	}
 	endCmdDebugLabel(cmd);
 
-	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2.1::UPSAMPLE::SUM");
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::SUM_BLENDED_LAPLACIANS");
 	{
 
 		fs.stages["upsample0_add"].Bind(cmd)
@@ -714,10 +653,10 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		uint32_t h = _viewport.imageExtent.height >> first_i;
 
 		for (int i = first_i; i >= 0; --i) {
-			beginCmdDebugLabel(cmd, ltm_str + "::STAGE_2::SUM_LAPLACIANS::MIP_" + std::to_string(i));
+			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::SUM_BLENDED_LAPLACIANS::MIP_" + std::to_string(i));
 
-			uint32_t groupsX = w / threadsXY + 1;
-			uint32_t groupsY = h / threadsXY + 1;
+			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
 
 			GPUCompPC pc = {
 				.mipIndex = i,
@@ -753,10 +692,10 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	endCmdDebugLabel(cmd);
 
 	// Restore color
-	beginCmdDebugLabel(cmd, ltm_str + "::STAGE_3");
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::RESTORE_FINAL_COLOR");
 	{
-		uint32_t groupsX = _viewport.imageExtent.width / threadsXY + 1;
-		uint32_t groupsY = _viewport.imageExtent.height / threadsXY + 1;
+		uint32_t groupsX = _viewport.imageExtent.width  / COMPUTE_THREADS_XY + 1;
+		uint32_t groupsY = _viewport.imageExtent.height / COMPUTE_THREADS_XY + 1;
 
 		fs.stages["4"].Bind(cmd)
 			// In
@@ -825,7 +764,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 		if (anyMoved) {
 			// Wait for shadow cubemap array to render before rendering the scene
-			utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
+			vk_utils::imageMemoryBarrier(f.cmd, _shadow.cubemapArray.allocImage.image,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
 
@@ -844,7 +783,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	cmdSetViewportScissor(f.cmd, _viewport.imageExtent.width, _viewport.imageExtent.height);
 	{ // Viewport pass
 		// Translate to required layout
-		utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
+		vk_utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
 			VK_IMAGE_LAYOUT_UNDEFINED,
@@ -909,7 +848,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	}
 
 	// Need to wait until scene is rendered to proceed with post-processing
-	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
+	vk_utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		viewportToComputeDstAccessMask, // Need only access to reading the image
 
@@ -923,6 +862,61 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 	{ // Compute step
 		beginCmdDebugLabel(f.cmd, "COMPUTE_PASS");
+
+		if (_renderContext.enableBloom) {
+			beginCmdDebugLabel(f.cmd, "BLOOM");
+			{
+				uint32_t groupsX = _viewport.imageExtent.width / 32 + 1;
+				uint32_t groupsY = _viewport.imageExtent.height / 32 + 1;
+
+				Bloom& bl = _compute.bloom;
+
+				bl.stages["0"].Bind(f.cmd)
+					.UpdateImage(_viewport.imageViews[imageIndex], 1)
+					.UpdateImage(bl.att["highlights"], 2)
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+
+				const int blur_times = _renderContext.numOfBloomBlurPasses * 2;
+				ASSERT(blur_times % 2 != 1);
+
+
+				bl.stages["blur0"].Bind(f.cmd)
+					.UpdateImage(bl.att["highlights"], 1)
+					.UpdateImage(bl.att["blur0"], 2)
+					.WriteSets(imageIndex);
+
+				bl.stages["blur1"].Bind(f.cmd)
+					.UpdateImage(bl.att["blur0"], 1)
+					.UpdateImage(bl.att["highlights"], 2)
+					.WriteSets(imageIndex);
+
+				GPUCompPC pc = {
+					.horizontalPass = true
+				};
+
+				beginCmdDebugLabel(f.cmd, "BLOOM::BLUR");
+				for (int i = 0; i < blur_times; ++i) {
+					std::string blur = "blur" + std::to_string(i % 2);
+
+					pc.horizontalPass = i % 2;
+					vkCmdPushConstants(f.cmd, bl.stages[blur].pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					bl.stages[blur].Bind(f.cmd)
+						.Dispatch(groupsX, groupsY, imageIndex)
+						.Barrier();
+				}
+				endCmdDebugLabel(f.cmd);
+
+				bl.stages["2"].Bind(f.cmd)
+					.UpdateImage(_viewport.imageViews[imageIndex], 1)
+					.UpdateImage(bl.att["highlights"], 2)
+					.Dispatch(groupsX, groupsY, imageIndex)
+					.Barrier();
+			}
+			endCmdDebugLabel(f.cmd);
+		}
+
 		if (_renderContext.comp.enableAdaptation) {
 			beginCmdDebugLabel(f.cmd, "EYE_ADAPTATION");
 			{
@@ -943,7 +937,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		
 		if (_renderContext.comp.enableLTM) {
 			// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
-			utils::memoryBarrier(f.cmd,
+			vk_utils::memoryBarrier(f.cmd,
 				VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 			
@@ -954,16 +948,17 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 			}
 
 			// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
-			utils::memoryBarrier(f.cmd,
+			vk_utils::memoryBarrier(f.cmd,
 				VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 		}
+
 
 		beginCmdDebugLabel(f.cmd, "COMPUTE_FINAL");
 		{
 			// Compute final viewport image
 			_compute.toneMapping.Bind(f.cmd)
-				.UpdateImage(_viewport.imageViews[imageIndex], 2)
+				.UpdateImage(_viewport.imageViews[imageIndex], 1)
 				.Dispatch(_viewport.imageExtent.width / 32 + 1, _viewport.imageExtent.height / 32 + 1, imageIndex);
 		}
 		endCmdDebugLabel(f.cmd);
@@ -972,7 +967,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 	}
 
 	// Post-processing must finish because viewport image is sampled from during swapchain pass
-	utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
+	vk_utils::imageMemoryBarrier(f.cmd, _viewport.images[imageIndex].image,
 		VK_ACCESS_SHADER_WRITE_BIT,
 		VK_ACCESS_SHADER_READ_BIT,
 
@@ -987,7 +982,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 	{
 		// Traslate to required layout
-		utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
+		vk_utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
 			0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 
 			VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1035,7 +1030,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 		endCmdDebugLabel(f.cmd);
 
 		// Translate to required layout for presentation on screen
-		utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
+		vk_utils::imageMemoryBarrier(f.cmd, _swapchain.images[imageIndex],
 			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
 
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1055,7 +1050,6 @@ void Engine::drawFrame()
 	// Since we have descriptor set copies for each frame in flight,
 	// we set the pointers to current frame's descriptor set buffers
 	_gpu.Reset(f);
-
 	
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	imguiUpdate();
@@ -1070,16 +1064,16 @@ void Engine::drawFrame()
         }
     }
 
-	VKASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
-	VKASSERT(vkResetFences(_device, 1, &f.inFlightFence));
+	VK_ASSERT(vkWaitForFences(_device, 1, &f.inFlightFence, VK_TRUE, UINT64_MAX));
+	VK_ASSERT(vkResetFences(_device, 1, &f.inFlightFence));
 	{ // Command buffer
 		VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info();
 
-		VKASSERT(vkBeginCommandBuffer(f.cmd, &beginInfo));
+		VK_ASSERT(vkBeginCommandBuffer(f.cmd, &beginInfo));
 		{
 			recordCommandBuffer(f, imageIndex);
 		}
-		VKASSERT(vkEndCommandBuffer(f.cmd));
+		VK_ASSERT(vkEndCommandBuffer(f.cmd));
 	}
 
     VkSemaphore waitSemaphores[] = { f.imageAvailableSemaphore };
@@ -1097,7 +1091,7 @@ void Engine::drawFrame()
 		.pSignalSemaphores = signalSemaphores
 	};
 
-    VKASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, f.inFlightFence));
+    VK_ASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, f.inFlightFence));
 
     VkSwapchainKHR swapchains[] = { _swapchain.handle };
     VkPresentInfoKHR presentInfo{
@@ -1115,7 +1109,7 @@ void Engine::drawFrame()
 		return;
     }
     else {
-        VKASSERTMSG(result, "failed to present swap chain image!");
+        VK_ASSERTMSG(result, "failed to present swap chain image!");
     }
 
 	_frameInFlightNum = (_frameInFlightNum + 1) % MAX_FRAMES_IN_FLIGHT;
