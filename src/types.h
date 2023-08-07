@@ -284,7 +284,7 @@ struct RenderContext {
     bool enableSkybox = true;
     bool displayLightSourceObjects = true;
 
-    int localToneMappingMode = 1; // 0 - Durand2002, 1 - Exposure fusion
+    int localToneMappingMode = 0; // 0 - Durand2002, 1 - Exposure fusion
 
     float zNear = 0.1f;
     float zFar = 64.0f;
@@ -299,7 +299,7 @@ struct RenderContext {
     float maxLogLuminance = 4.7f;
     float eyeAdaptationTimeCoefficient = 2.2f;
 
-    bool enableBloom = true;
+    bool enableBloom = false;
     int numOfBloomBlurPasses = 5;
 
     float gamma = 2.2f;

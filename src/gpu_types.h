@@ -146,7 +146,7 @@ struct GPUCompUB {
     int gammaMode = 0; // 0 - off, 1 - on, 2 - inverse
     float baseScale = 0.288;
 
-    float baseOffset = -0.999;
+    float baseOffset = 0;
     float sigmaS = 20; // Is automatically set to 2% of image size
     float sigmaR = 0.2;
     int numOfViewportMips;

@@ -199,7 +199,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 
 	ASSERT(loadModelFromObj("cube", Engine::MODEL_PATH + "cube/cube.obj"));
 
-	constexpr const char* suff[6] = { "XP", "XN", "YP", "YN", "ZP", "ZN" };
+	constexpr const char* suff[6] = { "px", "nx", "py", "ny", "pz", "nz" };
 
 	std::string basePath = Engine::IMAGE_PATH + cubemapDirName;
 
@@ -244,8 +244,6 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			// Make sure all the faces of cubemap have exactly the same dimensions and color channels
 			ASSERT(baseTexW == texW && baseTexH == texH && baseTexChannels == texChannels);
 		}
-
-
 
 		// Copy data to buffer
 		void* dst = (char*)stagingBuffer.gpu_ptr + bufferOffset;

@@ -2,6 +2,7 @@
 
 #include "incl/defs.glsl"
 #include "incl/durand_defs.glsl"
+#include "incl/color_spaces.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
@@ -31,8 +32,9 @@ void main() {
 #else
 		vec3 chrom = rgb2lab(inpColor);
 #endif
-		float log2Lum = log2(lum); // + 1.0
-		//float log2Lum = lum;
+		//float log2Lum = log2(lum); // + 1.0
+		// When luminance is used in log space, black squares artifacts appear
+		float log2Lum = lum;
 		
 		imageStore(logLumImage, coords, vec4(vec3(log2Lum), 1.0));
 		imageStore(chrominanceImage, coords, vec4(chrom, 1.0));

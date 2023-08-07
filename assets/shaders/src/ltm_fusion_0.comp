@@ -33,6 +33,24 @@ vec3 applyToneMapping(vec3 col) {
 	return outCol;
 }
 
+float saturation(vec3 col) {
+	float sum0 = dot(col, vec3(1)) / 3;
+	float sum1 = pow(col.x - sum0, 2);
+	sum1 += pow(col.y - sum0, 2);
+	sum1 += pow(col.z - sum0, 2);
+
+	float saturation = sqrt(sum1 / 3);
+	return saturation;
+}
+
+float exposedness(vec3 col) {
+	float exposedness = exp(-pow(col.x - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
+	exposedness *= exp(-pow(col.y - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
+	exposedness *= exp(-pow(col.z - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
+
+	return exposedness;
+}
+
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	uvec2 dim = imageSize(inImage).xy;
@@ -41,20 +59,15 @@ void main() {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
 		//inpColor *= exp2(ub.midtonesExposure);
-#if 1
+
+		vec3 highlightsColor = clamp(applyToneMapping(inpColor * exp2(ub.highlightsExposure)), 0.0, 1.0);
 		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
-		float highlights = dot(clamp(applyToneMapping(inpColor * exp2(ub.highlightsExposure)), 0.0, 1.0), RGB_TO_LUM);
+		vec3 shadowsColor = clamp(applyToneMapping(inpColor * exp2(ub.shadowsExposure)), 0.0, 1.0);
 
-		//float midtonesSquare = dot(midtonesColor, RGB_TO_LUM);
+		float highlights = dot(highlightsColor, RGB_TO_LUM);
         float midtones   = dot(midtonesColor, RGB_TO_LUM);
+        float shadows	 = dot(shadowsColor, RGB_TO_LUM);
 
-        float shadows	 = dot(clamp(applyToneMapping(inpColor * exp2(ub.shadowsExposure)), 0.0, 1.0), RGB_TO_LUM);
-#else
-		vec3 midtonesColor = inpColor * exp2(ub.midtonesExposure);
-		float highlights = dot(inpColor * exp2(ub.highlightsExposure), RGB_TO_LUM);
-        float midtones   = dot(inpColor, RGB_TO_LUM);
-        float shadows	 = dot(inpColor * exp2(ub.shadowsExposure), RGB_TO_LUM);
-#endif
 		vec3 lums  = vec3(highlights, midtones, shadows);
         vec3 lab = rgb2lab(midtonesColor);
         vec3 chrom = lab;
@@ -63,7 +76,11 @@ void main() {
 
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 diff = lums - vec3(0.5);
-        vec3 weights = vec3(exp(-0.5 * diff * diff * ub.exposednessWeightSigma * ub.exposednessWeightSigma));
+        //vec3 exposedness = vec3(exp(-0.5 * diff * diff * ub.exposednessWeightSigma * ub.exposednessWeightSigma));
+		vec3 expos = vec3(exposedness(highlightsColor), exposedness(midtonesColor), exposedness(shadowsColor));
+		vec3 satur = vec3(saturation(highlightsColor), saturation(midtonesColor), saturation(shadowsColor));
+
+		vec3 weights = expos * satur;
         //vec3 weights = vec3(exp(-1 * diff * diff / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma)));
 
 		// Normalize weights

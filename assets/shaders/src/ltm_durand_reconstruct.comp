@@ -29,7 +29,7 @@ void main() {
 		ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 		float logLum = imageLoad(inLogLumImage, coords).r;
-        vec3 chrom  = imageLoad(inChrominanceImage, coords).rgb;
+        vec3  chrom  = imageLoad(inChrominanceImage, coords).rgb;
 		float base   = imageLoad(inBaseFreqImage, coords).r;
 		float detail = imageLoad(inDetailImage, coords).r;
 		
@@ -38,8 +38,8 @@ void main() {
 		//float offsetBase = base * ub.baseScale + ub.baseOffset;
 		//offsetBase = max(offsetBase, EPSILON);
 		// Bring luminance back to linear
-		float lumReconstruct = exp2(offsetBase + detail);
-		//float lumReconstruct = offsetBase + detail;
+		//float lumReconstruct = exp2(offsetBase + detail);
+		float lumReconstruct = offsetBase + detail;
 		//float lumReconstruct = exp2(detail);
 		// Reconstruct color from luminance
 #if CONVERT_LAB == 0
