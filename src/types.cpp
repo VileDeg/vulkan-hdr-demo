@@ -84,7 +84,7 @@ void RenderContext::Init(CreateSceneData data)
 	std::vector<bool> enable = { true, true, true, true };
 
 
-	float amb = 0.1f;
+	float amb = 0.001f;
 	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
 
 	sceneData.enableShadows = true;

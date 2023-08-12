@@ -5,7 +5,11 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
 
+#include "imgui/imgui_internal.h"
+
 #include "imgui/implot.h"
+
+#define SHOW_IMGUI_METRICS 0
 
 /* utility structure for realtime plot
  * From implot.cpp */ 
@@ -24,7 +28,136 @@ struct RollingBuffer {
 	}
 };
 
-void Engine::initImgui()
+
+static const char* get_longest_str(std::vector<const char*>& strs)
+{
+	if (strs.size() == 0) {
+		return nullptr;
+	}
+	const char* ptr = strs[strs.size() - 1];
+	for (size_t i = 0; i < strs.size(); ++i) {
+		if (strlen(strs[i]) > strlen(ptr)) {
+			ptr = strs[i];
+		}
+	}
+	return ptr;
+}
+
+static std::vector<const char*> browse_path(std::string path, std::string format, std::vector<std::string>& strs)
+{
+	strs.clear();
+
+	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(path)) {
+		std::string pstr = dirEntry.path().string();
+		if (pstr.find_last_of(".") != std::string::npos &&
+			pstr.substr(pstr.find_last_of(".")) == format)
+		{
+			strs.push_back(pstr);
+		}
+	}
+
+	std::vector<const char*> cstrs(strs.size());
+	for (size_t i = 0; i < strs.size(); ++i) {
+		cstrs[i] = strs[i].c_str();
+	}
+
+	return cstrs;
+}
+
+
+static ImVec2 ui_ViewportTexWindowFit(float viewportAspect, bool scrollbar) {
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+
+	if (scrollbar) {
+		ImGuiStyle& style = ImGui::GetStyle();
+		float scrollbarWidth = style.ScrollbarSize;
+		avail.x -= scrollbarWidth + 15;
+	}
+
+	float min = std::min(avail.x, avail.y);
+	ImVec2 dim = ImVec2(min, min);
+
+	if (avail.y > min) {
+		dim.y /= viewportAspect;
+	} else {
+		dim.x *= viewportAspect;
+	}
+
+	return dim;
+}
+
+static void ui_AttachmentImageButton(VkDescriptorSet tex_id, const char* att_name, ImVec2 dim, int button_i, bool& selected) {
+	ImGui::SeparatorText(att_name);
+
+	ImGui::PushID(button_i);
+	{
+		float my_tex_w = (float)dim.x;
+		float my_tex_h = (float)dim.y;
+
+		ImVec2 size = ImVec2(my_tex_w, my_tex_h);                   // Size of the image we want to make visible
+		ImVec2 uv0 = ImVec2(0.0f, 0.0f);                            // UV coordinates for lower-left
+		ImVec2 uv1 = ImVec2(size.x / my_tex_w, size.y / my_tex_h);  // UV coordinates in our texture
+		ImVec4 bg_col = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);             // Black background
+		ImVec4 tint_col = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);           // No tint
+
+
+		if (ImGui::ImageButton("", tex_id, size, uv0, uv1, bg_col, tint_col)) {
+			selected = true;
+		}
+	}
+	ImGui::PopID();
+}
+
+static void ui_PostFXPipelineButton(bool& flag, std::string name,
+	bool* toDisable = nullptr, bool center = true, bool single_button = true)
+{
+	ImVec2 button_size = ImVec2(ImGui::CalcTextSize(name.c_str()).x, 0);
+
+	if (center) {
+		if (single_button) {
+			// obtain width of window
+			float width = ImGui::GetWindowSize().x;
+
+			// figure out where we need to move the button to. It's good if you understand why this formula works!
+			float centre_position_for_button = (width - button_size.x) / 2;
+
+			// tell Dear ImGui to render the button at the current y pos, but with the new x pos
+			ImGui::SetCursorPosX(centre_position_for_button);
+		} else {
+			// obtain size of window
+			ImVec2 avail = ImGui::GetWindowSize();
+
+			// calculate centre of window for button. I recommend trying to figure out why this works!
+			float centre_position_for_button{
+				// we have two buttons, so twice the size - and we need to account for the spacing in the middle
+				(avail.x - button_size.x * 2 - ImGui::GetStyle().ItemSpacing.x) / 2
+				//(avail.y - button_size.y) / 2
+			};
+
+			// tell Dear ImGui to render the button at the new pos
+			ImGui::SetCursorPosX(centre_position_for_button);
+		}
+	}
+
+	bool flagPrev = flag;
+	if (!flagPrev) {
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().DisabledAlpha);
+	}
+
+	if (ImGui::Button(name.c_str())) {
+		flag = !flag;
+		if (flag && toDisable) {
+			*toDisable = false;
+		}
+	}
+
+	if (!flagPrev) {
+		ImGui::PopStyleVar();
+	}
+}
+
+
+void Engine::ui_InitImGui()
 {
 	// 1: create descriptor pool for IMGUI
 	// the size of the pool is very oversize, but it's copied from imgui demo itself.
@@ -60,21 +193,21 @@ void Engine::initImgui()
 	ImPlot::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+
 
 
 	float fontScale = 0.75f;
 
 	io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/static/CascadiaMono-Bold.ttf", 18.0f * fontScale);
 	io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/CascadiaMono.ttf", 18.0f * fontScale);
-	
-
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
-	
+
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
@@ -83,7 +216,6 @@ void Engine::initImgui()
 		style.WindowRounding = 0.0f;
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
-
 
 	//this initializes imgui for SDL
 	ImGui_ImplGlfw_InitForVulkan(_window, true);
@@ -106,6 +238,8 @@ void Engine::initImgui()
 
 	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
 
+
+
 	//execute a gpu command to upload imgui font textures
 	immediate_submit([&](VkCommandBuffer cmd) {
 		ImGui_ImplVulkan_CreateFontsTexture(cmd);
@@ -114,12 +248,11 @@ void Engine::initImgui()
 	//clear font textures from cpu data
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-	imgui_RegisterViewportImageViews();
-
+	ui_RegisterTextures();
 
 	//add the destroy the imgui created structures
 	_deletionStack.push([=]() {
-		imgui_UnregisterViewportImageViews();
+		ui_UnregisterTextures();
 
 		vkDestroyDescriptorPool(_device, imguiPool, nullptr);
 
@@ -128,30 +261,68 @@ void Engine::initImgui()
 
 		ImPlot::DestroyContext();
 		ImGui::DestroyContext();
-	});
+		});
 }
 
-void Engine::imgui_RegisterViewportImageViews()
+void Engine::ui_Init()
 {
-	ASSERT(_imguiViewportImageViewDescriptorSets.size() == 0);
-	_imguiViewportImageViewDescriptorSets.resize(_viewport.imageViews.size());
+	ui_InitImGui();
+
+	uiWindows["Config"] = true;
+	uiWindows["Viewport"] = true;
+	uiWindows["PostFX Pipeline"] = true;
+	uiWindows["Attachment Viewer"] = true;
+}
+
+void Engine::ui_RegisterTextures()
+{
+	ASSERT(_viewport.ui_texids.size() == 0);
+	_viewport.ui_texids.resize(_viewport.imageViews.size());
 
 	for (size_t i = 0; i < _viewport.imageViews.size(); ++i) {
-		_imguiViewportImageViewDescriptorSets[i] =
-			ImGui_ImplVulkan_AddTexture(_linearSampler, _viewport.imageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		_viewport.ui_texids[i] = ImGui_ImplVulkan_AddTexture(_nearestSampler, _viewport.imageViews[i], ViewportPass::UI_IMAGE_LAYOUT);
+	}
+
+	for (auto& att : _postfx.att) {
+		ASSERT(att.second.ui_texid == VK_NULL_HANDLE);
+		att.second.ui_texid = ImGui_ImplVulkan_AddTexture(_nearestSampler, att.second.view, Attachment::UI_IMAGE_LAYOUT);
+	}
+
+	for (auto& pyr : _postfx.pyr) {
+		ASSERT(pyr.second.ui_texids.size() == 0);
+		
+		for (auto& view : pyr.second.views) {
+			pyr.second.ui_texids.push_back(
+				ImGui_ImplVulkan_AddTexture(_nearestSampler, view, AttachmentPyramid::UI_IMAGE_LAYOUT));
+		}
 	}
 }
 
-void Engine::imgui_UnregisterViewportImageViews()
+void Engine::ui_UnregisterTextures()
 {
-	for (auto& dset : _imguiViewportImageViewDescriptorSets) {
-		ImGui_ImplVulkan_RemoveTexture(dset);
+	for (auto& texid : _viewport.ui_texids) {
+		ImGui_ImplVulkan_RemoveTexture(texid);
+		texid = VK_NULL_HANDLE;
 	}
 
-	_imguiViewportImageViewDescriptorSets.clear();
+	_viewport.ui_texids.clear();
+
+	for (auto& att : _postfx.att) {
+		ImGui_ImplVulkan_RemoveTexture(att.second.ui_texid);
+		att.second.ui_texid = VK_NULL_HANDLE;
+	}
+
+	for (auto& pyr : _postfx.pyr) {
+		for (auto& texid : pyr.second.ui_texids) {
+			ImGui_ImplVulkan_RemoveTexture(texid);
+			texid = VK_NULL_HANDLE;
+		}
+		pyr.second.ui_texids.clear();
+	}
 }
 
-void Engine::uiUpdateScene()
+
+void Engine::ui_Scene()
 {
 	if (ImGui::TreeNodeEx("Scene configs", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::SeparatorText("Shadow"); {
@@ -179,79 +350,79 @@ void Engine::uiUpdateScene()
 	}
 }
 
-void Engine::uiUpdateHDR()
+void Engine::ui_HDR()
 {
 	if (ImGui::TreeNodeEx("HDR", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 		if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable bloom", &_renderContext.enableBloom);
+			ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
 
-			ImGui::SliderInt("Number of blur passes", &_renderContext.numOfBloomBlurPasses, 0, 20);
-			ImGui::SliderFloat("Bloom Threshold", &_renderContext.comp.bloomThreshold, 0.1, 10);
+			ImGui::SliderInt("Number of blur passes", &_postfx.numOfBloomBlurPasses, 0, 20);
+			ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
 
-			ImGui::SliderFloat("Bloom Hightlights Weight", &_renderContext.comp.bloomHighlightsWeight, 0.1, 1.f);
+			ImGui::SliderFloat("Bloom Hightlights Weight", &_postfx.ub.bloomHighlightsWeight, 0.1, 1.f);
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable global tone mapping", &_renderContext.enableGlobalToneMapping)) {
-				if (_renderContext.enableGlobalToneMapping) {
-					_renderContext.enableLocalToneMapping = false;
+			if (ImGui::Checkbox("Enable global tone mapping", &_postfx.enableGlobalToneMapping)) {
+				if (_postfx.enableGlobalToneMapping) {
+					_postfx.enableLocalToneMapping = false;
 				}
 			}
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = _renderContext.comp.toneMappingMode;
+			static int item_current = _postfx.ub.toneMappingMode;
 			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
-				_renderContext.comp.toneMappingMode = item_current;
+				_postfx.ub.toneMappingMode = item_current;
 			}
 
-			{ // Scene EV
-				ImGui::Text("Adjust scene EV"); ImGui::SameLine();
-				if (ImGui::Button("-")) {
-					_renderContext.sceneData.exposure -= 1;
-				} ImGui::SameLine();
-				ImGui::Text("%f", _renderContext.sceneData.exposure); ImGui::SameLine();
-				if (ImGui::Button("+")) {
-					_renderContext.sceneData.exposure += 1;
-				}
-			}
+			//{ // Scene EV
+			//	ImGui::Text("Adjust scene EV"); ImGui::SameLine();
+			//	if (ImGui::Button("-")) {
+			//		_renderContext.sceneData.exposure -= 1;
+			//	} ImGui::SameLine();
+			//	ImGui::Text("%f", _renderContext.sceneData.exposure); ImGui::SameLine();
+			//	if (ImGui::Button("+")) {
+			//		_renderContext.sceneData.exposure += 1;
+			//	}
+			//}
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable local tone mapping", &_renderContext.enableLocalToneMapping)) {
-				if (_renderContext.enableLocalToneMapping) {
-					_renderContext.enableGlobalToneMapping = false;
+			if (ImGui::Checkbox("Enable local tone mapping", &_postfx.enableLocalToneMapping)) {
+				if (_postfx.enableLocalToneMapping) {
+					_postfx.enableGlobalToneMapping = false;
 				}
 			}
 
 			const char* items[] = { "Durand 2002", "Exposure fusion" };
-			static int item_current = _renderContext.localToneMappingMode;
+			static int item_current = (int)_postfx.localToneMappingMode;
 			if (ImGui::Combo("LTM Mode", &item_current, items, IM_ARRAYSIZE(items))) {
-				_renderContext.localToneMappingMode = item_current;
+				_postfx.localToneMappingMode = (PostFX::LTM)item_current;
 			}
 
 			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::SliderFloat("Base Scale", &_renderContext.comp.baseScale, 0.001f, 1.f);
-				ImGui::SliderFloat("Base Offset", &_renderContext.comp.baseOffset, -0.999f, 0.999f);
+				ImGui::SliderFloat("Base Scale", &_postfx.ub.baseScale, 0.001f, 1.f);
+				ImGui::SliderFloat("Base Offset", &_postfx.ub.baseOffset, -0.999f, 0.999f);
 
-				//ImGui::SliderFloat("Spacial sigma", &_renderContext.comp.sigmaS, 3.f, 50.0f);
-				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _renderContext.comp.sigmaS);
-				ImGui::SliderFloat("Range sigma", &_renderContext.comp.sigmaR, 0.1f, 2.0f);
+				//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
+				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.sigmaS);
+				ImGui::SliderFloat("Range sigma", &_postfx.ub.sigmaR, 0.1f, 2.0f);
 
 				ImGui::TreePop();
 			}
 
 			if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::SliderFloat("Shadows Exposure", &_renderContext.comp.shadowsExposure, 0, 10);
-				//ImGui::SliderFloat("Midtones Exposure", &_renderContext.comp.midtonesExposure, -10, 5);
-				ImGui::SliderFloat("Highlights Exposure", &_renderContext.comp.highlightsExposure, -20, 0);
+				ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.shadowsExposure, 0, 10);
+				//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
+				ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.highlightsExposure, -20, 0);
 
-				ImGui::SliderFloat("Exposedness Weight Sigma", &_renderContext.comp.exposednessWeightSigma, 0.01, 10);
+				ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.exposednessWeightSigma, 0.01, 10);
 
 				ImGui::TreePop();
 			}
@@ -262,7 +433,7 @@ void Engine::uiUpdateHDR()
 		if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 			{ // Gamma correction
-				ImGui::Checkbox("Enable Gamma Correction", &_renderContext.enableGammaCorrection);
+				ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
 
 				/*const char* items[] = {
 					"Gamma correction", "Inverse gamma correction" };*/
@@ -271,20 +442,20 @@ void Engine::uiUpdateHDR()
 					_renderContext.gammaMode = item_current;
 
 					if (_renderContext.gammaMode == 1) {
-						_renderContext.comp.gamma = 1 / _renderContext.gamma;
+						_postfx.ub.gamma = 1 / _renderContext.gamma;
 					} else {
-						_renderContext.comp.gamma = _renderContext.gamma;
+						_postfx.ub.gamma = _renderContext.gamma;
 					}
 				}*/
 
-				ImGui::SliderFloat("Gamma", &_renderContext.comp.gamma, 0.5f, 3.f);
+				ImGui::SliderFloat("Gamma", &_postfx.ub.gamma, 0.5f, 3.f);
 			}
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Temporal eye adaptation", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable eye adaptation", &_renderContext.enableAdaptation);
+			ImGui::Checkbox("Enable eye adaptation", &_postfx.enableAdaptation);
 
 			if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
@@ -292,26 +463,26 @@ void Engine::uiUpdateHDR()
 
 				ImGui::Separator();
 
-				ImGui::SliderFloat("Min log luminance", &_renderContext.comp.minLogLum, -10.f, 0.f);
-				ImGui::SliderFloat("Max log luminance", &_renderContext.maxLogLuminance, 1.f, 20.f);
+				ImGui::SliderFloat("Min log luminance", &_postfx.ub.minLogLum, -10.f, 0.f);
+				ImGui::SliderFloat("Max log luminance", &_postfx.maxLogLuminance, 1.f, 20.f);
 
-				ImGui::SliderFloat("Histogram index weight", &_renderContext.comp.weights.x, 0.f, 2.f);
+				ImGui::SliderFloat("Histogram index weight", &_postfx.ub.weights.x, 0.f, 2.f);
 				//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
-				ImGui::SliderFloat("Awaited luminance (bin)", &_renderContext.comp.weights.z, 0.f, 100.f);
-				ImGui::SliderFloat("Awaited luminance weight", &_renderContext.comp.weights.w, 0.f, 5.f);
+				ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.weights.z, 0.f, 100.f);
+				ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.weights.w, 0.f, 5.f);
 
 				ImGui::TreePop();
 			}
 
 			if (ImGui::TreeNodeEx("Histogram bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-				ImGui::SliderFloat("Lower", &_renderContext.lumPixelLowerBound, 0.f, 0.45f);
-				ImGui::SliderFloat("Upper", &_renderContext.lumPixelUpperBound, 0.55f, 1.f);
+				ImGui::SliderFloat("Lower", &_postfx.lumPixelLowerBound, 0.f, 0.45f);
+				ImGui::SliderFloat("Upper", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
 
 				ImGui::Separator();
-				ImGui::Text("Total pixels: %u", _renderContext.comp.totalPixelNum);
-				ImGui::Text("Histogram bounds: %f %f", _renderContext.lumPixelLowerBound, _renderContext.lumPixelUpperBound);
-				ImGui::Text("Histogram bounds indices: %u %u", _renderContext.comp.lumLowerIndex, _renderContext.comp.lumUpperIndex);
+				ImGui::Text("Total pixels: %u", _postfx.ub.totalPixelNum);
+				ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
+				ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.lumLowerIndex, _postfx.ub.lumUpperIndex);
 
 				ImGui::TreePop();
 			}
@@ -320,14 +491,14 @@ void Engine::uiUpdateHDR()
 		}
 	
 		if (ImGui::TreeNodeEx("Plots", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (_renderContext.enableAdaptation) {
+			if (_postfx.enableAdaptation) {
 				if (ImGui::TreeNodeEx("Adaptation Window")) {
 				
 					ImGui::Separator();
 
 					static RollingBuffer rdata, rdata1;
 
-					ImGui::SliderFloat("Adaptation time coefficient", &_renderContext.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+					ImGui::SliderFloat("Adaptation time coefficient", &_postfx.eyeAdaptationTimeCoefficient, 1.f, 10.f);
 
 					static float t = 0;
 					t += ImGui::GetIO().DeltaTime;
@@ -400,8 +571,8 @@ void Engine::uiUpdateHDR()
 
 						ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
 
-						uint32_t start_i = _renderContext.comp.lumLowerIndex;
-						uint32_t end_i   = _renderContext.comp.lumUpperIndex;
+						uint32_t start_i = _postfx.ub.lumLowerIndex;
+						uint32_t end_i   = _postfx.ub.lumUpperIndex;
 
 						std::vector<uint32_t> xs1(end_i - start_i);
 						std::iota(xs1.begin(), xs1.end(), start_i);
@@ -425,7 +596,7 @@ void Engine::uiUpdateHDR()
 	}
 }
 
-void Engine::uiUpdateRenderContext()
+void Engine::ui_RenderContext()
 {
 	if (ImGui::TreeNodeEx("Scene lighting")) {
 		float amb = _renderContext.sceneData.ambientColor.x;
@@ -448,7 +619,7 @@ void Engine::uiUpdateRenderContext()
 				ImGui::Checkbox("Enabled", &l.enabled);
 
 				glm::vec3 tmpPos = l.position;
-				if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.1f, -100.f, 100.f)) {
+				if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.01f, -100.f, 100.f)) {
 					_renderContext.UpdateLightPosition(i, tmpPos);
 				}
 
@@ -485,7 +656,7 @@ void Engine::uiUpdateRenderContext()
 	}
 }
 
-void Engine::uiUpdateDebugDisplay()
+void Engine::ui_DebugDisplay()
 {
 	if (ImGui::TreeNodeEx("Debug display")) {
 		if (ImGui::TreeNodeEx("Shadow cubemap")) {
@@ -525,50 +696,223 @@ void Engine::uiUpdateDebugDisplay()
 	}
 }
 
-
-static const char* get_longest_str(std::vector<const char*>& strs) 
+void Engine::ui_MenuBar()
 {
-	if (strs.size() == 0) {
-		return nullptr;
-	}
-	const char* ptr = strs[strs.size()-1];
-	for (size_t i = 0; i < strs.size(); ++i) {
-		if (strlen(strs[i]) > strlen(ptr)) {
-			ptr = strs[i];
+	if (ImGui::BeginMenuBar()) {
+		ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
+		
+		if (ImGui::BeginMenu("Save")) {
+			ui_SaveScene();
+
+			ImGui::EndMenu();
+		} else if (_saveShortcutPressed) {
+			ImGui::Begin("Save", 0, flags); {
+				_saveShortcutPressed = !ui_SaveScene();
+			} ImGui::End();
 		}
+
+		if (ImGui::BeginMenu("Load")) {
+			ui_LoadScene();
+
+			ImGui::EndMenu();
+		} else if (_loadShortcutPressed) {
+			ImGui::Begin("Load", 0, flags); {
+				_loadShortcutPressed = !ui_LoadScene();
+			} ImGui::End();
+		}
+
+		for (auto& wnd : uiWindows) {
+			if (wnd.second) {
+				continue;
+			}
+			if (ImGui::BeginMenu(wnd.first.c_str())) {
+				wnd.second = true;
+
+				ImGui::EndMenu();
+			}
+		}
+
+		ImGui::EndMenuBar();
 	}
-	return ptr;
 }
 
-static std::vector<const char*> browse_path(std::string path, std::string format, std::vector<std::string>& strs) 
+void Engine::ui_Viewport()
 {
-	strs.clear();
+	_isViewportHovered = ImGui::IsWindowHovered();
 
-	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(path)) {
-		std::string pstr = dirEntry.path().string();
-		if (pstr.find_last_of(".") != std::string::npos &&
-			pstr.substr(pstr.find_last_of(".")) == format)
-		{
-			strs.push_back(pstr);
-		}
+	ImVec2 vSize = ImGui::GetContentRegionAvail();
+
+	uint32_t usX = (uint32_t)vSize.x;
+	uint32_t usY = (uint32_t)vSize.y;
+
+	// We round up our viewport size to multiple of 4 to make mipmapping of it a lot more accurate
+	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
+	/*static int step = 32;
+
+	usX = math_utils::roundUpPw2(usX, step);
+	usY = math_utils::roundUpPw2(usY, step);*/
+
+	if (_viewport.width != usX || _viewport.height != usY) {
+		// Viewport will be resized later after all rendering is finished
+		newViewportSizeX = usX;
+		newViewportSizeY = usY;
+		_wasViewportResized = true;
 	}
 
-	std::vector<const char*> cstrs(strs.size());
-	for (size_t i = 0; i < strs.size(); ++i) {
-		cstrs[i] = strs[i].c_str();
-	}
-
-	return cstrs;
+	ImGui::Image(_viewport.ui_texids[_frameInFlightNum], ImVec2(_viewport.width, _viewport.height));
 }
 
-bool Engine::uiSaveScene()
+void Engine::ui_PostFXPipeline()
+{
+	ui_PostFXPipelineButton(_postfx.enableAdaptation, "Exposure Adaptation");
+
+	ui_PostFXPipelineButton(_postfx.enableBloom, "Bloom");
+
+	ui_PostFXPipelineButton(_postfx.enableGlobalToneMapping, "Global Tone Mapping", &_postfx.enableLocalToneMapping, true, false);
+
+	ImGui::SameLine();
+
+	ui_PostFXPipelineButton(_postfx.enableLocalToneMapping, "Local Tone Mapping", &_postfx.enableGlobalToneMapping, false);
+
+	ui_PostFXPipelineButton(_postfx.enableGammaCorrection, "Gamma Correction");
+}
+
+void Engine::ui_AttachmentViewer()
+{
+	ImVec2 defaultPopupSize = { 512, 512 };
+	bool popup_docking = true;
+	ImGuiWindowFlags flags = 0;
+	flags |= popup_docking ? 0 : ImGuiWindowFlags_NoDocking;
+
+	ImVec2 dim = ui_ViewportTexWindowFit(_viewport.aspectRatio, true);
+
+	if (ImGui::TreeNodeEx("Images", ImGuiTreeNodeFlags_DefaultOpen)) {
+		int i = 0;
+		for (auto& att : _postfx.att) {
+
+			size_t undersc = att.first.find_first_of("_") + 1;
+			ASSERT(undersc != std::string::npos);
+
+			std::string pref = att.first.substr(0, undersc);
+			if (!_postfx.isEffectEnabled(_postfx.getEffectFromPrefix(pref))) {
+				continue;
+			}
+
+			ui_AttachmentImageButton(att.second.ui_texid, att.first.c_str(), dim, i, att.second.ui_selected);
+
+			if (att.second.ui_selected) {
+				ImGui::SetNextWindowSize(defaultPopupSize, ImGuiCond_Once);
+
+				ImGui::Begin(att.first.c_str(), &att.second.ui_selected, flags);
+				{
+					ImVec2 dim = ui_ViewportTexWindowFit(_viewport.aspectRatio, false);
+
+					ImGui::Image(att.second.ui_texid, dim);
+				}
+				ImGui::End();
+			}
+			++i;
+		}
+
+
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Pyramids", ImGuiTreeNodeFlags_DefaultOpen)) {
+		int i = 0;
+		for (auto& pyr : _postfx.pyr) {
+			size_t undersc = pyr.first.find_first_of("_") + 1;
+			ASSERT(undersc != std::string::npos);
+
+			std::string pref = pyr.first.substr(0, undersc);
+			if (!_postfx.isEffectEnabled(_postfx.getEffectFromPrefix(pref))) {
+				continue;
+			}
+
+			const char* att_name = pyr.first.c_str();
+			int button_i = i;
+
+			ui_AttachmentImageButton(pyr.second.ui_texids[0], att_name, dim, i, pyr.second.ui_selected);
+
+			if (pyr.second.ui_selected) {
+				ImGui::SetNextWindowSize(defaultPopupSize, ImGuiCond_Once);
+
+				ImGui::Begin(att_name, &pyr.second.ui_selected, flags);
+				{
+					ImVec2 dim = ui_ViewportTexWindowFit(_viewport.aspectRatio, false);
+
+					int i = 0;
+					for (auto& view : pyr.second.views) {
+						ImGui::SeparatorText(("Mip " + std::to_string(i)).c_str());
+
+						VkDescriptorSet tex_id = pyr.second.ui_texids[i];
+						ImGui::Image(tex_id, dim);
+
+						++i;
+					}
+				}
+				ImGui::End();
+			}
+			++i;
+		}
+		ImGui::TreePop();
+	}
+}
+
+void Engine::ui_StatusBar()
+{
+	ImGuiIO& io = ImGui::GetIO();
+	_frameRate = io.Framerate;
+	_deltaTime = io.DeltaTime;
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+	float height = ImGui::GetFrameHeight();
+
+	// Function from imgui_internal.h. Issue: https://github.com/ocornut/imgui/issues/3518
+	if (ImGui::BeginViewportSideBar("##SecondaryMenuBar", NULL, ImGuiDir_Down, height, window_flags)) {
+		if (ImGui::BeginMenuBar()) {
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			ImGui::EndMenuBar();
+		}
+	}
+	ImGui::End();
+}
+
+
+
+bool Engine::ui_LoadScene()
+{
+	bool loaded = false;
+
+	std::vector<std::string> scenes;
+	std::vector<const char*> scenes_cstr;
+
+	scenes_cstr = browse_path(SCENE_PATH, ".json", scenes);
+
+	float width = 0;
+	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	ImGui::PushItemWidth(width);
+
+	static int i = 0;
+	if (ImGui::ListBox("##Scenes", &i, scenes_cstr.data(), scenes_cstr.size())) {
+		loadScene(scenes_cstr[i]);
+		loaded = true;
+	}
+
+	ImGui::PopItemWidth();
+
+	return loaded;
+}
+
+bool Engine::ui_SaveScene()
 {
 	bool saved = false;
 
 	std::vector<std::string> scenes;
 	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(Engine::SCENE_PATH, ".json", scenes);
+	scenes_cstr = browse_path(SCENE_PATH, ".json", scenes);
 	scenes_cstr.push_back("* New");
 
 	float width = 0;
@@ -587,7 +931,7 @@ bool Engine::uiSaveScene()
 	if (i == scenes_cstr.size() - 1) {
 		char buf[256] = { 0 };
 		if (ImGui::InputText("##Scene name", buf, 256, ImGuiInputTextFlags_EnterReturnsTrue)) {
-			saveScene(Engine::SCENE_PATH + buf);
+			saveScene(SCENE_PATH + buf);
 			saved = true;
 		}
 	}
@@ -597,91 +941,27 @@ bool Engine::uiSaveScene()
 	return saved;
 }
 
-bool Engine::uiLoadScene()
-{
-	bool loaded = false;
 
-	std::vector<std::string> scenes;
-	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(Engine::SCENE_PATH, ".json", scenes);
-
-	float width = 0;
-	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-	ImGui::PushItemWidth(width);
-
-	static int i = 0;
-	if (ImGui::ListBox("##Scenes", &i, scenes_cstr.data(), scenes_cstr.size())) {
-		loadScene(scenes_cstr[i]);
-		loaded = true;
-	}
-
-	ImGui::PopItemWidth();
-
-	return loaded;
+bool& Engine::ui_GetWindowFlag(std::string name) {
+	ASSERT(uiWindows.contains(name));
+	return uiWindows[name];
 }
 
-void Engine::uiUpdateMenuBar()
-{
-	if (ImGui::BeginMenuBar()) {
-		ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-		
-		if (ImGui::BeginMenu("Save")) {
-			uiSaveScene();
 
-			ImGui::EndMenu();
-		} else if (_saveShortcutPressed) {
-			ImGui::Begin("Save", 0, flags); {
-				_saveShortcutPressed = !uiSaveScene();
-			} ImGui::End();
+void Engine::ui_Window(std::string name, std::function<void()> func, int flags/* = 0*/)
+{
+	if (ui_GetWindowFlag(name)) {
+		ImGui::Begin(name.c_str(), &ui_GetWindowFlag(name), (ImGuiWindowFlags)flags);
+		{
+			func();
 		}
-
-		if (ImGui::BeginMenu("Load")) {
-			uiLoadScene();
-
-			ImGui::EndMenu();
-		} else if (_loadShortcutPressed) {
-			ImGui::Begin("Load", 0, flags); {
-				_loadShortcutPressed = !uiLoadScene();
-			} ImGui::End();
-		}
-
-		ImGui::EndMenuBar();
+		ImGui::End();
 	}
 }
 
-void Engine::uiUpdateViewport()
-{
-	_isViewportHovered = ImGui::IsWindowHovered();
 
-	ImVec2 vSize = ImGui::GetContentRegionAvail();
-
-	uint32_t usX = (uint32_t)vSize.x;
-	uint32_t usY = (uint32_t)vSize.y;
-
-	// We round up our viewport size to multiple of 4 to make mipmapping of it a lot more accurate
-	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
-	static int step = 32;
-
-	usX = math_utils::roundUpPw2(usX, step);
-	usY = math_utils::roundUpPw2(usY, step);
-
-	if (_viewport.imageExtent.width != usX || _viewport.imageExtent.height != usY) {
-		// Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
-		vkDeviceWaitIdle(_device);
-
-		imgui_UnregisterViewportImageViews();
-
-		// Create viewport images and etc. with new extent
-		recreateViewport(usX, usY);
-
-		imgui_RegisterViewportImageViews();
-	}
-
-	ImGui::Image(_imguiViewportImageViewDescriptorSets[_frameInFlightNum], ImVec2(usX, usY));
-}
-
-void Engine::imguiUpdate()
+void Engine::ui_Update()
 {
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
@@ -689,7 +969,6 @@ void Engine::imguiUpdate()
 	ImGui::NewFrame();
 
 	ImGuiIO& io = ImGui::GetIO();
-	//io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	static bool opt_fullscreen = true;
 	static bool opt_padding = false;
@@ -721,7 +1000,7 @@ void Engine::imguiUpdate()
 
 	ImGui::Begin("DockSpace", &p_open, window_flags);
 	{
-		uiUpdateMenuBar();
+		ui_MenuBar();
 
 		if (!opt_padding) {
 			ImGui::PopStyleVar();
@@ -738,56 +1017,64 @@ void Engine::imguiUpdate()
 			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 		}
 		
-		ImGui::Begin("Config");
-		{
-			// Most "big" widgets share a common width settings by default. See 'Demo->Layout->Widgets Width' for details.
-			// e.g. Use 2/3 of the space for widgets and 1/3 for labels (right align)
-			//ImGui::PushItemWidth(-ImGui::GetWindowWidth() * 0.35f);
-			// e.g. Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
-			ImGui::PushItemWidth(ImGui::GetFontSize() * -13); //-12
-			//ImGui::PushItemWidth(-ImGui::GetContentRegionAvail().x * 0.5f);
+		// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
+		ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
 
-			uiUpdateScene();
-			uiUpdateHDR();
-			uiUpdateRenderContext();
-			uiUpdateDebugDisplay();
+		ui_Window("Config", [this]() {
 
-			ImGui::Separator();
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			ui_Scene();
+			ui_HDR();
+			ui_RenderContext();
+			ui_DebugDisplay();
+		});
 
-			_frameRate = io.Framerate;
-			_deltaTime = io.DeltaTime;
+		ImGui::PopItemWidth();
 
-			ImGui::PopItemWidth();
-		}
-		ImGui::End();
 	
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-		ImGui::Begin("Viewport", (bool*)0, ImGuiWindowFlags_None);
-		{
-			uiUpdateViewport();		
-		}
-		ImGui::End();
+
+		ui_Window("Viewport", [this]() {
+			ui_Viewport();
+		});
+
+	
 		ImGui::PopStyleVar();
 		ImGui::PopStyleVar();
+
+		ui_Window("PostFX Pipeline", [this]() {
+			ui_PostFXPipeline();
+		});
+
+		ui_Window("Attachment Viewer", [this]() {
+			ui_AttachmentViewer();
+		});
+
+		ui_StatusBar();
+
+#if SHOW_IMGUI_METRICS == 1
+		ImGui::ShowMetricsWindow();
+#endif
 	}
 	ImGui::End();
 }
 
-void Engine::imguiOnDrawStart()
+void Engine::ui_OnDrawStart()
 {
 	ImGui::Render();
 }
 
-void Engine::imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer)
+void Engine::ui_OnRenderPassEnd(VkCommandBuffer cmdBuffer)
 {
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer); //, _mainPipeline
 
 	ImGuiIO& io = ImGui::GetIO();
-	if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
 	}
+
+	
 }

@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "engine.h"
 
-#define VKDEMO_USE_COMPUTE 1
+#define VKDEMO_USE_postfx 1
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -150,7 +150,7 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
 
 
             bool allQSupported = queueFamilyList[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
-#if VKDEMO_USE_COMPUTE
+#if VKDEMO_USE_postfx
             allQSupported = allQSupported && (queueFamilyList[i].queueFlags & VK_QUEUE_COMPUTE_BIT);
 #endif
 

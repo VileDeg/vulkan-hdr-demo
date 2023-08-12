@@ -6,8 +6,8 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 {
     PipelineShaders shaders{};
 
-    shaders.vert.code = vk_utils::readShaderBinary(Engine::SHADER_PATH + vertName);
-    shaders.frag.code = vk_utils::readShaderBinary(Engine::SHADER_PATH + fragName);
+    shaders.vert.code = vk_utils::readShaderBinary(SHADER_PATH + vertName);
+    shaders.frag.code = vk_utils::readShaderBinary(SHADER_PATH + fragName);
 
     if (vk_utils::createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
         std::cout << "Vertex shader successfully loaded." << std::endl;
@@ -168,13 +168,13 @@ void Engine::createPipelines()
     }
 
     { // Compute 
-        for (auto& stage : _compute.stages) {
+        for (auto& stage : _postfx.stages) {
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }
     }
 
     _deletionStack.push([=]() mutable {
-        for (auto& stage : _compute.stages) {
+        for (auto& stage : _postfx.stages) {
             stage.second.Destroy();
         }
     });

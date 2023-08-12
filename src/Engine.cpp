@@ -1,12 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
 
-std::string Engine::ASSET_PATH = "assets/";
-std::string Engine::SHADER_PATH = ASSET_PATH + "shaders/bin/";
-std::string Engine::IMAGE_PATH = ASSET_PATH + "images/";
-std::string Engine::MODEL_PATH = ASSET_PATH + "models/";
-std::string Engine::SCENE_PATH = ASSET_PATH + "scenes/";
-
 Engine::Engine()
 {
     _enabledValidationLayers = {
@@ -66,8 +60,8 @@ void Engine::Init()
     
     createSwapchain();
     
-    prepareMainPass();
-    prepareViewportPass(_swapchain.imageExtent.width, _swapchain.imageExtent.height);
+    prepareSwapchainPass();
+    prepareViewportPass(_swapchain.width, _swapchain.height);
     prepareShadowPass();
 
     initDescriptors();
@@ -77,7 +71,7 @@ void Engine::Init()
     
     loadScene(SCENE_PATH + "dobrovic-sponza.json");
     
-    initImgui();
+    ui_Init();
 
     _isInitialized = true;
 }
@@ -93,9 +87,20 @@ void Engine::Run()
         if (_isViewportHovered || !_cursorEnabled) {
             _camera.Update(_window, _deltaTime);
         }
-    }
 
-    vkDeviceWaitIdle(_device);
+        if (_wasViewportResized) {
+            // Need to wait for all commands to finish so that we can safely recreate and reregister all viewport images
+            vkDeviceWaitIdle(_device);
+            ui_UnregisterTextures();
+
+            // Create viewport images and etc. with new extent
+            recreateViewport(newViewportSizeX, newViewportSizeY);
+
+            ui_RegisterTextures();
+
+            _wasViewportResized = false;
+        }
+    }
 }
 
 void Engine::Cleanup()
@@ -103,6 +108,8 @@ void Engine::Cleanup()
     if (!_isInitialized) {
         return;
     }
+
+    vkDeviceWaitIdle(_device);
 
     cleanupViewportResources();
 
@@ -147,6 +154,9 @@ void Engine::createAttachment(
         .imageLayout = layout
     };
 
+    att.tag = debugName;
+    att.dim = { extent.width, extent.height };
+
     immediate_submit([&](VkCommandBuffer cmd) {
         vk_utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
     });
@@ -182,6 +192,8 @@ void Engine::createAttachmentPyramid(
         att.views.push_back(view);
     }
 
+    att.tag = debugName;
+    att.dim = { extent.width, extent.height };
 
     /*att.allocImage.descInfo = {
         .sampler = _linearSampler,
@@ -195,12 +207,11 @@ void Engine::createAttachmentPyramid(
 }
 
 void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
-    //int step = 8;
-    //extentX = math::roundUpPw2(extentX, step);
-    //extentY = math::roundUpPw2(extentY, step);
-    //extentX = extentY = 1024;
+    _viewport.width = extentX;
+    _viewport.height = extentY;
 
-    _viewport.imageExtent = { extentX, extentY };
+    _viewport.aspectRatio = (float)extentX / extentY;
+
     bool anyFormats = vk_utils::getSupportedDepthFormat(_physicalDevice, &_viewport.depthFormat);
     ASSERT_MSG(anyFormats, "Physical device has no supported depth formats");
     
@@ -225,9 +236,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     _viewport.imageViews.resize(imgCount);
 
-    for (uint32_t i = 0; i < imgCount; i++)
-    {
-        VkImageCreateInfo dimg_info{
+    VkImageCreateInfo img_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = _viewport.colorFormat,
@@ -238,14 +247,15 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             .tiling = VK_IMAGE_TILING_OPTIMAL,
             .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-        };
+    };
 
+    VmaAllocationCreateInfo img_allocinfo = {};
+    img_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-        VmaAllocationCreateInfo dimg_allocinfo = {};
-        dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
+    for (uint32_t i = 0; i < imgCount; i++)
+    {
         //allocate and create the image
-        VK_ASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
+        VK_ASSERT(vmaCreateImage(_allocator, &img_info, &img_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
         setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
         VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_viewport.colorFormat, _viewport.images[i].image, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -259,20 +269,21 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
          //int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
         // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
-        _renderContext.comp.numOfViewportMips = numOfViewportMips;
+        _postfx.ub.numOfViewportMips = numOfViewportMips;
+        _postfx.numOfBloomMips = numOfViewportMips;
 
 
-        for (auto& att : _compute.att) {
+        for (auto& att : _postfx.att) {
             createAttachment(
                 _viewport.colorFormat,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                 extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_GENERAL,
-                att.second, "COMPUTE::FUSION::" + att.first
+                att.second, "COMPUTE::" + att.first
             );
         }
     
-        for (auto& att : _compute.pyr) {
+        for (auto& att : _postfx.pyr) {
             createAttachmentPyramid(
                 _viewport.colorFormat,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
@@ -280,7 +291,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
                 extent3D, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_GENERAL,
                 numOfViewportMips,
-                att.second, "COMPUTE::FUSION::" + att.first
+                att.second, "COMPUTE::" + att.first
             );
         }
 
@@ -305,11 +316,11 @@ void Engine::cleanupViewportResources()
     //Destroy depth image
     _viewport.depth.Cleanup(_device, _allocator);
 
-    for (auto& a : _compute.att) {
+    for (auto& a : _postfx.att) {
         a.second.Cleanup(_device, _allocator);
     }
 
-    for (auto& att : _compute.pyr) {
+    for (auto& att : _postfx.pyr) {
         att.second.Cleanup(_device, _allocator);
     }
 
@@ -639,7 +650,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
             f.compSSBO = allocateBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             f.compUB   = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-            for (auto& stage : _compute.stages) {
+            for (auto& stage : _postfx.stages) {
                 stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
                 setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::COMPUTE::" + stage.first + "::FRAME_" + std::to_string(frame_i));
             }

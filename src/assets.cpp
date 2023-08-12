@@ -197,11 +197,11 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	// Partially based on Sascha Willems' cubemap demo: 
 	// https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
 
-	ASSERT(loadModelFromObj("cube", Engine::MODEL_PATH + "cube/cube.obj"));
+	ASSERT(loadModelFromObj("cube", MODEL_PATH + "cube/cube.obj"));
 
 	constexpr const char* suff[6] = { "px", "nx", "py", "ny", "pz", "nz" };
 
-	std::string basePath = Engine::IMAGE_PATH + cubemapDirName;
+	std::string basePath = IMAGE_PATH + cubemapDirName;
 
 	VkDeviceSize imageSize;
 	AllocatedBuffer stagingBuffer;
@@ -854,12 +854,16 @@ void Engine::saveScene(std::string fullScenePath)
 
 void Engine::createSamplers() {
 	// Create samplers for textures
-	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_LINEAR);
+	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_LINEAR);
+	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_NEAREST);
 
-	VK_ASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_linearSampler));
+	VK_ASSERT(vkCreateSampler(_device, &samplerInfo, nullptr, &_linearSampler));
+	VK_ASSERT(vkCreateSampler(_device, &samplerInfo1, nullptr, &_nearestSampler));
+
 	_deletionStack.push([=]() {
 		vkDestroySampler(_device, _linearSampler, nullptr);
-		});
+		vkDestroySampler(_device, _nearestSampler, nullptr);
+	});
 }
 
 void Engine::createScene(CreateSceneData data)
@@ -878,10 +882,10 @@ void Engine::createScene(CreateSceneData data)
 	}
 
 	// Main model of the scene
-	ASSERT(loadModelFromObj("main", Engine::MODEL_PATH + data.modelPath));
+	ASSERT(loadModelFromObj("main", MODEL_PATH + data.modelPath));
 
 	// Sphere model of the light source
-	ASSERT(loadModelFromObj("sphere", Engine::MODEL_PATH + "sphere/sphere.obj"));
+	ASSERT(loadModelFromObj("sphere", MODEL_PATH + "sphere/sphere.obj"));
 
 	// Set materials
 	for (auto& [key, model] : _models) {

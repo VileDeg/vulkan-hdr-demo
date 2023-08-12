@@ -141,7 +141,7 @@ struct GPUCompUB {
 
     glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
 
-    float bloomThreshold = 0.95f;
+    float bloomThreshold = 0.5f;
     int toneMappingMode = 3;
     int gammaMode = 0; // 0 - off, 1 - on, 2 - inverse
     float baseScale = 0.288;

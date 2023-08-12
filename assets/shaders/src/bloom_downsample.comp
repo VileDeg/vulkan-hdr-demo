@@ -1,0 +1,51 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+/*layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;*/ // TODO: remove ?
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 0) uniform image2D image[MAX_VIEWPORT_MIPS];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int i = pc.mipIndex;
+	ivec2 dim = imageSize(image[i]).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+		ivec2 coordsHigher = coords << 1;
+		
+		vec4 A = imageLoad(image[i-1], coordsHigher + ivec2(-1.0, -1.0));
+        vec4 B = imageLoad(image[i-1], coordsHigher + ivec2( 0.0, -1.0));
+        vec4 C = imageLoad(image[i-1], coordsHigher + ivec2( 1.0, -1.0));
+        vec4 D = imageLoad(image[i-1], coordsHigher + ivec2(-0.5, -0.5));
+        vec4 E = imageLoad(image[i-1], coordsHigher + ivec2( 0.5, -0.5));
+        vec4 F = imageLoad(image[i-1], coordsHigher + ivec2(-1.0,  0.0));
+        vec4 G = imageLoad(image[i-1], coordsHigher                    );
+        vec4 H = imageLoad(image[i-1], coordsHigher + ivec2( 1.0,  0.0));
+        vec4 I = imageLoad(image[i-1], coordsHigher + ivec2(-0.5,  0.5));
+        vec4 J = imageLoad(image[i-1], coordsHigher + ivec2( 0.5,  0.5));
+        vec4 K = imageLoad(image[i-1], coordsHigher + ivec2(-1.0,  1.0));
+        vec4 L = imageLoad(image[i-1], coordsHigher + ivec2( 0.0,  1.0));
+        vec4 M = imageLoad(image[i-1], coordsHigher + ivec2( 1.0,  1.0));
+
+        vec2 div = (1.0 / 4.0) * vec2(0.5, 0.125);
+
+        vec4 px = (D + E + I + J) * div.x;
+        px += (A + B + G + F) * div.y;
+        px += (B + C + H + G) * div.y;
+        px += (F + G + L + K) * div.y;
+        px += (G + H + M + L) * div.y;
+
+		imageStore(image[i], coords, px);
+	}
+}

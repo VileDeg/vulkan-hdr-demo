@@ -54,8 +54,17 @@ struct AllocatedImage {
 
 struct Attachment {
     std::string tag = "";
+    glm::vec2 dim;
+
     AllocatedImage allocImage;
     VkImageView view;
+
+    
+    bool ui_selected = false;
+    // Used by imgui to display viewport in ImGui::Image widget
+    VkDescriptorSet ui_texid = VK_NULL_HANDLE;
+    // Used by imgui as layout for registering textures
+    static constexpr VkImageLayout UI_IMAGE_LAYOUT = VK_IMAGE_LAYOUT_GENERAL;
 
     void Cleanup(VkDevice device, VmaAllocator allocator) {
         vkDestroyImageView(device, view, nullptr);
@@ -65,8 +74,17 @@ struct Attachment {
 
 struct AttachmentPyramid {
     std::string tag = "";
+    glm::vec2 dim;
+
     AllocatedImage allocImage;
     std::vector<VkImageView> views;
+
+
+    bool ui_selected = false;
+    // Used by imgui to display viewport in ImGui::Image widget
+    std::vector<VkDescriptorSet> ui_texids = {};
+    // Used by imgui as layout for registering textures
+    static constexpr VkImageLayout UI_IMAGE_LAYOUT = VK_IMAGE_LAYOUT_GENERAL;
 
     void Cleanup(VkDevice device, VmaAllocator allocator) {
         for (auto& v : views) {
@@ -121,7 +139,15 @@ struct ViewportPass {
 
     VkFormat depthFormat;
 
-    VkExtent2D imageExtent; // Viewport dimensions
+    uint32_t width;
+    uint32_t height;
+
+    float aspectRatio;
+
+    // Used by imgui to display viewport in ImGui::Image widget
+    std::vector<VkDescriptorSet> ui_texids = {};
+    // Used by imgui as layout for registering textures
+    static constexpr VkImageLayout UI_IMAGE_LAYOUT = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 };
 
 struct SwapchainPass {
@@ -132,7 +158,8 @@ struct SwapchainPass {
 
     VkFormat colorFormat;
 
-    VkExtent2D imageExtent; // Window dimensions
+    uint32_t width;
+    uint32_t height;
 };
 
 
@@ -276,7 +303,7 @@ struct CreateSceneData {
 
 struct RenderContext {
     GPUSceneUB sceneData{};
-    GPUCompUB comp{};
+    
 
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
@@ -284,7 +311,7 @@ struct RenderContext {
     bool enableSkybox = true;
     bool displayLightSourceObjects = true;
 
-    int localToneMappingMode = 0; // 0 - Durand2002, 1 - Exposure fusion
+    
 
     float zNear = 0.1f;
     float zFar = 64.0f;
@@ -293,22 +320,8 @@ struct RenderContext {
 
     bool showNormals = false;
 
-    float lumPixelLowerBound = 0.2f;
-    float lumPixelUpperBound = 0.95f;
 
-    float maxLogLuminance = 4.7f;
-    float eyeAdaptationTimeCoefficient = 2.2f;
-
-    bool enableBloom = false;
-    int numOfBloomBlurPasses = 5;
-
-    float gamma = 2.2f;
-    int gammaMode = 0; // 0 - forward, 1 - inverse
-
-    bool enableGlobalToneMapping = false;
-    bool enableGammaCorrection = false;
-    bool enableAdaptation = false;
-    bool enableLocalToneMapping = true;
+   
 
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold = 1.f / 255.f;

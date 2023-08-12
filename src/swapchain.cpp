@@ -113,7 +113,9 @@ void Engine::createSwapchain()
     _swapchain.colorFormat = surfaceFormat.format;
 
     auto presentMode = pickPresentMode(support.presentModes);
-    _swapchain.imageExtent = pickExtent(support.capabilities, _window);
+    VkExtent2D extent = pickExtent(support.capabilities, _window);
+    _swapchain.width = extent.width;
+    _swapchain.height = extent.height;
 
     auto caps = support.capabilities;
     uint32_t imageCount = caps.minImageCount + 1;
@@ -127,7 +129,7 @@ void Engine::createSwapchain()
         .minImageCount = imageCount,
         .imageFormat = surfaceFormat.format,
         .imageColorSpace = surfaceFormat.colorSpace,
-        .imageExtent = _swapchain.imageExtent,
+        .imageExtent = extent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, // Added sampled
         .preTransform = caps.currentTransform,
@@ -166,10 +168,10 @@ void Engine::createSwapchain()
     }
 }
 
-void Engine::prepareMainPass() {
+void Engine::prepareSwapchainPass() {
     VkExtent3D imageExtent3D = {
-        _swapchain.imageExtent.width,
-        _swapchain.imageExtent.height,
+        _swapchain.width,
+        _swapchain.height,
         1 
     };
 
@@ -217,9 +219,7 @@ void Engine::recreateSwapchain()
     cleanupSwapchainResources();
 
     createSwapchain();
-    prepareMainPass();
-
-    
+    prepareSwapchainPass();
 }
 
 void Engine::cleanupSwapchainResources()

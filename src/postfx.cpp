@@ -1,21 +1,21 @@
 #include "stdafx.h"
 #include "engine.h"
 
-#include "compute.h"
+#include "postfx.h"
 
 #include "vk_descriptors.h"
 
 
 
 
-void ComputeStage::Create(VkDevice device, VkSampler sampler,
+void PostFXStage::Create(VkDevice device, VkSampler sampler,
 	const std::string& shaderBinName, bool usePushConstants/* = false*/)
 {
 	this->device = device;
 	this->sampler = sampler;
 
 	ShaderData comp;
-	comp.code = vk_utils::readShaderBinary(Engine::SHADER_PATH + shaderBinName);
+	comp.code = vk_utils::readShaderBinary(SHADER_PATH + shaderBinName);
 
 	if (vk_utils::createShaderModule(device, comp.code, &comp.module)) {
 		std::cout << "Compute shader successfully loaded." << std::endl;
@@ -64,14 +64,14 @@ void ComputeStage::Create(VkDevice device, VkSampler sampler,
 	imageBindings.reserve(MAX_IMAGE_UPDATES);
 }
 
-ComputeStage& ComputeStage::Bind(VkCommandBuffer cmd)
+PostFXStage& PostFXStage::Bind(VkCommandBuffer cmd)
 {
 	commandBuffer = cmd;
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImage(VkImageView view, uint32_t binding)
+PostFXStage& PostFXStage::UpdateImage(VkImageView view, uint32_t binding)
 {
 	imageBindings.push_back({ { view }, binding });
 	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
@@ -79,7 +79,7 @@ ComputeStage& ComputeStage::UpdateImage(VkImageView view, uint32_t binding)
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImage(Attachment att, uint32_t binding)
+PostFXStage& PostFXStage::UpdateImage(Attachment att, uint32_t binding)
 {
 	imageBindings.push_back({ { att.view }, binding });
 	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
@@ -87,7 +87,7 @@ ComputeStage& ComputeStage::UpdateImage(Attachment att, uint32_t binding)
 	return *this;
 }
 
-ComputeStage& ComputeStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding)
+PostFXStage& PostFXStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding)
 {
 	imageBindings.push_back({ att.views, binding });
 	ASSERT(imageBindings.size() <= MAX_IMAGE_UPDATES);
@@ -95,7 +95,7 @@ ComputeStage& ComputeStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t 
 	return *this;
 }
 
-ComputeStage& ComputeStage::WriteSets(int set_i)
+PostFXStage& PostFXStage::WriteSets(int set_i)
 {
 	if (!imageBindings.empty()) {
 		// Need to create vector for image infos to hold data until update command is executed
@@ -136,7 +136,7 @@ ComputeStage& ComputeStage::WriteSets(int set_i)
 	return *this;
 }
 
-ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i)
+PostFXStage& PostFXStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i)
 {
 	WriteSets(set_i);
 
@@ -146,14 +146,14 @@ ComputeStage& ComputeStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set
 	return *this;
 }
 
-void ComputeStage::Barrier()
+void PostFXStage::Barrier()
 {
 	vk_utils::memoryBarrier(commandBuffer,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 }
 
-void ComputeStage::InitDescriptorSets(
+void PostFXStage::InitDescriptorSets(
 	DescriptorLayoutCache* dLayoutCache, DescriptorAllocator* dAllocator,
 	FrameData& f, int frame_i)
 {
@@ -184,17 +184,24 @@ void ComputeStage::InitDescriptorSets(
 	builder.build(sets[frame_i], setLayout);
 }
 
-void ComputeStage::Destroy()
+void PostFXStage::Destroy()
 {
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 }
 
-ComputePass::ComputePass()
+PostFX::PostFX()
 {
+	effectPrefixMap[EXPADP] = "expadp_";
+	effectPrefixMap[DURAND] = "durand_";
+	effectPrefixMap[FUSION] = "fusion_";
+	effectPrefixMap[BLOOM] = "bloom_";
+	effectPrefixMap[GTMO] = "gtmo_";
+	effectPrefixMap[GAMMA] = "gamma_";
+
 	std::string pref = "";
 	{
-		pref = getEffectPrefix(DURAND);
+		pref = getPrefixFromEffect(DURAND);
 		stages[pref+"0"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
 		stages[pref+"1"] = { .shaderName = "ltm_durand_bilateral_base.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
 		stages[pref+"2"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG, IMG } };
@@ -205,20 +212,20 @@ ComputePass::ComputePass()
 		att[pref+"detail"] = {};
 	}
 	{
-		pref = getEffectPrefix(FUSION);
+		pref = getPrefixFromEffect(FUSION);
 		stages[pref+"0"] = { .shaderName = "ltm_fusion_0.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
 		stages[pref+"1"] = { .shaderName = "ltm_fusion_1.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
 		stages[pref+"2"] = { .shaderName = "ltm_fusion_2.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR } };
 		stages[pref+"4"] = { .shaderName = "ltm_fusion_4.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
 
 		// TODO: change naming to "filter_horiz/vert"
-		stages[pref+"upsample0_sub"] = { .shaderName = "upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample1_sub"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample2_sub"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample0_sub"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample1_sub"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample2_sub"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
-		stages[pref+"upsample0_add"] = { .shaderName = "upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample1_add"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample2_add"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample0_add"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample1_add"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"upsample2_add"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
 		stages[pref + "add"] = { .shaderName = "mipmap_add.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 		stages[pref + "subtract"] = { .shaderName = "mipmap_subtract.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR}, .usesPushConstants = true };
@@ -226,15 +233,15 @@ ComputePass::ComputePass()
 		stages[pref + "move"] = { .shaderName = "move.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 
 		// TODO: change naming to "filter_horiz/vert"
-		stages[pref + "downsample0_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "downsample1_lum"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "downsample2_lum"] = { .shaderName = "decimate_new.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "downsample0_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "downsample1_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "downsample2_lum"] = { .shaderName = "ltm_fusion_decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
-		stages[pref+"downsample0_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"downsample1_weight"] = { .shaderName = "filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"downsample2_weight"] = { .shaderName = "decimate_new.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"downsample0_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"downsample1_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"downsample2_weight"] = { .shaderName = "ltm_fusion_decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
-		att[pref+"chrom"] = att[pref+"laplacSum"] = {};
+		att[pref+"chrom"] = {};
 
 		pyr[pref+"lum"] = pyr[pref+"weight"] = pyr[pref+"laplac"] = pyr[pref+"blendedLaplac"] = {};
 		// Pyramid that will hold intermediate filtered images when upsampling
@@ -243,64 +250,91 @@ ComputePass::ComputePass()
 		pyr[pref+"downsampled0"] = pyr[pref+"downsampled1"] = {};
 	}
 	{
-		pref = getEffectPrefix(BLOOM);
-		stages[pref+"0"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
+		pref = getPrefixFromEffect(BLOOM);
+		stages[pref + "threshold"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 
-		stages[pref+"blur0"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { UB, IMG, IMG }, .usesPushConstants = true };
-		stages[pref+"blur1"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { UB, IMG, IMG }, .usesPushConstants = true };
+		stages[pref + "downsample"] = { .shaderName = "bloom_downsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
 
-		stages[pref+"2"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
+		stages[pref + "blur0"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+		stages[pref + "blur1"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
 
-		att[pref+"highlights"] = att[pref+"blur0"] = att[pref+"blur1"] = {};
+		stages[pref + "upsample"] = { .shaderName = "bloom_upsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
+
+		stages[pref + "combine"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
+
+		pyr[pref + "highlights"] = {};
+
+		pyr[pref + "blur"] = {};
 	}
 	{
-		pref = getEffectPrefix(EXPADP);
+		pref = getPrefixFromEffect(EXPADP);
 		stages[pref + "histogram"] = { .shaderName = "expadp_histogram.comp.spv", .dsetBindings = { SSBO, UB, IMG } };
 		stages[pref + "avglum"] = { .shaderName = "expadp_average_luminance.comp.spv", .dsetBindings = { SSBO, UB } };
 		stages[pref + "eyeadp"] = { .shaderName = "expadp_eye_adaptation.comp.spv", .dsetBindings = { SSBO, IMG } };
 	}
 	{
-		pref = getEffectPrefix(GTMO);
+		pref = getPrefixFromEffect(GTMO);
 		stages[pref + "0"] = { .shaderName = "global_tone_mapping.comp.spv", .dsetBindings = { UB, IMG } };
 	}
 	{
-		pref = getEffectPrefix(GAMMA);
+		pref = getPrefixFromEffect(GAMMA);
 		stages[pref + "0"] = { .shaderName = "gamma_correction.comp.spv", .dsetBindings = { UB, IMG } };
 	}
 }
 
-ComputeStage& ComputePass::Stage(Effect fct, std::string key) {
-	std::string _key = getEffectPrefix(fct) + key;
+PostFXStage& PostFX::Stage(Effect fct, std::string key) {
+	std::string _key = getPrefixFromEffect(fct) + key;
 	ASSERT(stages.contains(_key));
 	return stages[_key];
 }
 
-Attachment& ComputePass::Att(Effect fct, std::string key) {
-	std::string _key = getEffectPrefix(fct) + key;
+Attachment& PostFX::Att(Effect fct, std::string key) {
+	std::string _key = getPrefixFromEffect(fct) + key;
 	ASSERT(att.contains(_key));
 	return att[_key];
 }
 
-AttachmentPyramid& ComputePass::Pyr(Effect fct, std::string key) {
-	std::string _key = getEffectPrefix(fct) + key;
+AttachmentPyramid& PostFX::Pyr(Effect fct, std::string key) {
+	std::string _key = getPrefixFromEffect(fct) + key;
 	ASSERT(pyr.contains(_key));
 	return pyr[_key];
 }
 
-std::string ComputePass::getEffectPrefix(Effect fct) {
+std::string PostFX::getPrefixFromEffect(Effect fct) {
 	switch (fct) {
-	case DURAND:
-		return "durand_";
+	case DURAND: case FUSION: case BLOOM: case EXPADP: case GTMO: case GAMMA:
+		return effectPrefixMap[fct];
+	default:
+		ASSERT(false);
+		return "";
+	}
+}
+
+Effect PostFX::getEffectFromPrefix(std::string pref)
+{
+	for (auto& ep : effectPrefixMap) {
+		if (ep.second == pref) {
+			return ep.first;
+		}
+	}
+	ASSERT(false);
+}
+
+bool PostFX::isEffectEnabled(Effect fct)
+{
+	switch (fct) {
+	case DURAND: 
+		return enableLocalToneMapping && localToneMappingMode == LTM::DURAND;
 	case FUSION:
-		return "fusion_";
-	case BLOOM:
-		return "bloom_";
-	case EXPADP:
-		return "expadp_";
-	case GTMO:
-		return "gtmo_";
+		return enableLocalToneMapping && localToneMappingMode == LTM::FUSION;
+	case BLOOM: 
+		return enableBloom;
+	case EXPADP: 
+		return enableAdaptation;
+	case GTMO: 
+		return enableGlobalToneMapping;
 	case GAMMA:
-		return "gamma_";
+		return enableGammaCorrection;
 	default:
 		ASSERT(false);
 		return "";

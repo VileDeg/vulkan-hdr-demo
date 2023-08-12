@@ -14,7 +14,7 @@ enum {
 class DescriptorLayoutCache;
 class DescriptorAllocator;
 
-struct ComputeStage {
+struct PostFXStage {
     std::string tag = "";
 
     VkDescriptorSetLayout setLayout;
@@ -42,16 +42,16 @@ struct ComputeStage {
         const std::string& shaderBinName, bool usePushConstants = false);
     void Destroy();
 
-    ComputeStage& Bind(VkCommandBuffer cmd);
+    PostFXStage& Bind(VkCommandBuffer cmd);
 
-    ComputeStage& UpdateImage(VkImageView view, uint32_t binding);
-    ComputeStage& UpdateImage(Attachment att, uint32_t binding);
+    PostFXStage& UpdateImage(VkImageView view, uint32_t binding);
+    PostFXStage& UpdateImage(Attachment att, uint32_t binding);
 
-    ComputeStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
+    PostFXStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
 
-    ComputeStage& WriteSets(int set_i);
+    PostFXStage& WriteSets(int set_i);
 
-    ComputeStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
+    PostFXStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
     void Barrier();
 
     void InitDescriptorSets(
@@ -63,16 +63,47 @@ enum Effect {
     EXPADP, DURAND, FUSION, BLOOM, GTMO, GAMMA
 };
 
-struct ComputePass {
-    std::map<std::string, ComputeStage> stages;
+struct PostFX {
+    enum class LTM : int {
+        DURAND = 0, FUSION
+    };
+
+    std::map<std::string, PostFXStage> stages;
     std::map<std::string, Attachment> att;
     std::map<std::string, AttachmentPyramid> pyr;
 
-    ComputePass();
+    PostFX();
 
-    ComputeStage& Stage(Effect fct, std::string key);
+    PostFXStage& Stage(Effect fct, std::string key);
     Attachment& Att(Effect fct, std::string key);
     AttachmentPyramid& Pyr(Effect fct, std::string key);
 
-    std::string getEffectPrefix(Effect fct);
+    std::string getPrefixFromEffect(Effect fct);
+    Effect getEffectFromPrefix(std::string pref);
+
+    bool isEffectEnabled(Effect fct);
+
+    std::map<Effect, std::string> effectPrefixMap;
+
+    GPUCompUB ub{};
+
+    int numOfBloomMips;
+    float lumPixelLowerBound = 0.2f;
+    float lumPixelUpperBound = 0.95f;
+
+    float maxLogLuminance = 4.7f;
+    float eyeAdaptationTimeCoefficient = 2.2f;
+
+    LTM localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
+
+    float gamma = 2.2f;
+    int gammaMode = 0; // 0 - forward, 1 - inverse
+
+    int numOfBloomBlurPasses = 5;
+
+    bool enableBloom = true;
+    bool enableGlobalToneMapping = true;
+    bool enableGammaCorrection = false;
+    bool enableAdaptation = false;
+    bool enableLocalToneMapping = false;
 };

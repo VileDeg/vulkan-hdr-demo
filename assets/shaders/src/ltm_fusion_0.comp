@@ -69,8 +69,6 @@ void main() {
         float shadows	 = dot(shadowsColor, RGB_TO_LUM);
 
 		vec3 lums  = vec3(highlights, midtones, shadows);
-        vec3 lab = rgb2lab(midtonesColor);
-        vec3 chrom = lab;
 
 		//vec3 chrom = midtonesColor / midtones;
 
@@ -87,6 +85,12 @@ void main() {
         weights /= dot(weights, vec3(1.0)) + 0.00001;
 
 		imageStore(luminanceImage, coords, vec4(lums, 1.0));
+
+		// Blend the colors to restore the right color in the last step that would correspond to blended luminances
+		vec3 blendedColor = highlightsColor * weights.x + midtonesColor * weights.y + shadowsColor * weights.z;
+		vec3 lab = rgb2lab(blendedColor);
+        vec3 chrom = lab;
+
 		imageStore(chrominanceImage, coords, vec4(chrom, 1.0));
 
 		imageStore(weightImage, coords, vec4(weights, 1.0));

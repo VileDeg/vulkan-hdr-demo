@@ -1,0 +1,29 @@
+#version 460
+
+#include "incl/defs.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+/*layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;*/ // TODO: remove ?
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 0) uniform image2D image[MAX_VIEWPORT_MIPS];
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int i = pc.mipIndex;
+	ivec2 dim = imageSize(image[i]).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+		vec4 px = imageLoad(image[i], coords) + imageLoad(image[i-1], coords);
+
+		imageStore(image[i-1], coords << 2, px);
+	}
+}

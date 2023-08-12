@@ -75,5 +75,10 @@ namespace vkinit {
 	VkSamplerCreateInfo sampler_create_info(VkFilter filters, VkSamplerAddressMode samplerAddressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
 	VkWriteDescriptorSet write_descriptor_image(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfos, uint32_t binding);
+
+	// Dynamic Rendering
+	VkRenderingAttachmentInfo rendering_attachment_info(VkImageView view, VkImageLayout layout);
+
+	VkRenderingInfo rendering_info(VkRenderingAttachmentInfo* pColorAttachments, VkRenderingAttachmentInfo* pDepthAttachments, uint32_t width, uint32_t height);
 }
 

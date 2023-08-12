@@ -9,7 +9,7 @@
 #endif
 
 #include "types.h"
-#include "compute.h"
+#include "postfx.h"
 
 #include "camera.h"
 #include "vk_descriptors.h"
@@ -35,7 +35,7 @@ private: /* Methods used from Init directly */
     void createVmaAllocator();
     void createSwapchain();
 
-    void prepareMainPass();
+    void prepareSwapchainPass();
     void prepareViewportPass(uint32_t extentX, uint32_t extentY);
     void prepareShadowPass();
 
@@ -98,13 +98,18 @@ private: /* Secondary methods */
     void drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>& object, Material** lastMaterial, Mesh** lastMesh, uint32_t index);
     void drawObjects(VkCommandBuffer cmd, const std::vector<std::shared_ptr<RenderObject>>& objects);
 
-    void updateCubeFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
+    void updateShadowCubemapFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
 
     void loadDataToGPU();
     void durand2002(VkCommandBuffer& cmd, int imageIndex);
 
     void exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix);
     void exposureFusion(VkCommandBuffer& cmd, int imageIndex);
+
+    void shadowPass(FrameData& f, int imageIndex);
+    void viewportPass(VkCommandBuffer& cmd, int imageIndex);
+    void postfxPass(FrameData& f, int imageIndex);
+    void swapchainPass(FrameData& f, int imageIndex);
 
     void recordCommandBuffer(FrameData& f, uint32_t imageIndex);
 
@@ -124,31 +129,43 @@ private:
     void loadScene(std::string fullScenePath);
 
 private:  // UI
-    void initImgui();
 
-    void imgui_RegisterViewportImageViews();
-    void imgui_UnregisterViewportImageViews();
+    void ui_InitImGui();
+    void ui_Init();
 
-    void imguiUpdate();
+    void ui_RegisterTextures();
+    void ui_UnregisterTextures();
 
-    void imguiOnDrawStart();
-    void imguiOnRenderPassEnd(VkCommandBuffer cmdBuffer);
+    void ui_Update();
+    void ui_OnDrawStart();
+    void ui_OnRenderPassEnd(VkCommandBuffer cmdBuffer);
 
-    void uiUpdateScene();
-    void uiUpdateHDR();
-    void uiUpdateRenderContext();
-    void uiUpdateViewport();
-    void uiUpdateDebugDisplay();
-    void uiUpdateMenuBar();
+    void ui_Scene();
+    void ui_HDR();
+    void ui_RenderContext();
+    void ui_Viewport();
+    void ui_DebugDisplay();
+    void ui_MenuBar();
+    void ui_AttachmentViewer();
+    void ui_StatusBar();
+    void ui_PostFXPipeline();
 
-    bool uiSaveScene();
-    bool uiLoadScene();
+    bool ui_SaveScene();
+    bool ui_LoadScene();
+
+    void ui_Window(std::string name, std::function<void()> func, int flags = 0);
+    bool& ui_GetWindowFlag(std::string name);
+
+    std::map<std::string, bool> uiWindows;
 
     bool _saveShortcutPressed = false;
     bool _loadShortcutPressed = false;
     bool _isViewportHovered = true;
 
-    std::vector<VkDescriptorSet> _imguiViewportImageViewDescriptorSets;
+    bool _wasViewportResized = false;
+
+    uint32_t newViewportSizeX = 0;
+    uint32_t newViewportSizeY = 0;
 private:
     void setDebugName(VkObjectType type, void* handle, const std::string name);
 
@@ -187,7 +204,7 @@ private:
     ViewportPass _viewport;
 
     ShadowPass _shadow;
-    ComputePass _compute;
+    PostFX _postfx;
 
     uint32_t _frameInFlightNum = 0;
 
@@ -218,6 +235,7 @@ private:
     VkDescriptorSetLayout _shadowSetLayout;
 
     VkSampler _linearSampler;
+    VkSampler _nearestSampler;
 
     VkDescriptorPool _descriptorPool;
 
@@ -244,13 +262,6 @@ private:
     std::vector<const char*> _enabledValidationLayers;
     std::vector<const char*> _instanceExtensions;
     std::vector<const char*> _deviceExtensions;
-
-public:
-    static std::string ASSET_PATH;
-    static std::string SHADER_PATH;
-    static std::string IMAGE_PATH;
-    static std::string MODEL_PATH;
-    static std::string SCENE_PATH;
 
 private:
     uint32_t WIDTH;
