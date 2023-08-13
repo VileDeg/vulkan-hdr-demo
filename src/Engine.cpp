@@ -270,7 +270,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
         _postfx.ub.numOfViewportMips = numOfViewportMips;
-        _postfx.numOfBloomMips = numOfViewportMips;
+        _postfx.numOfBloomMips = numOfViewportMips-2;
 
 
         for (auto& att : _postfx.att) {

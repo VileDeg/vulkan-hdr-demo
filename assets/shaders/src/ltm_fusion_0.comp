@@ -60,15 +60,17 @@ void main() {
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
 		//inpColor *= exp2(ub.midtonesExposure);
 
-		vec3 highlightsColor = clamp(applyToneMapping(inpColor * exp2(ub.highlightsExposure)), 0.0, 1.0);
-		vec3 midtonesColor = clamp(applyToneMapping(inpColor), 0.0, 1.0);
-		vec3 shadowsColor = clamp(applyToneMapping(inpColor * exp2(ub.shadowsExposure)), 0.0, 1.0);
 
-		float highlights = dot(highlightsColor, RGB_TO_LUM);
-        float midtones   = dot(midtonesColor, RGB_TO_LUM);
-        float shadows	 = dot(shadowsColor, RGB_TO_LUM);
 
-		vec3 lums  = vec3(highlights, midtones, shadows);
+		vec3 highlightsColor = applyToneMapping(inpColor * exp2(ub.highlightsExposure));
+		vec3 midtonesColor	 = applyToneMapping(inpColor);
+		vec3 shadowsColor	 = applyToneMapping(inpColor * exp2(ub.shadowsExposure));
+
+		vec3 lums  = vec3(
+			dot(highlightsColor, RGB_TO_LUM), 
+			dot(midtonesColor, RGB_TO_LUM), 
+			dot(shadowsColor, RGB_TO_LUM)
+		);
 
 		//vec3 chrom = midtonesColor / midtones;
 

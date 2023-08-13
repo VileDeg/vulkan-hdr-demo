@@ -18,12 +18,15 @@ void main() {
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 	if (coords.x < dim.x && coords.y < dim.y) {
-		vec3 outColor = imageLoad(inOutImage, coords).rgb;
-		vec3 bloom = imageLoad(bloomImage, coords).rgb;
+		vec3 color = imageLoad(inOutImage, coords).rgb;
+		vec3 bloom = imageLoad(bloomImage, coords).rgb * ub.bloomHighlightsWeight;
+
+		//bloom = clamp(bloom, 0, 2);
 
 		// Apply bloom
-		outColor += bloom * ub.bloomHighlightsWeight;
+		//color += log(bloom+1);
+		color += bloom;
 
-		imageStore(inOutImage, coords, vec4(outColor, 1.0));
+		imageStore(inOutImage, coords, vec4(color, 1.0));
 	}
 }

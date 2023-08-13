@@ -914,9 +914,7 @@ void Engine::createScene(CreateSceneData data)
 		sphr->lightAffected = false;
 		sphr->useObjectColor = true;
 
-		sphr->meshes[0]->gpuMat.ambientColor *= 10.f;
-		sphr->meshes[0]->gpuMat.diffuseColor *= 10.f;
-		sphr->meshes[0]->gpuMat.specularColor *= 10.f;
+		float max_intensity = _renderContext.sceneData.lights[0].intensity;
 
 		for (int i = 0; i < MAX_LIGHTS; i++) {
 			auto ptr = std::make_shared<RenderObject>(
@@ -930,9 +928,14 @@ void Engine::createScene(CreateSceneData data)
 			);
 
 			_renderables.push_back(ptr);
-
 			_renderContext.lightObjects.push_back(ptr);
+
+			max_intensity = std::max(max_intensity, _renderContext.sceneData.lights[i].intensity);
 		}
+
+		sphr->meshes[0]->gpuMat.ambientColor  *= max_intensity;
+		sphr->meshes[0]->gpuMat.diffuseColor  *= max_intensity;
+		sphr->meshes[0]->gpuMat.specularColor *= max_intensity;
 	}
 
 	if (getModel("main")) {

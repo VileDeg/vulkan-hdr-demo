@@ -83,9 +83,9 @@ void main()
                 sd.enableShadows, shadowCubeArray, sd.lightFarPlane, sd.shadowBias, sd.enablePCF);
         }
 
-        if (sd.enableExposure) {
+        /*if (sd.enableExposure) {
             result *= pow(2, sd.exposure);
-        }
+        }*/
     }
    
     FragColor = vec4(result, 1.f);

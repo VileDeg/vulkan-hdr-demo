@@ -6,6 +6,7 @@
 #define COMPUTE_THREADS_XY 32
 #define FUSION_DBG_PREF std::string("LTM::FUSION")
 #define DURAND_DBG_PREF std::string("LTM::DURAND")
+#define BLOOM_DBG_PREF std::string("BLOOM")
 
 constexpr VkImageSubresourceRange FULL_COLOR_RANGE = {
 	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -799,7 +800,8 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 	}
 
 	if (_postfx.enableBloom) {
-		beginCmdDebugLabel(f.cmd, "BLOOM");
+		
+		beginCmdDebugLabel(f.cmd, BLOOM_DBG_PREF);
 		{
 			cp.Stage(BLOOM, "threshold").Bind(f.cmd)
 				.UpdateImage(_viewport.imageViews[imageIndex], 1)
@@ -831,40 +833,48 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 
 			GPUCompPC pc = {};
 
-			beginCmdDebugLabel(f.cmd, "BLOOM::DOWNSAMPLE_AND_BLUR");
-			for (int i = 1; i < _postfx.numOfBloomMips; ++i) {
+			std::string dbglb = BLOOM_DBG_PREF + "::DOWNSAMPLE_AND_BLUR";
+			beginCmdDebugLabel(f.cmd, dbglb);
+			for (int i = 0; i < _postfx.numOfBloomMips; ++i) {
+				beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
 				glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
 
 				pc.mipIndex = i;
 				pc.horizontalPass = true;
-				vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "downsample").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-				// Downsample
-				cp.Stage(BLOOM, "downsample").Bind(f.cmd)
-					.Dispatch(groups32.x, groups32.y, imageIndex)
-					.Barrier();
-#if 0
-				pc.mipIndex = i;
-				pc.horizontalPass = true;
 				vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "blur0").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
 
-				cp.Stage(BLOOM, "blur0").Bind(f.cmd)
-					.Dispatch(groups32.x, groups32.y, imageIndex)
-					.Barrier();
-
-				pc.mipIndex = i;
-				pc.horizontalPass = false;
-				vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "blur1").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-				cp.Stage(BLOOM, "blur1").Bind(f.cmd)
-					.Dispatch(groups32.x, groups32.y, imageIndex)
-					.Barrier();
+#if 1
+				if (i > 0) {
+					// Downsample
+					cp.Stage(BLOOM, "downsample").Bind(f.cmd)
+						.Dispatch(groups32.x, groups32.y, imageIndex)
+						.Barrier();
+				}
 #endif
+
+#if 1
+				if (i < _postfx.numOfBloomMips - 1) {
+					cp.Stage(BLOOM, "blur0").Bind(f.cmd)
+						.Dispatch(groups32.x, groups32.y, imageIndex)
+						.Barrier();
+
+					pc.horizontalPass = false;
+					vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "blur1").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+					cp.Stage(BLOOM, "blur1").Bind(f.cmd)
+						.Dispatch(groups32.x, groups32.y, imageIndex)
+						.Barrier();
+				}
+#endif
+
+				endCmdDebugLabel(f.cmd);
 			}
 			endCmdDebugLabel(f.cmd);
-#if 0
-			beginCmdDebugLabel(f.cmd, "BLOOM::UPSAMPLE_AND_ADD");
-			for (int i = _postfx.numOfBloomMips - 1; i >= 1; --i) {
+#if 1
+			dbglb = BLOOM_DBG_PREF + "::UPSAMPLE_AND_ADD";
+			beginCmdDebugLabel(f.cmd, dbglb);
+			for (int i = _postfx.numOfBloomMips - 2; i >= 0; --i) {
+				beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
 				glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
 
 				pc.mipIndex = i;
@@ -873,6 +883,7 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 				cp.Stage(BLOOM, "upsample").Bind(f.cmd)
 					.Dispatch(groups32.x, groups32.y, imageIndex)
 					.Barrier();
+				endCmdDebugLabel(f.cmd);
 			}
 			endCmdDebugLabel(f.cmd);
 
