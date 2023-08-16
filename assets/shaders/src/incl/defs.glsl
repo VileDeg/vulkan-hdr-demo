@@ -42,4 +42,8 @@
         MatData mat[MAX_MESHES_PER_OBJECT];
     };
 
+    ivec2 borderClamp(ivec2 coords, ivec2 dim) {
+	    coords = clamp(coords, ivec2(0), dim-ivec2(1));
+	    return coords;
+    }
 #endif

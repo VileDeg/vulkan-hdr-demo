@@ -357,10 +357,8 @@ void Engine::ui_HDR()
 		if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
 
-			ImGui::SliderInt("Number of blur passes", &_postfx.numOfBloomBlurPasses, 0, 20);
-			ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
-
-			ImGui::SliderFloat("Bloom Hightlights Weight", &_postfx.ub.bloomHighlightsWeight, 0.1, 1.f);
+			//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
+			ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloomWeight, 0.001, 0.5f);
 
 			ImGui::TreePop();
 		}
@@ -378,17 +376,6 @@ void Engine::ui_HDR()
 			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
 				_postfx.ub.toneMappingMode = item_current;
 			}
-
-			//{ // Scene EV
-			//	ImGui::Text("Adjust scene EV"); ImGui::SameLine();
-			//	if (ImGui::Button("-")) {
-			//		_renderContext.sceneData.exposure -= 1;
-			//	} ImGui::SameLine();
-			//	ImGui::Text("%f", _renderContext.sceneData.exposure); ImGui::SameLine();
-			//	if (ImGui::Button("+")) {
-			//		_renderContext.sceneData.exposure += 1;
-			//	}
-			//}
 
 			ImGui::TreePop();
 		}
@@ -434,19 +421,6 @@ void Engine::ui_HDR()
 
 			{ // Gamma correction
 				ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
-
-				/*const char* items[] = {
-					"Gamma correction", "Inverse gamma correction" };*/
-				/*static int item_current = _renderContext.gammaMode;
-				if (ImGui::Combo("Gamma", &item_current, items, IM_ARRAYSIZE(items))) {
-					_renderContext.gammaMode = item_current;
-
-					if (_renderContext.gammaMode == 1) {
-						_postfx.ub.gamma = 1 / _renderContext.gamma;
-					} else {
-						_postfx.ub.gamma = _renderContext.gamma;
-					}
-				}*/
 
 				ImGui::SliderFloat("Gamma", &_postfx.ub.gamma, 0.5f, 3.f);
 			}

@@ -815,7 +815,9 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 			cp.Stage(BLOOM, "downsample").Bind(f.cmd)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
 				.WriteSets(imageIndex);
+#define BLOOM_BLUR 0
 
+#if BLOOM_BLUR == 1
 			cp.Stage(BLOOM, "blur0").Bind(f.cmd)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "blur"), 1)
@@ -825,6 +827,7 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "blur"), 0)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 1)
 				.WriteSets(imageIndex);
+#endif
 
 			cp.Stage(BLOOM, "upsample").Bind(f.cmd)
 				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
@@ -852,7 +855,7 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 				}
 #endif
 
-#if 1
+#if BLOOM_BLUR == 1
 				if (i < _postfx.numOfBloomMips - 1) {
 					cp.Stage(BLOOM, "blur0").Bind(f.cmd)
 						.Dispatch(groups32.x, groups32.y, imageIndex)

@@ -6,14 +6,126 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-/*layout (set = 0, binding = 0) 
-#include "incl/computeUB.incl" 
-ub;*/ // TODO: remove ?
-
 #include "incl/compPC.incl"
 pc;
 
 layout (rgba32f, set = 0, binding = 0) uniform image2D image[MAX_VIEWPORT_MIPS];
+
+
+// [Jimenez14] http://goo.gl/eomGso
+// . . . . . . .
+// . A . B . C .
+// . . D . E . .
+// . F . G . H .
+// . . I . J . .
+// . K . L . M .
+// . . . . . . .
+
+#if 0
+    // 2x2 billinear fetch
+    // A B
+    // C D
+    vec4 billinear(image2D img, ivec2 tc) 
+    {
+        vec4 A = imageLoad(img, tc);
+        vec4 B = imageLoad(img, tc + ivec2(1, 0));
+        vec4 C = imageLoad(img, tc + ivec2(0, -1));
+        vec4 D = imageLoad(img, tc + ivec2(-1, -1));
+
+        return (A + B + C + D) * 0.25;
+    }
+
+
+    // 4x4 box filter
+    // A . B .
+    // . . . .
+    // C . D .
+    // . . . .
+    vec4 box(image2D img, ivec2 tc) 
+    {
+        vec4 A = billinear(img, tc + ivec2(-1, -1));
+        vec4 B = billinear(img, tc + ivec2(1, -1));
+        vec4 C = billinear(img, tc + ivec2(-1, 1));
+        vec4 D = billinear(img, tc + ivec2(1, 1));
+
+        return (A + B + C + D) * 0.25;
+    }
+#else 
+
+    #if 0
+        // 2x2 fetch
+        // A B
+        // C D
+        #define billinear(img, tc) ( \
+            ( \
+                imageLoad(img, (tc)) + \
+                imageLoad(img, (tc) + ivec2(1, 0)) + \
+                imageLoad(img, (tc) + ivec2(0, -1)) + \
+                imageLoad(img, (tc) + ivec2(-1, -1)) \
+            ) * 0.25\
+        )
+    #else 
+        #define DIM imageSize(image[i]).xy
+        // 3x3 fetch
+        // A B C
+        // D E F
+        // G H I
+        #define f3x3tent(img, tc) ( \
+            ( \
+                imageLoad(img, (tc) + ivec2(-1, -1)) + \
+                imageLoad(img, (tc) + ivec2(0 , -1)) * 2.0 + \
+                imageLoad(img, (tc) + ivec2(1 , -1)) + \
+                \
+                imageLoad(img, (tc) + ivec2(-1,  0)) * 2.0 + \
+                imageLoad(img, (tc)                ) * 4.0 + \
+                imageLoad(img, (tc) + ivec2(1 ,  0)) * 2.0 + \
+                \
+                imageLoad(img, (tc) + ivec2(-1,  1)) + \
+                imageLoad(img, (tc) + ivec2(0 ,  1)) * 2.0 + \
+                imageLoad(img, (tc) + ivec2(1 ,  1)) \
+            ) * 0.0625 /* 1/16 */\
+        )
+
+        // 9x9
+        // . . .  . . .  . . .
+        // . A .  . B .  . C .
+        // . . .  . . .  . . .
+        //
+        // . . .  . . .  . . .
+        // . D .  . E .  . F .
+        // . . .  . . .  . . .
+        //
+        // . . .  . . .  . . .
+        // . G .  . H .  . I .
+        // . . .  . . .  . . .
+        #define f9x9tent(img, tc) ( \
+            ( \
+                f3x3tent(img, (tc) + ivec2(-3, -3)) + \
+                f3x3tent(img, (tc) + ivec2(0 , -3)) * 2.0 + \
+                f3x3tent(img, (tc) + ivec2(3 , -3)) + \
+                \
+                f3x3tent(img, (tc) + ivec2(-3,  0)) * 2.0 + \
+                f3x3tent(img, (tc)                ) * 4.0 + \
+                f3x3tent(img, (tc) + ivec2(3 ,  0)) * 2.0 + \
+                \
+                f3x3tent(img, (tc) + ivec2(-3,  3)) + \
+                f3x3tent(img, (tc) + ivec2(0 ,  3)) * 2.0 + \
+                f3x3tent(img, (tc) + ivec2(3 ,  3)) \
+            ) * 0.0625 /* 1/16 */\
+        )
+
+    #endif
+
+    #define box(img, tc) ( \
+        ( \
+            billinear(img, tc + ivec2(-1, -1)) + \
+            billinear(img, tc + ivec2(1, -1)) + \
+            billinear(img, tc + ivec2(-1, 1)) + \
+            billinear(img, tc + ivec2(1, 1)) \
+        ) * 0.25 \
+    )
+
+#endif
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
@@ -24,6 +136,7 @@ void main() {
 	if (coords.x < dim.x && coords.y < dim.y) {
 		ivec2 coordsHigher = coords << 1;
 		
+#if 0
 		vec4 A = imageLoad(image[i-1], coordsHigher + ivec2(-1.0, -1.0));
         vec4 B = imageLoad(image[i-1], coordsHigher + ivec2( 0.0, -1.0));
         vec4 C = imageLoad(image[i-1], coordsHigher + ivec2( 1.0, -1.0));
@@ -45,6 +158,11 @@ void main() {
         px += (B + C + H + G) * div.y;
         px += (F + G + L + K) * div.y;
         px += (G + H + M + L) * div.y;
+#else
+        //vec4 px = box(image[i-1], coordsHigher);
+        //vec4 px = f3x3tent(image[i-1], coordsHigher);
+        vec4 px = f9x9tent(image[i-1], coordsHigher);
+#endif
 
 		imageStore(image[i], coords, px);
 	}

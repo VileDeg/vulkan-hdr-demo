@@ -48,36 +48,6 @@ void main() {
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 	if (coords.x < dim.x && coords.y < dim.y) {
-		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(decimatedImage[i+1]).xy);
-/*		ivec2 coordsHigher = coords << 1;
-		
-		vec3 px = vec3(0);
-		// Horizontal
-		ivec2 dir = ivec2(1, 0);
-		for (int j = -(MSIZE/2); j < (MSIZE/2+1); ++j) {
-			ivec2 sampleFrom = coordsHigher + dir * j;
-#if EDGE_MODE == 0
-			sampleFrom = borderWrap(sampleFrom, dim);
-#else
-			sampleFrom = borderClamp(sampleFrom, dim);
-#endif
-			px += imageLoad(inFilteredImage[i-1], sampleFrom).rgb * f[j + MSIZE/2];
-		}
-		imageStore(decimatedImage[i], coords, vec4(px, 1.0));
-		barrier();
-
-		// Vertical
-		dir = ivec2(0, 1);
-		for (int j = -(MSIZE/2); j < (MSIZE/2+1); ++j) {
-			ivec2 sampleFrom = coordsHigher + dir * j;
-#if EDGE_MODE == 0
-			sampleFrom = borderWrap(sampleFrom, dim);
-#else
-			sampleFrom = borderClamp(sampleFrom, dim);
-#endif
-			px += imageLoad(inFilteredImage[i-1], sampleFrom).rgb * f[j + MSIZE/2];
-		}*/
-
 		imageStore(decimatedImage[i], coords, vec4(imageLoad(inFilteredImage[i-1], coords << 1).rgb, 1.0));
 	}
 }

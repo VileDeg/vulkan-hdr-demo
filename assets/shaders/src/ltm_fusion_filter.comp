@@ -25,10 +25,7 @@ const float[MSIZE] f = { .0625, .25, .375, .25, .0625 };
 // Border clamp works better
 #define EDGE_MODE 0
 
-ivec2 borderClamp(ivec2 coords, ivec2 dim) {
-	    coords = clamp(coords, ivec2(0), dim-ivec2(1));
-	    return coords;
-    }
+
 
 ivec2 borderWrap(ivec2 coords, ivec2 dim) {
 	if (coords.x > dim.x-1) {

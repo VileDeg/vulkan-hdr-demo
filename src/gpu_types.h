@@ -156,5 +156,5 @@ struct GPUCompUB {
     float highlightsExposure = -1.6;
     float exposednessWeightSigma = 5;
 
-    float bloomHighlightsWeight = 0.628f;
+    float bloomWeight = 0.04f;
 };
