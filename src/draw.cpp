@@ -60,7 +60,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		bool hasBump = mesh->bumpTex != nullptr;
 		GPUScenePC pc = {
 			.lightAffected = model->lightAffected,
-			.isCubemap = obj.isSkybox,
+			//.isCubemap = obj.isSkybox,
 			.objectIndex = index,
 			.meshIndex = m,
 			.useDiffTex = hasDiff,
@@ -75,7 +75,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 
 		vkCmdPushConstants(
 			cmd, mesh->material->pipelineLayout,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUScenePC),
+			mesh->material->pushConstantsStages, 0, sizeof(GPUScenePC),
 			&pc);
 
 		// If the material is different, bind the new material

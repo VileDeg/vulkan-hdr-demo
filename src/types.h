@@ -237,6 +237,7 @@ struct Material {
     std::string tag = "";
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
+    int pushConstantsStages;
 };
 
 

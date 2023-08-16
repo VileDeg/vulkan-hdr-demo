@@ -9,7 +9,6 @@ layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec3 fragColor;
 layout(location = 2) out vec2 texCoord;
 layout(location = 3) out vec3 normal;
-layout(location = 4) out vec3 uvw; //For cubemap sampling
 
 #include "incl/defs.glsl"
 
@@ -31,11 +30,7 @@ void main()
 	mat4 modelMat = ssbo.objects[pc.objectIndex].model;
 	mat4 transformMat = cam.viewproj * modelMat;
 	
-	if (!pc.isCubemap) {
-		gl_Position = transformMat * vec4(vPosition, 1.0f);
-	} else {
-		gl_Position = (cam.proj * mat4(mat3(cam.view)) * vec4(vPosition, 1.0f)).xyww; 
-	}
+	gl_Position = transformMat * vec4(vPosition, 1.0f);
 
 	fragPos = vec3(modelMat * vec4(vPosition, 1.0f));
 	fragColor = vColor;
@@ -44,7 +39,5 @@ void main()
 
 	//normalMat = mat3(transpose(inverse(modelMat)));
 	normal = normalize(mat3(ssbo.objects[pc.objectIndex].normalMatrix) * vNormal);
-
-	uvw = vPosition;
 }
 

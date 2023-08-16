@@ -74,7 +74,13 @@ private: /* Secondary methods */
     void uploadMesh(Mesh& mesh);
     void createMeshBuffer(Mesh& mesh, bool isVertexBuffer);
 
-    Material* createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
+    void createGraphicsPipeline(
+        const std::string& name,
+        const std::string vertBinName, const std::string fragBinName,
+        VkShaderStageFlags pushConstantsStages, uint32_t pushConstantsSize,
+        std::vector<VkDescriptorSetLayout> setLayouts,
+        VkFormat colorFormat, VkFormat depthFormat,
+        int cullMode);
 
     void createAttachment(
         VkFormat format, VkImageUsageFlags usage,

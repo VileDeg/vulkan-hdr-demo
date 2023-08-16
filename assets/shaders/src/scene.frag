@@ -4,8 +4,6 @@ layout(location = 0) in vec3 fragPos;
 layout(location = 1) in vec3 fragColor;
 layout(location = 2) in vec2 uv;
 layout(location = 3) in vec3 normal;
-layout(location = 4) in vec3 uvw; //For skybox cubemap sampling
-
 
 layout(location = 0) out vec4 FragColor;
 
@@ -27,9 +25,6 @@ ssbo;
 layout(set = 0, binding = 3) uniform samplerCube skybox;
 layout(set = 0, binding = 4) uniform samplerCubeArray shadowCubeArray;
 
-/*layout(set = 1, binding = 0) uniform sampler2D diffuse[MAX_MESHES];
-layout(set = 1, binding = 1) uniform sampler2D bump[MAX_MESHES];*/
-
 layout(set = 0, binding = 5) uniform sampler2D diffuse[MAX_TEXTURES];
 layout(set = 0, binding = 6) uniform sampler2D bump[MAX_TEXTURES];
 
@@ -38,7 +33,7 @@ void main()
     vec3 bumpNormal = normal;
     vec2 bumpUV = uv;
 
-    if (sd.enableBumpMapping && !pc.isCubemap && pc.useBumpTex) {
+    if (sd.enableBumpMapping && pc.useBumpTex) {
         bumpMapping(bump[pc.bumpTexIndex], sd.bumpStep, mat3(ssbo.objects[pc.objectIndex].normalMatrix), sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV);
     }
 
@@ -48,39 +43,27 @@ void main()
     }
 
     vec3 result = vec3(0);
-
-    if (pc.isCubemap) {
-        result = texture(skybox, uvw).rgb;
+  
+    if (pc.useDiffTex) {
+        result = texture(diffuse[pc.diffTexIndex], bumpUV).rgb; 
     } else {
-        if (pc.useDiffTex) {
-            result = texture(diffuse[pc.diffTexIndex], bumpUV).rgb; 
-        } else {
-            //result = objectColor.rgb;
-            result = ssbo.objects[pc.objectIndex].mat[pc.meshIndex].diffuseColor;
-        }
+        result = ssbo.objects[pc.objectIndex].mat[pc.meshIndex].diffuseColor;
     }
 
     if (pc.lightAffected) {
-
-        if (!pc.isCubemap) {
-            if (sd.showShadowMap) {
-                vec3 lightToFrag = fragPos - sd.lights[sd.shadowMapDisplayIndex].pos;
-                float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag, sd.shadowMapDisplayIndex)).r;
-                sampledDepth /= sd.lightFarPlane;
-                FragColor = vec4(vec3(sampledDepth), 1.0) * sd.shadowMapDisplayBrightness;
-                return;
-            }
-
-            // Apply lighting
-            result *= calculateLighting(sd.lights, ssbo.objects[pc.objectIndex].mat[pc.meshIndex], 
-                sd.ambientColor, fragPos, bumpNormal, sd.cameraPos, 
-                sd.enableShadows, shadowCubeArray, sd.lightFarPlane, sd.shadowBias, sd.enablePCF);
+        if (sd.showShadowMap) {
+            vec3 lightToFrag = fragPos - sd.lights[sd.shadowMapDisplayIndex].pos;
+            float sampledDepth = texture(shadowCubeArray, vec4(lightToFrag, sd.shadowMapDisplayIndex)).r;
+            sampledDepth /= sd.lightFarPlane;
+            FragColor = vec4(vec3(sampledDepth), 1.0) * sd.shadowMapDisplayBrightness;
+            return;
         }
 
-        /*if (sd.enableExposure) {
-            result *= pow(2, sd.exposure);
-        }*/
+        // Apply lighting
+        result *= calculateLighting(sd.lights, ssbo.objects[pc.objectIndex].mat[pc.meshIndex], 
+            sd.ambientColor, fragPos, bumpNormal, sd.cameraPos, 
+            sd.enableShadows, shadowCubeArray, sd.lightFarPlane, sd.shadowBias, sd.enablePCF);
     }
-   
+
     FragColor = vec4(result, 1.f);
 }

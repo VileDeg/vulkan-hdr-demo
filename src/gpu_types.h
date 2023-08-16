@@ -31,7 +31,8 @@ struct GPUCameraUB {
 
 struct GPUScenePC {
     GPUBool lightAffected;
-    GPUBool isCubemap;
+    //GPUBool isCubemap;
+    int _pad0;
     uint32_t objectIndex;
     uint32_t meshIndex;
 

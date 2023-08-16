@@ -591,21 +591,3 @@ void Engine::cleanupScene()
 	modelLoaderGlobalBumpTexIndex = 0;
 }
 
-
-Material* Engine::createMaterial(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name)
-{
-	auto& mat = _materials[name] = {
-		.tag = name,
-		.pipeline = pipeline,
-		.pipelineLayout = layout
-	};
-
-	setDebugName(VK_OBJECT_TYPE_PIPELINE, pipeline, name);
-
-	_deletionStack.push([&]() { 
-		vkDestroyPipeline(_device, mat.pipeline, nullptr);
-		vkDestroyPipelineLayout(_device, mat.pipelineLayout, nullptr);
-	});
-
-	return &_materials[name];
-}
