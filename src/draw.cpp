@@ -21,43 +21,6 @@ constexpr VkClearValue CDS_CLEAR_VALUES[2] = {
 	{.depthStencil = {.depth = 1.0f, .stencil = 0 } }
 };
 
-#if 0
-static constexpr int ACCESS_MASK_ALL =
-VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-VK_ACCESS_INDEX_READ_BIT |
-VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-VK_ACCESS_UNIFORM_READ_BIT |
-VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
-VK_ACCESS_SHADER_READ_BIT |
-VK_ACCESS_SHADER_WRITE_BIT |
-VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-VK_ACCESS_TRANSFER_READ_BIT |
-VK_ACCESS_TRANSFER_WRITE_BIT |
-VK_ACCESS_HOST_READ_BIT |
-VK_ACCESS_HOST_WRITE_BIT;
-
-static void s_fullBarrier(VkCommandBuffer& cmd) {
-	VkMemoryBarrier memoryBarrier = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-		.srcAccessMask = ACCESS_MASK_ALL,
-		.dstAccessMask = ACCESS_MASK_ALL
-	};
-
-	vkCmdPipelineBarrier(
-		cmd,
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // srcStageMask
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // dstStageMask
-		0,
-		1,                                  // memoryBarrierCount
-		&memoryBarrier,                     // pMemoryBarriers
-		0, 0, 0, 0
-	);
-}
-#endif
-
 static void cmdSetViewportScissor(VkCommandBuffer cmd, uint32_t w, uint32_t h) 
 {
 	VkViewport viewport{
@@ -343,7 +306,7 @@ void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 	uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
 
 	PostFX& cp = _postfx;
-	_postfx.Stage(DURAND, "0").Bind(cmd)
+	_postfx.Stage(DURAND, "lum_chrom").Bind(cmd)
 		// In
 		.UpdateImage(_viewport.imageViews[imageIndex], 1)
 		// Out
@@ -353,7 +316,7 @@ void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 		.Dispatch(groupsX, groupsY, imageIndex)
 		.Barrier();
 
-	_postfx.Stage(DURAND, "1").Bind(cmd)
+	_postfx.Stage(DURAND, "bilateral").Bind(cmd)
 		// In
 		.UpdateImage(cp.Att(DURAND, "lum").view, 1)
 		// Out
@@ -363,7 +326,7 @@ void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 		.Dispatch(groupsX, groupsY, imageIndex)
 		.Barrier();
 
-	_postfx.Stage(DURAND, "2").Bind(cmd)
+	_postfx.Stage(DURAND, "reconstruct").Bind(cmd)
 		// In
 		.UpdateImage(cp.Att(DURAND, "lum").view, 1)
 		.UpdateImage(cp.Att(DURAND, "chrom").view, 2)
@@ -378,6 +341,77 @@ void Engine::durand2002(VkCommandBuffer& cmd, int imageIndex)
 	endCmdDebugLabel(cmd);
 }
 
+
+void Engine::bloom(FrameData& f, int imageIndex)
+{
+	PostFX& cp = _postfx;
+
+	glm::uvec2 div32 = glm::uvec2(_viewport.width >> 5, _viewport.height >> 5);
+	glm::uvec2 groups32 = div32 + glm::uvec2(1);
+
+	beginCmdDebugLabel(f.cmd, BLOOM_DBG_PREF);
+	{
+		cp.Stage(BLOOM, "threshold").Bind(f.cmd)
+			.UpdateImage(_viewport.imageViews[imageIndex], 1)
+			.UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
+			.Dispatch(groups32.x, groups32.y, imageIndex)
+			.Barrier();
+
+		cp.Stage(BLOOM, "downsample").Bind(f.cmd)
+			.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
+			.WriteSets(imageIndex);
+
+		cp.Stage(BLOOM, "upsample").Bind(f.cmd)
+			.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
+			.WriteSets(imageIndex);
+
+		GPUCompPC pc = {};
+
+		std::string dbglb = BLOOM_DBG_PREF + "::DOWNSAMPLE_AND_BLUR";
+		beginCmdDebugLabel(f.cmd, dbglb);
+		for (int i = 1; i < _postfx.numOfBloomMips; ++i) {
+			beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
+			glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
+
+			pc.mipIndex = i;
+			vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "downsample").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			// Downsample
+			cp.Stage(BLOOM, "downsample").Bind(f.cmd)
+				.Dispatch(groups32.x, groups32.y, imageIndex)
+				.Barrier();
+
+
+			endCmdDebugLabel(f.cmd);
+		}
+		endCmdDebugLabel(f.cmd);
+#if 1
+		dbglb = BLOOM_DBG_PREF + "::UPSAMPLE_AND_ADD";
+		beginCmdDebugLabel(f.cmd, dbglb);
+		for (int i = _postfx.numOfBloomMips - 2; i >= 0; --i) {
+			beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
+			glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
+
+			pc.mipIndex = i;
+			vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "upsample").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			cp.Stage(BLOOM, "upsample").Bind(f.cmd)
+				.Dispatch(groups32.x, groups32.y, imageIndex)
+				.Barrier();
+			endCmdDebugLabel(f.cmd);
+		}
+		endCmdDebugLabel(f.cmd);
+
+
+		cp.Stage(BLOOM, "combine").Bind(f.cmd)
+			.UpdateImage(_viewport.imageViews[imageIndex], 1)
+			.UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
+			.Dispatch(groups32.x, groups32.y, imageIndex)
+			.Barrier();
+#endif
+	}
+	endCmdDebugLabel(f.cmd);
+}
 
 void Engine::exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix)
 {
@@ -800,108 +834,8 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 	}
 
 	if (_postfx.enableBloom) {
-		
-		beginCmdDebugLabel(f.cmd, BLOOM_DBG_PREF);
-		{
-			cp.Stage(BLOOM, "threshold").Bind(f.cmd)
-				.UpdateImage(_viewport.imageViews[imageIndex], 1)
-				.UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
-				.Dispatch(groups32.x, groups32.y, imageIndex)
-				.Barrier();
-
-			//const int blur_times = _renderContext.numOfBloomBlurPasses * 2;
-			//ASSERT(blur_times % 2 != 1);
-
-			cp.Stage(BLOOM, "downsample").Bind(f.cmd)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
-				.WriteSets(imageIndex);
-#define BLOOM_BLUR 0
-
-#if BLOOM_BLUR == 1
-			cp.Stage(BLOOM, "blur0").Bind(f.cmd)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "blur"), 1)
-				.WriteSets(imageIndex);
-
-			cp.Stage(BLOOM, "blur1").Bind(f.cmd)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "blur"), 0)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 1)
-				.WriteSets(imageIndex);
-#endif
-
-			cp.Stage(BLOOM, "upsample").Bind(f.cmd)
-				.UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
-				.WriteSets(imageIndex);
-
-
-			GPUCompPC pc = {};
-
-			std::string dbglb = BLOOM_DBG_PREF + "::DOWNSAMPLE_AND_BLUR";
-			beginCmdDebugLabel(f.cmd, dbglb);
-			for (int i = 0; i < _postfx.numOfBloomMips; ++i) {
-				beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
-				glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
-
-				pc.mipIndex = i;
-				pc.horizontalPass = true;
-				vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "blur0").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-#if 1
-				if (i > 0) {
-					// Downsample
-					cp.Stage(BLOOM, "downsample").Bind(f.cmd)
-						.Dispatch(groups32.x, groups32.y, imageIndex)
-						.Barrier();
-				}
-#endif
-
-#if BLOOM_BLUR == 1
-				if (i < _postfx.numOfBloomMips - 1) {
-					cp.Stage(BLOOM, "blur0").Bind(f.cmd)
-						.Dispatch(groups32.x, groups32.y, imageIndex)
-						.Barrier();
-
-					pc.horizontalPass = false;
-					vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "blur1").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-					cp.Stage(BLOOM, "blur1").Bind(f.cmd)
-						.Dispatch(groups32.x, groups32.y, imageIndex)
-						.Barrier();
-				}
-#endif
-
-				endCmdDebugLabel(f.cmd);
-			}
-			endCmdDebugLabel(f.cmd);
-#if 1
-			dbglb = BLOOM_DBG_PREF + "::UPSAMPLE_AND_ADD";
-			beginCmdDebugLabel(f.cmd, dbglb);
-			for (int i = _postfx.numOfBloomMips - 2; i >= 0; --i) {
-				beginCmdDebugLabel(f.cmd, dbglb + "::MIP_" + std::to_string(i));
-				glm::uvec2 groups32 = glm::uvec2(_viewport.width >> i >> 5, _viewport.height >> i >> 5) + glm::uvec2(1);
-
-				pc.mipIndex = i;
-				vkCmdPushConstants(f.cmd, cp.Stage(BLOOM, "upsample").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-				cp.Stage(BLOOM, "upsample").Bind(f.cmd)
-					.Dispatch(groups32.x, groups32.y, imageIndex)
-					.Barrier();
-				endCmdDebugLabel(f.cmd);
-			}
-			endCmdDebugLabel(f.cmd);
-
-
-			cp.Stage(BLOOM, "combine").Bind(f.cmd)
-				.UpdateImage(_viewport.imageViews[imageIndex], 1)
-				.UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
-				.Dispatch(groups32.x, groups32.y, imageIndex)
-				.Barrier();
-#endif
-		}
-		endCmdDebugLabel(f.cmd);
+		bloom(f, imageIndex);
 	}
-
-
 
 	if (_postfx.enableLocalToneMapping) {
 		// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits

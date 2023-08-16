@@ -67,7 +67,9 @@
 
 #define ASSET_PATH std::string("assets/")
 
-#define SHADER_PATH ASSET_PATH + std::string("shaders/bin/")
 #define IMAGE_PATH  ASSET_PATH + std::string("images/")
 #define MODEL_PATH  ASSET_PATH + std::string("models/")
 #define SCENE_PATH  ASSET_PATH + std::string("scenes/")
+
+#define SHADER_PATH ASSET_PATH + std::string("shaders/bin/")
+#define SKYBOX_PATH IMAGE_PATH + std::string("skybox/")

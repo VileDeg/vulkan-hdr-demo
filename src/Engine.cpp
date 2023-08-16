@@ -112,9 +112,7 @@ void Engine::Cleanup()
     vkDeviceWaitIdle(_device);
 
     cleanupViewportResources();
-
     cleanupSwapchainResources();
-
 
     _descriptorAllocator->cleanup();
     _descriptorLayoutCache->cleanup();
@@ -265,13 +263,11 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     }
 
     { // Compute attachments
-
-         //int numOfViewportMips = log2(std::min(extentX, extentY)) + 1;
         // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
+
         _postfx.ub.numOfViewportMips = numOfViewportMips;
         _postfx.numOfBloomMips = numOfViewportMips-2;
-
 
         for (auto& att : _postfx.att) {
             createAttachment(
@@ -297,8 +293,6 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     }
 }
-
-
 
 
 void Engine::recreateViewport(uint32_t extentX, uint32_t extentY)
@@ -520,9 +514,6 @@ void Engine::prepareShadowPass()
         vkDestroySampler(_device, _shadow.sampler, nullptr);
     });
 }
-
-
-
 
 
 void Engine::initDescriptors()

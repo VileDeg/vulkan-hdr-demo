@@ -137,7 +137,7 @@ void Engine::createPipelines()
         VkPipeline pipeline;
 
         s_createGraphicsPipeline(_device,
-            "shader.vert.spv", "shader.frag.spv",
+            "viewport.vert.spv", "viewport.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
             { _globalSetLayout, _diffuseTextureSetLayout },
             _viewport.colorFormat, _viewport.depthFormat, 
@@ -147,7 +147,7 @@ void Engine::createPipelines()
         createMaterial(pipeline, layout, "general");
 
         s_createGraphicsPipeline(_device,
-            "shader.vert.spv", "shader.frag.spv",
+            "viewport.vert.spv", "viewport.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
             { _globalSetLayout, _diffuseTextureSetLayout },
             _viewport.colorFormat, _viewport.depthFormat,

@@ -23,8 +23,6 @@ void main() {
 #if 0
 		float lum = dot(px, RGB_TO_LUM);
 		if (lum > ub.bloomThreshold) {
-			//px = px / (px + 1);
-			//px = log2(px + 0.0001) + 1;
 			imageStore(outImage, coords, vec4(px, 1.0));
 		} else {
 			imageStore(outImage, coords, vec4(vec3(0), 1.0));

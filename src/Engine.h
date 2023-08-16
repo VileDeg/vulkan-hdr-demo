@@ -44,6 +44,7 @@ private: /* Methods used from Init directly */
     void createSamplers();
 
     void createScene(CreateSceneData data);
+    void cleanupScene();
 
 private: /* Secondary methods */
 
@@ -68,7 +69,7 @@ private: /* Secondary methods */
 
 
     Attachment* loadTextureFromFile(const char* path);
-    void loadCubemap(const char* cubemapDirName, bool isHDR);
+    
 
     void uploadMesh(Mesh& mesh);
     void createMeshBuffer(Mesh& mesh, bool isVertexBuffer);
@@ -101,6 +102,9 @@ private: /* Secondary methods */
     void updateShadowCubemapFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
 
     void loadDataToGPU();
+
+
+    void bloom(FrameData& f, int imageIndex);
     void durand2002(VkCommandBuffer& cmd, int imageIndex);
 
     void exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix);
@@ -128,6 +132,9 @@ private:
     void saveScene(std::string fullScenePath);
     void loadScene(std::string fullScenePath);
 
+    void loadSkybox(std::string skyboxDirName);
+    //void cleanupSkybox();
+
 private:  // UI
 
     void ui_InitImGui();
@@ -149,6 +156,8 @@ private:  // UI
     void ui_AttachmentViewer();
     void ui_StatusBar();
     void ui_PostFXPipeline();
+
+    bool ui_LoadSkybox();
 
     bool ui_SaveScene();
     bool ui_LoadScene();
@@ -214,6 +223,7 @@ private:
     bool _isInitialized = false;
     DeletionStack _deletionStack{}; // Disposing resources created during initialization
     DeletionStack _sceneDisposeStack{};
+    DeletionStack _skyboxDisposeStack{};
 
     Camera _camera = {};
 
@@ -239,9 +249,7 @@ private:
 
     VkDescriptorPool _descriptorPool;
 
-    AllocatedImage _skyboxAllocImage;
-
-    Attachment _blurBuffer;
+    Attachment _skybox;
 
     RenderContext _renderContext;
 

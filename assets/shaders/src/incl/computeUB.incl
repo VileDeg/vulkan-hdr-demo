@@ -27,5 +27,8 @@ uniform ComputeUB {
     float exposednessWeightSigma;
 
     float bloomHighlightsWeight;
+    int durandBilateralRadius;
+    int _pad0;
+    int _pad1;
 }
 

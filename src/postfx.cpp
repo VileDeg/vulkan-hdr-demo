@@ -5,9 +5,6 @@
 
 #include "vk_descriptors.h"
 
-
-
-
 void PostFXStage::Create(VkDevice device, VkSampler sampler,
 	const std::string& shaderBinName, bool usePushConstants/* = false*/)
 {
@@ -195,16 +192,16 @@ PostFX::PostFX()
 	effectPrefixMap[EXPADP] = "expadp_";
 	effectPrefixMap[DURAND] = "durand_";
 	effectPrefixMap[FUSION] = "fusion_";
-	effectPrefixMap[BLOOM] = "bloom_";
-	effectPrefixMap[GTMO] = "gtmo_";
-	effectPrefixMap[GAMMA] = "gamma_";
+	effectPrefixMap[BLOOM]  = "bloom_";
+	effectPrefixMap[GTMO]   = "gtmo_";
+	effectPrefixMap[GAMMA]  = "gamma_";
 
 	std::string pref = "";
 	{
 		pref = getPrefixFromEffect(DURAND);
-		stages[pref+"0"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
-		stages[pref+"1"] = { .shaderName = "ltm_durand_bilateral_base.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
-		stages[pref+"2"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG, IMG } };
+		stages[pref+"lum_chrom"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+		stages[pref+"bilateral"] = { .shaderName = "ltm_durand_bilateral.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
+		stages[pref+"reconstruct"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG, IMG } };
 
 		att[pref+"lum"] = {};
 		att[pref+"chrom"] = {};
@@ -252,19 +249,16 @@ PostFX::PostFX()
 	{
 		pref = getPrefixFromEffect(BLOOM);
 		stages[pref + "threshold"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
-
 		stages[pref + "downsample"] = { .shaderName = "bloom_downsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
 
-		stages[pref + "blur0"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
-		stages[pref + "blur1"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+		/*stages[pref + "blur0"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+		stages[pref + "blur1"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };*/
 
 		stages[pref + "upsample"] = { .shaderName = "bloom_upsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
-
 		stages[pref + "combine"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 
 		pyr[pref + "highlights"] = {};
-
-		pyr[pref + "blur"] = {};
+		//pyr[pref + "blur"] = {};
 	}
 	{
 		pref = getPrefixFromEffect(EXPADP);
@@ -318,6 +312,7 @@ Effect PostFX::getEffectFromPrefix(std::string pref)
 		}
 	}
 	ASSERT(false);
+	return INVALID;
 }
 
 bool PostFX::isEffectEnabled(Effect fct)

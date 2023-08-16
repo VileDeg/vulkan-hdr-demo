@@ -192,16 +192,15 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 }
 
 
-void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
+void Engine::loadSkybox(std::string skyboxDirName)
 {
 	// Partially based on Sascha Willems' cubemap demo: 
 	// https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
-
-	ASSERT(loadModelFromObj("cube", MODEL_PATH + "cube/cube.obj"));
+	_skyboxDisposeStack.flush();
 
 	constexpr const char* suff[6] = { "px", "nx", "py", "ny", "pz", "nz" };
 
-	std::string basePath = IMAGE_PATH + cubemapDirName;
+	std::string basePath = SKYBOX_PATH + skyboxDirName;
 
 	VkDeviceSize imageSize;
 	AllocatedBuffer stagingBuffer;
@@ -212,22 +211,17 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	VkDeviceSize bufferOffset = 0;
 
 	for (int i = 0; i < 6; ++i) {
-		std::string path = basePath + "/" + suff[i] + (isHDR ? ".hdr" : ".jpg");
+		std::string path = basePath + "/" + suff[i] + ".hdr";
 
 		void* pixel_ptr = nullptr;
 		int texW, texH, texChannels;
-		if (isHDR) {
-			ASSERT(stbi_is_hdr(path.c_str()) != 0);
-			float* fpix = stbi_loadf(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
-			pixel_ptr = fpix;
 
-			imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-		} else {
-			stbi_uc* pix = stbi_load(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
-			pixel_ptr = pix;
+		ASSERT(stbi_is_hdr(path.c_str()) != 0);
+		float* fpix = stbi_loadf(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
+		pixel_ptr = fpix;
 
-			imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
-		}
+		imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+		
 
 		ASSERT_MSG(pixel_ptr != nullptr, "Failed to load cubemap face " + std::to_string(i) + ", path: " + path);
 		if (i == 0) {
@@ -235,7 +229,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 			baseTexH = texH;
 			baseTexChannels = texChannels;
 
-			imageSize = (VkDeviceSize)baseTexW * (VkDeviceSize)baseTexH * 4 * (isHDR ? 4 : 1);
+			imageSize = (VkDeviceSize)baseTexW * (VkDeviceSize)baseTexH * 4 * 4;
 
 			VkDeviceSize bufferSize = imageSize * 6;
 			// Allocate temporary buffer for holding texture data to upload
@@ -256,11 +250,11 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	}
 
 	VkImageSubresourceRange subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 6
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 6
 	};
 
 	// Create optimal tiled target image
@@ -286,14 +280,14 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	};
 
 	// This creates entry in cache
-	Attachment& newTexture = _textures[basePath];
-	newTexture.tag = basePath;
+	_skybox = _textures[basePath];
+	_skybox.tag = basePath;
 
 	VmaAllocationCreateInfo dimg_allocinfo = {};
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	//allocate and create the image
-	VK_ASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr));
+	VK_ASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &_skybox.allocImage.image, &_skybox.allocImage.allocation, nullptr));
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
@@ -323,7 +317,7 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				offset += imageSize;
 			}
 
-			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, _skybox.allocImage.image,
 				0, 
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 
@@ -335,10 +329,10 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 				subresourceRange);
 
 			//copy the buffer into the image
-			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, _skybox.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				static_cast<uint32_t>(bufferCopyRegions.size()), bufferCopyRegions.data());
 
-			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
+			vk_utils::imageMemoryBarrier(cmd, _skybox.allocImage.image,
 				VK_ACCESS_TRANSFER_WRITE_BIT, 
 				VK_ACCESS_SHADER_READ_BIT,
 
@@ -354,38 +348,47 @@ void Engine::loadCubemap(const char* cubemapDirName, bool isHDR)
 	// Create image view
 	VkImageViewCreateInfo imageinfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = newTexture.allocImage.image,
+		.image = _skybox.allocImage.image,
 		.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
 		.format = imageFormat,
 		.subresourceRange = subresourceRange,
 	};
 
-	VK_ASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &newTexture.view));
-
-	_sceneDisposeStack.push([=]() mutable {
-		vkDestroyImageView(_device, newTexture.view, nullptr);
-		vmaDestroyImage(_allocator, newTexture.allocImage.image, newTexture.allocImage.allocation);
-	});
+	VK_ASSERT(vkCreateImageView(_device, &imageinfo, nullptr, &_skybox.view));
 
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
 
 	// write cubemap to descriptor set
-	newTexture.allocImage.descInfo = {
+	_skybox.allocImage.descInfo = {
 		.sampler = _linearSampler,//cubemapSampler,
-		.imageView = newTexture.view,
+		.imageView = _skybox.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
-
-	_skyboxAllocImage = newTexture.allocImage;
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 		VkWriteDescriptorSet skyboxWrite =
 			vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
-				_frames[i].globalSet, &newTexture.allocImage.descInfo, 3);
+				_frames[i].globalSet, &_skybox.allocImage.descInfo, 3);
 		vkUpdateDescriptorSets(_device, 1, &skyboxWrite, 0, nullptr);
 	}
+
+	_skyboxDisposeStack.push([=]() mutable {
+		vkDestroyImageView(_device, _skybox.view, nullptr);
+		vmaDestroyImage(_allocator, _skybox.allocImage.image, _skybox.allocImage.allocation);
+	});
+
+	_sceneDisposeStack.push([=]() mutable {
+		_skyboxDisposeStack.flush();
+	});
 }
+
+//void Engine::cleanupSkybox()
+//{
+//	vkDestroyImageView(_device, _skybox.view, nullptr);
+//	vmaDestroyImage(_allocator, _skybox.allocImage.image, _skybox.allocImage.allocation);
+//}
+
 
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
 {
@@ -866,26 +869,31 @@ void Engine::createSamplers() {
 	});
 }
 
+void Engine::cleanupScene()
+{
+	vkDeviceWaitIdle(_device);
+
+	_renderables.clear();
+	_renderContext.lightObjects.clear();
+	_models.clear();
+
+	_sceneDisposeStack.flush();
+
+	_meshes.clear();
+	_textures.clear();
+}
+
 void Engine::createScene(CreateSceneData data)
 {
-	{ // Reset for when we load a scene at runtime
-		vkDeviceWaitIdle(_device);
-
-		_renderables.clear();
-		_renderContext.lightObjects.clear();
-		_models.clear();
-
-		_sceneDisposeStack.flush();
-
-		_meshes.clear();
-		_textures.clear();
-	}
+	// Reset for when we load a scene at runtime
+	cleanupScene();
 
 	// Main model of the scene
 	ASSERT(loadModelFromObj("main", MODEL_PATH + data.modelPath));
-
 	// Sphere model of the light source
 	ASSERT(loadModelFromObj("sphere", MODEL_PATH + "sphere/sphere.obj"));
+	// Cube model for skybox
+	ASSERT(loadModelFromObj("cube", MODEL_PATH + "cube/cube.obj"));
 
 	// Set materials
 	for (auto& [key, model] : _models) {
@@ -894,7 +902,7 @@ void Engine::createScene(CreateSceneData data)
 		}
 	}
 
-	loadCubemap(data.skyboxPath.c_str(), true);
+	loadSkybox(data.skyboxPath);
 
 	_skyboxObject = std::make_shared<RenderObject>(
 		RenderObject{
@@ -950,7 +958,7 @@ void Engine::createScene(CreateSceneData data)
 	}
 
 	_deletionStack.push([this]() {
-		_sceneDisposeStack.flush();
+		cleanupScene();
 	});
 }
 

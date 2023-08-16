@@ -36,8 +36,6 @@ struct PostFXStage {
     std::vector<int> dsetBindings;
     bool usesPushConstants;
 
-    //int lastSetUpdateIndex = -1;
-
     void Create(VkDevice device, VkSampler sampler,
         const std::string& shaderBinName, bool usePushConstants = false);
     void Destroy();
@@ -60,7 +58,7 @@ struct PostFXStage {
 };
 
 enum Effect {
-    EXPADP, DURAND, FUSION, BLOOM, GTMO, GAMMA
+    INVALID = -1, EXPADP, DURAND, FUSION, BLOOM, GTMO, GAMMA
 };
 
 struct PostFX {
@@ -98,8 +96,6 @@ struct PostFX {
 
     float gamma = 2.2f;
     int gammaMode = 0; // 0 - forward, 1 - inverse
-
-    int numOfBloomBlurPasses = 5;
 
     bool enableBloom = true;
     bool enableGlobalToneMapping = true;

@@ -21,10 +21,7 @@ void main() {
 
 	if (coords.x < dim.x && coords.y < dim.y) {
 		vec4 current = imageLoad(image[mip_i], coords);
-		//vec4 px = current + imageLoad(image[mip_i+1], coords >> 1);
-
-		//float sampleScale = mip_i * 0.2;
-		//float sampleScale = 1.0;
+		
 		ivec4 d = ivec4(1, 1, -1, 0);
 
 		ivec2 coordsHigher = coords >> 1;
@@ -43,8 +40,6 @@ void main() {
 		px += imageLoad(image[mip_i+1], (coordsHigher + d.xy));
 
 		px *= 0.0625; // 0.0625 = 1/16
-
-		//px /= (mip_i + 1) * 0.5;
 
 		imageStore(image[mip_i], coords, current + px);
 	}

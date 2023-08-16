@@ -43,16 +43,13 @@ static const char* get_longest_str(std::vector<const char*>& strs)
 	return ptr;
 }
 
-static std::vector<const char*> browse_path(std::string path, std::string format, std::vector<std::string>& strs)
+static std::vector<const char*> browse_path(std::string path, std::vector<std::string>& strs, std::function<bool(std::filesystem::directory_entry)> entryCondition)
 {
 	strs.clear();
 
 	for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(path)) {
-		std::string pstr = dirEntry.path().string();
-		if (pstr.find_last_of(".") != std::string::npos &&
-			pstr.substr(pstr.find_last_of(".")) == format)
-		{
-			strs.push_back(pstr);
+		if (entryCondition(dirEntry)) {
+			strs.push_back(dirEntry.path().string());
 		}
 	}
 
@@ -62,6 +59,23 @@ static std::vector<const char*> browse_path(std::string path, std::string format
 	}
 
 	return cstrs;
+}
+
+static std::vector<const char*> browse_path_for_files_with_format(std::string path, std::string format, std::vector<std::string>& strs)
+{
+	return browse_path(path, strs, [format](std::filesystem::directory_entry dirEntry) {
+		std::string pstr = dirEntry.path().string();
+		return pstr.find_last_of(".") != std::string::npos &&
+			pstr.substr(pstr.find_last_of(".")) == format;
+	});
+}
+
+static std::vector<const char*> browse_path_for_folders(std::string path, std::vector<std::string>& strs)
+{
+	return browse_path(path, strs, [](std::filesystem::directory_entry dirEntry) {
+		std::string pstr = dirEntry.path().string();
+		return dirEntry.is_directory();
+	});
 }
 
 
@@ -156,6 +170,98 @@ static void ui_PostFXPipelineButton(bool& flag, std::string name,
 	}
 }
 
+
+
+void Engine::ui_Update()
+{
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	static bool opt_fullscreen = true;
+	static bool opt_padding = false;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+	if (opt_fullscreen) {
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->WorkPos);
+		ImGui::SetNextWindowSize(viewport->WorkSize);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+	} else {
+		dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
+	}
+
+	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
+		window_flags |= ImGuiWindowFlags_NoBackground;
+	}
+
+	if (!opt_padding) {
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	}
+	static bool p_open = true;
+
+	ImGui::Begin("DockSpace", &p_open, window_flags);
+	{
+		ui_MenuBar();
+
+		if (!opt_padding) {
+			ImGui::PopStyleVar();
+		}
+
+		if (opt_fullscreen) {
+			ImGui::PopStyleVar(2);
+		}
+
+		ImGuiIO& io = ImGui::GetIO();
+
+		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+		}
+
+		ui_Window("Config", [this]() {
+			// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
+			ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+			ui_Scene();
+			ui_HDR();
+			ui_RenderContext();
+			ui_DebugDisplay();
+			ImGui::PopItemWidth();
+		});
+
+		ui_Window("Viewport", [this]() {
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+			ui_Viewport();
+			ImGui::PopStyleVar();
+			ImGui::PopStyleVar();
+		});
+
+		ui_Window("PostFX Pipeline", [this]() {
+			ui_PostFXPipeline();
+		});
+
+		ui_Window("Attachment Viewer", [this]() {
+			ui_AttachmentViewer();
+		});
+
+		ui_StatusBar();
+
+#if SHOW_IMGUI_METRICS == 1
+		ImGui::ShowMetricsWindow();
+#endif
+	}
+	ImGui::End();
+}
 
 void Engine::ui_InitImGui()
 {
@@ -398,6 +504,8 @@ void Engine::ui_HDR()
 				ImGui::SliderFloat("Base Offset", &_postfx.ub.baseOffset, -0.999f, 0.999f);
 
 				//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
+				ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durandBilateralRadius, 1, 25);
+
 				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.sigmaS);
 				ImGui::SliderFloat("Range sigma", &_postfx.ub.sigmaR, 0.1f, 2.0f);
 
@@ -675,24 +783,30 @@ void Engine::ui_MenuBar()
 	if (ImGui::BeginMenuBar()) {
 		ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
 		
-		if (ImGui::BeginMenu("Save")) {
+		if (ImGui::BeginMenu("Save Scene")) {
 			ui_SaveScene();
 
 			ImGui::EndMenu();
 		} else if (_saveShortcutPressed) {
-			ImGui::Begin("Save", 0, flags); {
+			ImGui::Begin("Save Scene", 0, flags); {
 				_saveShortcutPressed = !ui_SaveScene();
 			} ImGui::End();
 		}
 
-		if (ImGui::BeginMenu("Load")) {
+		if (ImGui::BeginMenu("Load Scene")) {
 			ui_LoadScene();
 
 			ImGui::EndMenu();
 		} else if (_loadShortcutPressed) {
-			ImGui::Begin("Load", 0, flags); {
+			ImGui::Begin("Load Scene", 0, flags); {
 				_loadShortcutPressed = !ui_LoadScene();
 			} ImGui::End();
+		}
+
+		if (ImGui::BeginMenu("Load Skybox")) {
+			ui_LoadSkybox();
+
+			ImGui::EndMenu();
 		}
 
 		for (auto& wnd : uiWindows) {
@@ -853,7 +967,30 @@ void Engine::ui_StatusBar()
 	ImGui::End();
 }
 
+bool Engine::ui_LoadSkybox()
+{
+	bool loaded = false;
 
+	std::vector<std::string> entries;
+	std::vector<const char*> entries_cstr;
+
+	entries_cstr = browse_path_for_folders(SKYBOX_PATH, entries);
+
+	float width = 0;
+	width = ImGui::CalcTextSize(get_longest_str(entries_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	ImGui::PushItemWidth(width);
+
+	static int i = 0;
+	if (ImGui::ListBox("##entries", &i, entries_cstr.data(), entries_cstr.size())) {
+		std::string skyboxDir = entries[i].substr(entries[i].find_last_of("/")+1);
+		loadSkybox(skyboxDir);
+		loaded = true;
+	}
+
+	ImGui::PopItemWidth();
+
+	return loaded;
+}
 
 bool Engine::ui_LoadScene()
 {
@@ -862,7 +999,7 @@ bool Engine::ui_LoadScene()
 	std::vector<std::string> scenes;
 	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(SCENE_PATH, ".json", scenes);
+	scenes_cstr = browse_path_for_files_with_format(SCENE_PATH, ".json", scenes);
 
 	float width = 0;
 	width = ImGui::CalcTextSize(get_longest_str(scenes_cstr)).x + ImGui::GetStyle().FramePadding.x * 2.0f;
@@ -886,7 +1023,7 @@ bool Engine::ui_SaveScene()
 	std::vector<std::string> scenes;
 	std::vector<const char*> scenes_cstr;
 
-	scenes_cstr = browse_path(SCENE_PATH, ".json", scenes);
+	scenes_cstr = browse_path_for_files_with_format(SCENE_PATH, ".json", scenes);
 	scenes_cstr.push_back("* New");
 
 	float width = 0;
@@ -935,103 +1072,6 @@ void Engine::ui_Window(std::string name, std::function<void()> func, int flags/*
 }
 
 
-void Engine::ui_Update()
-{
-	// Start the Dear ImGui frame
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	static bool opt_fullscreen = true;
-	static bool opt_padding = false;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
-
-	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-	if (opt_fullscreen) {
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(viewport->WorkPos);
-		ImGui::SetNextWindowSize(viewport->WorkSize);
-		ImGui::SetNextWindowViewport(viewport->ID);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
-			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-	} else {
-		dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
-	}
-
-	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
-		window_flags |= ImGuiWindowFlags_NoBackground;
-	}
-
-	if (!opt_padding) {
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	}
-	static bool p_open = true;
-
-	ImGui::Begin("DockSpace", &p_open, window_flags);
-	{
-		ui_MenuBar();
-
-		if (!opt_padding) {
-			ImGui::PopStyleVar();
-		}
-
-		if (opt_fullscreen) {
-			ImGui::PopStyleVar(2);
-		}
-
-		ImGuiIO& io = ImGui::GetIO();
-
-		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-		}
-		
-		// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
-		ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
-
-		ui_Window("Config", [this]() {
-
-			ui_Scene();
-			ui_HDR();
-			ui_RenderContext();
-			ui_DebugDisplay();
-		});
-
-		ImGui::PopItemWidth();
-
-	
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-
-		ui_Window("Viewport", [this]() {
-			ui_Viewport();
-		});
-
-	
-		ImGui::PopStyleVar();
-		ImGui::PopStyleVar();
-
-		ui_Window("PostFX Pipeline", [this]() {
-			ui_PostFXPipeline();
-		});
-
-		ui_Window("Attachment Viewer", [this]() {
-			ui_AttachmentViewer();
-		});
-
-		ui_StatusBar();
-
-#if SHOW_IMGUI_METRICS == 1
-		ImGui::ShowMetricsWindow();
-#endif
-	}
-	ImGui::End();
-}
 
 void Engine::ui_OnDrawStart()
 {

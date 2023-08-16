@@ -157,4 +157,7 @@ struct GPUCompUB {
     float exposednessWeightSigma = 5;
 
     float bloomWeight = 0.04f;
+    int durandBilateralRadius = 5; // Controls how coarse the bilateral filter will be
+    int _pad0;
+    int _pad1;
 };

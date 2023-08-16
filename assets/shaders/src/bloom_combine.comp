@@ -22,7 +22,6 @@ void main() {
 		vec3 bloom = imageLoad(bloomImage, coords).rgb;
 
 		// Apply bloom
-		//color += bloom * ub.bloomHighlightsWeight;
 		color = mix(color, bloom, ub.bloomHighlightsWeight);
 
 		imageStore(inOutImage, coords, vec4(color, 1.0));
