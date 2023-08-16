@@ -185,6 +185,9 @@ private:
 
 private:
     float _fovY = 90.f; // degrees
+    //uint32_t modelLoaderGlobalMeshIndex = 0;
+    uint32_t modelLoaderGlobalDiffuseTexIndex = 0;
+    uint32_t modelLoaderGlobalBumpTexIndex = 0;
 
 private: 
     GLFWwindow* _window;
@@ -237,11 +240,13 @@ private:
     std::unordered_map<std::string, Mesh> _meshes;
     std::unordered_map<std::string, Attachment> _textures;
 
+    std::vector<Attachment*> _diffTexInsertionOrdered;
+    std::vector<Attachment*> _bumpTexInsertionOrdered;
+
     DescriptorAllocator* _descriptorAllocator;
     DescriptorLayoutCache* _descriptorLayoutCache;
 
-    VkDescriptorSetLayout _globalSetLayout;
-    VkDescriptorSetLayout _diffuseTextureSetLayout;
+    VkDescriptorSetLayout _sceneSetLayout;
     VkDescriptorSetLayout _shadowSetLayout;
 
     VkSampler _linearSampler;

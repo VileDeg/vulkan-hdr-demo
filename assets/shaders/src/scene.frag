@@ -13,15 +13,8 @@ layout(location = 0) out vec4 FragColor;
 #include "incl/light.glsl"
 #include "incl/bump_mapping.glsl" 
 
-layout(push_constant) uniform ScenePC {
-    bool lightAffected;
-    bool isCubemap;
-    uint objectIndex;
-    uint meshIndex;
-
-	bool useDiffTex;
-	bool useBumpTex;
-} pc;
+#include "incl/scenePC.incl" 
+pc;
 
 layout(set = 0, binding = 1)
 #include "incl/sceneUB.incl" 
@@ -34,9 +27,11 @@ ssbo;
 layout(set = 0, binding = 3) uniform samplerCube skybox;
 layout(set = 0, binding = 4) uniform samplerCubeArray shadowCubeArray;
 
-// Supplied from push descriptor set
-layout(set = 1, binding = 0) uniform sampler2D diffuse;
-layout(set = 1, binding = 1) uniform sampler2D bump;
+/*layout(set = 1, binding = 0) uniform sampler2D diffuse[MAX_MESHES];
+layout(set = 1, binding = 1) uniform sampler2D bump[MAX_MESHES];*/
+
+layout(set = 0, binding = 5) uniform sampler2D diffuse[MAX_TEXTURES];
+layout(set = 0, binding = 6) uniform sampler2D bump[MAX_TEXTURES];
 
 void main()  
 {
@@ -44,7 +39,7 @@ void main()
     vec2 bumpUV = uv;
 
     if (sd.enableBumpMapping && !pc.isCubemap && pc.useBumpTex) {
-        bumpMapping(bump, sd.bumpStep, mat3(ssbo.objects[pc.objectIndex].normalMatrix), sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV);
+        bumpMapping(bump[pc.bumpTexIndex], sd.bumpStep, mat3(ssbo.objects[pc.objectIndex].normalMatrix), sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV);
     }
 
     if (sd.showNormals) {
@@ -58,7 +53,7 @@ void main()
         result = texture(skybox, uvw).rgb;
     } else {
         if (pc.useDiffTex) {
-            result = texture(diffuse, bumpUV).rgb; 
+            result = texture(diffuse[pc.diffTexIndex], bumpUV).rgb; 
         } else {
             //result = objectColor.rgb;
             result = ssbo.objects[pc.objectIndex].mat[pc.meshIndex].diffuseColor;

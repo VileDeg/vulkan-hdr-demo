@@ -1,0 +1,11 @@
+layout(push_constant) uniform ScenePC {
+    bool lightAffected;
+    bool isCubemap;
+	uint objectIndex;
+    uint meshIndex;
+
+	bool useDiffTex;
+	bool useBumpTex;
+	uint diffTexIndex;
+    uint bumpTexIndex;
+}

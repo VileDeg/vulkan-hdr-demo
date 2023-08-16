@@ -20,6 +20,8 @@
  * THE SOFTWARE.
  */
 
+/* Initial code was modified */
+
 #include "stdafx.h"
 
 #include <vk_descriptors.h>
@@ -267,7 +269,7 @@ DescriptorBuilder& DescriptorBuilder::bind_image(uint32_t binding, VkDescriptorI
 
 	bindings.push_back(newBinding);
 
-	if (imageInfo != nullptr) { // Added condition to allow for later manual update
+	if (imageInfo != nullptr) { // Added condition to allow passing nullptr for later manual update
 		VkWriteDescriptorSet newWrite{};
 		newWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		newWrite.pNext = nullptr;
@@ -334,7 +336,6 @@ bool DescriptorBuilder::build(VkDescriptorSet& set, VkDescriptorSetLayout& layou
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 
 	layout = cache->create_descriptor_layout(&layoutInfo);
-
 
 	//allocate descriptor
 	bool success = alloc->allocate(&set, layout);

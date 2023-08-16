@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
 
-
 static PipelineShaders loadShaders(VkDevice device, const std::string& vertName, const std::string& fragName)
 {
     PipelineShaders shaders{};
@@ -137,9 +136,9 @@ void Engine::createPipelines()
         VkPipeline pipeline;
 
         s_createGraphicsPipeline(_device,
-            "viewport.vert.spv", "viewport.frag.spv",
+            "scene.vert.spv", "scene.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
-            { _globalSetLayout, _diffuseTextureSetLayout },
+            { _sceneSetLayout }, //, _diffuseTextureSetLayout
             _viewport.colorFormat, _viewport.depthFormat, 
             VK_CULL_MODE_BACK_BIT,
             pipeline, layout
@@ -147,9 +146,9 @@ void Engine::createPipelines()
         createMaterial(pipeline, layout, "general");
 
         s_createGraphicsPipeline(_device,
-            "viewport.vert.spv", "viewport.frag.spv",
+            "scene.vert.spv", "scene.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
-            { _globalSetLayout, _diffuseTextureSetLayout },
+            { _sceneSetLayout }, //, _diffuseTextureSetLayout
             _viewport.colorFormat, _viewport.depthFormat,
             VK_CULL_MODE_FRONT_BIT,
             pipeline, layout

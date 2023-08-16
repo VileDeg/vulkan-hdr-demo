@@ -53,47 +53,25 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		ASSERT(mesh && mesh->material);
 
 		// Always add the sceneData and SSBO descriptor
-		std::vector<VkDescriptorSet> sets = { _frames[_frameInFlightNum].globalSet };
-
-		{ // Push diffuse texture descriptor set
-			constexpr int txc = 2;
-			std::array<VkImageView, txc> imageView = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-			if (!obj.isSkybox) {
-				if (mesh->diffuseTex != nullptr) {
-					imageView[0] = mesh->diffuseTex->view;
-				}
-				if (mesh->bumpTex != nullptr) {
-					imageView[1] = mesh->bumpTex->view;
-				}
-			}
-
-			std::array<VkDescriptorImageInfo, txc> imageInfo;
-			std::array<VkWriteDescriptorSet, txc>  descWrites;
-
-			for (int i = 0; i < txc; ++i) {
-				imageInfo[i] = {
-					.sampler = _linearSampler,
-					.imageView = imageView[i],
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				descWrites[i] = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					VK_NULL_HANDLE, &imageInfo[i], i);
-			}
-
-			vkCmdPushDescriptorSetKHR(
-				cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->material->pipelineLayout, 1, txc, descWrites.data());
-		}
+		std::vector<VkDescriptorSet> sets = { _frames[_frameInFlightNum].sceneSet };
 
 		// Load push constants to GPU
+		bool hasDiff = mesh->diffuseTex != nullptr;
+		bool hasBump = mesh->bumpTex != nullptr;
 		GPUScenePC pc = {
 			.lightAffected = model->lightAffected,
 			.isCubemap = obj.isSkybox,
 			.objectIndex = index,
 			.meshIndex = m,
-			.useDiffTex = (mesh->diffuseTex!= nullptr),
-			.useBumpTex = (mesh->bumpTex != nullptr)
+			.useDiffTex = hasDiff,
+			.useBumpTex = hasBump,
 		};
+		if (hasDiff) {
+			pc.diffTexIndex = mesh->diffuseTex->globalIndex;
+		}
+		if (hasBump) {
+			pc.bumpTexIndex = mesh->bumpTex->globalIndex;
+		}
 
 		vkCmdPushConstants(
 			cmd, mesh->material->pipelineLayout,

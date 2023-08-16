@@ -186,7 +186,6 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
 
 static bool checkRequiredDeviceFeaturesSupport(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2& deviceFeatures)
 {
-    // Check if the device supports the shaderDrawParameters feature
     vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures);
 
     auto drFeatures = *reinterpret_cast<VkPhysicalDeviceDynamicRenderingFeatures*>(deviceFeatures.pNext);

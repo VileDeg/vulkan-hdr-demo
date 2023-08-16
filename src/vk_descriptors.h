@@ -1,6 +1,3 @@
-// vulkan_guide.h : Include file for standard system include files,
-// or project specific include files.
-
 /*
  * Copyright © 2020 vblanco20-1 https://github.com/vblanco20-1/vulkan-guide
  *
@@ -23,6 +20,8 @@
  * THE SOFTWARE.
  */
 
+/* Initial code was modified */
+
 #pragma once
 
 #include <types.h>
@@ -32,7 +31,6 @@
 
 class DescriptorAllocator {
 public:
-
 	struct PoolSizes {
 		std::vector<std::pair<VkDescriptorType, float>> sizes =
 		{
@@ -58,6 +56,7 @@ public:
 	void cleanup();
 
 	VkDevice device;
+
 private:
 	VkDescriptorPool grab_pool();
 
@@ -84,10 +83,7 @@ public:
 		size_t hash() const;
 	};
 
-
-
 private:
-
 	struct DescriptorLayoutHash
 	{
 
@@ -104,7 +100,6 @@ private:
 
 class DescriptorBuilder {
 public:
-
 	static DescriptorBuilder begin(DescriptorLayoutCache* layoutCache, DescriptorAllocator* allocator);
 
 	DescriptorBuilder& bind_buffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, VkDescriptorType type, VkShaderStageFlags stageFlags);
@@ -116,8 +111,8 @@ public:
 
 	bool build(VkDescriptorSet& set, VkDescriptorSetLayout& layout);
 	bool build(VkDescriptorSet& set);
-private:
 
+private:
 	std::vector<VkWriteDescriptorSet> writes;
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 

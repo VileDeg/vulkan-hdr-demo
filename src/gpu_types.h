@@ -1,5 +1,15 @@
 #pragma once
 
+#define MAX_LIGHTS 4
+
+#define MAX_OBJECTS 10
+#define MAX_MESHES_PER_OBJECT 50
+#define MAX_MESHES MAX_OBJECTS * MAX_MESHES_PER_OBJECT
+#define MAX_TEXTURES MAX_MESHES
+
+#define MAX_LUMINANCE_BINS 256
+
+// Bool is 8-bit in C++ but 32-bit in GLSL
 struct GPUBool {
     bool val = {};
     uint8_t _pad[3] = {};
@@ -27,6 +37,8 @@ struct GPUScenePC {
 
     GPUBool useDiffTex;
     GPUBool useBumpTex;
+    uint32_t diffTexIndex;
+    uint32_t bumpTexIndex;
 };
 
 struct GPUShadowPC {
@@ -77,7 +89,6 @@ struct GPUSceneUB {
     float bumpStep = 0.001f;
     float bumpUVFactor = 0.002f;
 
-#define MAX_LIGHTS 4
     GPULight lights[MAX_LIGHTS];
 };
 
@@ -94,18 +105,12 @@ struct GPUMaterial {
 
 struct GPUObject {
     glm::mat4 modelMatrix;
-
     glm::mat4 normalMatrix;
-    //glm::vec3 _pad0;
-    //glm::vec4 _pad1;
-
-    //glm::vec4 color = { 1.f, 0.f, 1.f, -1.f }; // magenta
-#define MAX_MESHES_PER_OBJECT 50
+  
     GPUMaterial mat[MAX_MESHES_PER_OBJECT];
 };
 
 struct GPUSceneSSBO {
-#define MAX_OBJECTS 10
     GPUObject objects[MAX_OBJECTS]{};
 };
 
@@ -116,15 +121,12 @@ struct GPUCompPC {
     int _pad1;
 };
 
-
-
 struct GPUCompSSBO {
     float averageLuminance = 1.f;
     float targetAverageLuminance = 1.f;
     int _pad0;
     int _pad1;
 
-#define MAX_LUMINANCE_BINS 256
     uint32_t luminance[MAX_LUMINANCE_BINS]{};
 };
 

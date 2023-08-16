@@ -53,7 +53,13 @@ struct AllocatedImage {
 };
 
 struct Attachment {
+    /*enum class Type {
+        None = -1, Diffuse, Bump
+    };*/
+    uint32_t globalIndex;
     std::string tag = "";
+    //Type type = Type::None;
+
     glm::vec2 dim;
 
     AllocatedImage allocImage;
@@ -111,7 +117,7 @@ struct FrameData {
     AllocatedBuffer compSSBO;
     AllocatedBuffer compUB;
 
-    VkDescriptorSet globalSet;
+    VkDescriptorSet sceneSet;
 
     VkDescriptorSet shadowPassSet;
 };
@@ -235,6 +241,8 @@ struct Material {
 
 
 struct Mesh {
+   
+
     std::string tag = "";
     std::vector<Vertex> vertices;
     AllocatedBuffer vertexBuffer;

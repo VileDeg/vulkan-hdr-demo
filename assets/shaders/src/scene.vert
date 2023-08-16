@@ -23,14 +23,8 @@ layout(std430, set = 0, binding = 2)
 #include "incl/objectSSBO.incl" 
 ssbo;
 
-layout(push_constant) uniform ScenePC {
-    bool lightAffected;
-    bool isCubemap;
-	uint objectIndex;
-    uint meshIndex;
-	bool useDiffTex;
-	bool useBumpTex;
-} pc;
+#include "incl/scenePC.incl" 
+pc;
 
 void main()
 {

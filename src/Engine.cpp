@@ -21,7 +21,6 @@ Engine::Engine()
 
     _deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, // Swapchain to present images on screen
-        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, // Push descriptor to load diffuse texture per each mesh. TODO: remove? because not supported by all drivers
         VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
 
@@ -524,24 +523,24 @@ void Engine::initDescriptors()
     _descriptorLayoutCache = new DescriptorLayoutCache{};
     _descriptorLayoutCache->init(_device);
 
-    { // Diffuse texture descriptor set (push descriptor set)
-        std::vector<VkDescriptorSetLayoutBinding> bindings = {
-            // Diffuse texture
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0), 
-            // Bump map
-            vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
-        };
+    //{ // Diffuse texture descriptor set (push descriptor set)
+    //    std::vector<VkDescriptorSetLayoutBinding> bindings = {
+    //        // Diffuse texture
+    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0), 
+    //        // Bump map
+    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
+    //    };
 
-        VkDescriptorSetLayoutCreateInfo diffuseSetInfo = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            // This is a push descriptor set !
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-            .bindingCount = static_cast<uint32_t>(bindings.size()),
-            .pBindings = bindings.data()
-        };
-     
-        _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
-    }
+    //    VkDescriptorSetLayoutCreateInfo diffuseSetInfo = {
+    //        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+    //        // This is a push descriptor set !
+    //        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+    //        .bindingCount = static_cast<uint32_t>(bindings.size()),
+    //        .pBindings = bindings.data()
+    //    };
+    // 
+    //    _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
+    //}
 }
 
 void Engine::initUploadContext()
@@ -577,7 +576,6 @@ void Engine::initFrame(FrameData& f, int frame_i)
 
         VK_ASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
 
-
         // Main command buffer
         VkCommandBufferAllocateInfo cmdBufferAllocInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -588,10 +586,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
 
         VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
 
-
         setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
-
-
 
         // Synchronization primitives
         VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
@@ -606,8 +601,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
     {
         { // Camera + scene + mat buffers descriptor set
             f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.sceneBuffer = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
+            f.sceneBuffer  = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
             f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
             // Image descriptor for the shadow cube map
@@ -620,12 +614,17 @@ void Engine::initFrame(FrameData& f, int frame_i)
             DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                 .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // Camera UB
                 .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Scene UB
-                //.bind_buffer(2, &f.matBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Material UB
                 .bind_buffer(2, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // Objects SSBO
+
                 .bind_image(3, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap sampler (Skybox will be passed later when loaded)
                 .bind_image(4, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap sampler
-                .build(f.globalSet, _globalSetLayout);
-            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.globalSet, "DESCRIPTOR_SET::VIEWPORT_GLOBAL::FRAME_" + std::to_string(frame_i));
+
+                .bind_image_empty(5, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Diffuse textures
+                .bind_image_empty(6, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Bump textures
+
+                .build(f.sceneSet, _sceneSetLayout);
+
+            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.sceneSet, "DESCRIPTOR_SET::VIEWPORT_GLOBAL::FRAME_" + std::to_string(frame_i));
         }
 
         { // Shadow pass descriptor set
@@ -634,7 +633,7 @@ void Engine::initFrame(FrameData& f, int frame_i)
                 //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                 .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
                 .build(f.shadowPassSet, _shadowSetLayout);
-            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.globalSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
+            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.shadowPassSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
         }
 
         { // Compute descriptor sets
