@@ -23,6 +23,7 @@ void Engine::writeTextureDescriptorSets()
 		};
 		diffuseImageInfos.push_back(imgInfo);
 	}
+
 	for (auto& tex : _bumpTexInsertionOrdered) {
 		VkDescriptorImageInfo imgInfo = {
 			.sampler = _linearSampler,
@@ -50,11 +51,14 @@ void Engine::writeTextureDescriptorSets()
 	writeBump.pImageInfo = bumpImageInfos.data();
 
 	for (auto& f : _frames) {
-		writeDiff.dstSet = f.sceneSet;
-		writeBump.dstSet = f.sceneSet;
-
-		writes.push_back(writeDiff);
-		writes.push_back(writeBump);
+		if (!diffuseImageInfos.empty()) {
+			writeDiff.dstSet = f.sceneSet;
+			writes.push_back(writeDiff);
+		}
+		if (!bumpImageInfos.empty()) {
+			writeBump.dstSet = f.sceneSet;
+			writes.push_back(writeBump);
+		}
 	}
 
 	vkUpdateDescriptorSets(_device, writes.size(), writes.data(), 0, nullptr);
@@ -109,6 +113,7 @@ void Engine::createScene(CreateSceneData data)
 					.tag = "light" + std::to_string(i),
 					.color = glm::vec4(10, 10, 10, 1.),
 					.model = sphr,
+					.isLightSource = true,
 					.pos = _renderContext.sceneData.lights[i].position,
 					.scale = glm::vec3(0.1f)
 				}
@@ -123,7 +128,11 @@ void Engine::createScene(CreateSceneData data)
 		sphr->meshes[0]->gpuMat.ambientColor *= max_intensity;
 		sphr->meshes[0]->gpuMat.diffuseColor *= max_intensity;
 		sphr->meshes[0]->gpuMat.specularColor *= max_intensity;
+
+		setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
 	}
+
+	
 
 	if (getModel("main")) {
 		_renderables.push_back(std::make_shared<RenderObject>(
@@ -131,7 +140,8 @@ void Engine::createScene(CreateSceneData data)
 				.model = getModel("main"),
 				.pos = glm::vec3(0, -5.f, 0),
 				.rot = glm::vec3(0, 90, 0),
-				.scale = glm::vec3(15.f)
+				//.scale = glm::vec3(15.f)
+				.scale = glm::vec3(data.modelScale)
 			}
 		));
 	}
@@ -512,6 +522,7 @@ void Engine::loadScene(std::string fullScenePath)
 	j << in;
 
 	CreateSceneData data = {
+		.modelScale = j["model_scale"],
 		.bumpStrength = j["bump_strength"],
 		.modelPath = j["model_name"],
 		.skyboxPath = j["skybox"]
@@ -538,6 +549,7 @@ void Engine::saveScene(std::string fullScenePath)
 
 	json j;
 	j["model_name"] = rc.modelName;
+	j["model_scale"] = rc.modelScale;
 	j["bump_strength"] = sd.bumpStrength;
 
 	auto arr = json::array();
@@ -592,5 +604,7 @@ void Engine::cleanupScene()
 
 	modelLoaderGlobalDiffuseTexIndex = 0;
 	modelLoaderGlobalBumpTexIndex = 0;
+	_diffTexInsertionOrdered.clear();
+	_bumpTexInsertionOrdered.clear();
 }
 

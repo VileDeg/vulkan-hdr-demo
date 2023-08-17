@@ -23,6 +23,7 @@ newmtl staklo
 	Kd 0.0 0.0 0.0
 	Ks 0.1 0.1 0.1
 	Ke 0.000000 0.000000 0.000000
+	d 0.000000 # manually added
 
 newmtl kamen_zid
 	Ns 8.000000

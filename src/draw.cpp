@@ -50,6 +50,13 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 	for (uint32_t m = 0; m < model->meshes.size(); ++m) {
 		Mesh* mesh = model->meshes[m];
 
+		beginCmdDebugLabel(cmd, mesh->tag);
+
+		if (mesh->isTransparent) {
+			endCmdDebugLabel(cmd);
+			continue;
+		}
+
 		ASSERT(mesh && mesh->material);
 
 		// Always add the sceneData and SSBO descriptor
@@ -98,6 +105,8 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 
 		// Ve send loop index as instance index to use it in shader to access object data in SSBO
 		vkCmdDrawIndexed(cmd, mesh->indices.size(), 1, 0, 0, 0); // index
+
+		endCmdDebugLabel(cmd);
 	}
 }
 
@@ -163,6 +172,9 @@ void Engine::updateShadowCubemapFace(FrameData& f, uint32_t lightIndex, uint32_t
 
 				for (int m = 0; m < model->meshes.size(); ++m) {
 					Mesh* mesh = model->meshes[m];
+					if (mesh->isTransparent) {
+						continue;
+					}
 
 					VkDeviceSize zeroOffset = 0;
 					vkCmdBindVertexBuffers(f.cmd, 0, 1, &mesh->vertexBuffer.buffer, &zeroOffset);

@@ -11,6 +11,7 @@ layout (location = 0) out vec4 fragPos;
 layout (location = 1) out flat vec3 lightPos;
 
 #include "incl/defs.glsl"
+#include "incl/scene_structs.incl"
 
 layout(set = 0, binding = 0)
 #include "incl/sceneUB.incl"

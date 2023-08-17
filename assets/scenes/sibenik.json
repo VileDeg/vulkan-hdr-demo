@@ -35,5 +35,6 @@
     }
   ],
   "model_name": "sibenik/sibenik.obj",
+  "model_scale": 15.0,
   "skybox": "furry_clouds"
 }

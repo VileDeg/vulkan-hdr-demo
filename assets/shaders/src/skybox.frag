@@ -6,8 +6,7 @@ layout(location = 1) in vec3 uvw; //For skybox cubemap sampling
 layout(location = 0) out vec4 FragColor;
 
 #include "incl/defs.glsl"
-#include "incl/light.glsl"
-#include "incl/bump_mapping.glsl" 
+#include "incl/scene_structs.incl"
 
 layout(set = 0, binding = 1)
 #include "incl/sceneUB.incl" 

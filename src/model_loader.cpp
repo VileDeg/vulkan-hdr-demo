@@ -411,6 +411,17 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 			.specularColor = glm::make_vec3(mp->specular)
 		};
 
+
+		if (mp->dissolve < 0.75) {
+			/*glm::vec3 trans = glm::make_vec3(mp->transmittance);
+
+			float thresh = 0.5;
+			if (trans.x < thresh || trans.y < thresh || trans.z < thresh) {
+				newModel.meshes[mesh_i]->isTransparent = true;
+			}*/
+			newModel.meshes[mesh_i]->isTransparent = true;
+		}
+
 		++mesh_i;
 	}
 

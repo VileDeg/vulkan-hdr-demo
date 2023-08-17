@@ -1,4 +1,5 @@
 #include "defs.glsl"
+#include "scene_structs.incl"
 
 vec3 pointLight(LightData ld, MatData md, vec3 fragPos, vec3 normal, vec3 viewDir) {
     vec3 fragToLight = ld.pos - fragPos;

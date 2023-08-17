@@ -11,6 +11,7 @@ layout(location = 2) out vec2 texCoord;
 layout(location = 3) out vec3 normal;
 
 #include "incl/defs.glsl"
+#include "incl/scene_structs.incl"
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
 	mat4 view;
@@ -33,7 +34,7 @@ void main()
 	gl_Position = transformMat * vec4(vPosition, 1.0f);
 
 	fragPos = vec3(modelMat * vec4(vPosition, 1.0f));
-	fragColor = vColor;
+	fragColor = vColor; 
 	texCoord = vTexCoord;
 	//objectColor = ssbo.objects[pc.objectIndex].color;
 

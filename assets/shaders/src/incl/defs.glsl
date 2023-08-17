@@ -14,36 +14,7 @@
     #define MAX_TEXTURES MAX_MESHES
 
     #define MAX_LUMINANCE_BINS 256
-
-    struct LightData {
-        vec3 pos;
-        float radius;
-
-        vec3 color;
-        float intensity;
-
-        float constant;
-        float linear;
-        float quadratic;
-        bool  enabled;
-    };
-
-    struct MatData {
-        vec3 ambientColor;
-        int _pad0;
-
-        vec3 diffuseColor;
-        int _pad1;
-
-        vec3 specularColor; 
-        int _pad2;
-    };
-
-    struct ObjectData{
-	    mat4 model;
-        mat4 normalMatrix;
-        MatData mat[MAX_MESHES_PER_OBJECT];
-    };
+ 
 
     #define FUSION_WEIGHT_MODE 0
     #define FUSION_BLUR_MODE 2

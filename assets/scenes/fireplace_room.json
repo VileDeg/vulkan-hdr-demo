@@ -1,0 +1,40 @@
+{
+  "model_scale": 35.0,
+  "bump_strength": 2.5,
+  "lights": [
+    {
+      "intensity": 10.0,
+      "position": [
+        -6.659999847412109,
+        1.1299999952316284,
+        -7.25
+      ]
+    },
+    {
+      "intensity": 5.0,
+      "position": [
+        0.0,
+        -1.0,
+        1.4700000286102295
+      ]
+    },
+    {
+      "intensity": 3.0,
+      "position": [
+        0.20000000298023224,
+        5.400000095367432,
+        5.0
+      ]
+    },
+    {
+      "intensity": 1.0,
+      "position": [
+        -5.0,
+        0.0,
+        -5.0
+      ]
+    }
+  ],
+  "model_name": "fireplace_room/fireplace_room.obj",
+  "skybox": "burnt_warehouse"
+}

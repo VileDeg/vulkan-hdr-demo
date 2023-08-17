@@ -242,8 +242,6 @@ struct Material {
 
 
 struct Mesh {
-   
-
     std::string tag = "";
     std::vector<Vertex> vertices;
     AllocatedBuffer vertexBuffer;
@@ -254,6 +252,7 @@ struct Mesh {
     Attachment* diffuseTex{ nullptr };
     Attachment* bumpTex{ nullptr };
 
+    bool isTransparent = false;
     int mat_id = -1;
 
     Material* material{ nullptr };
@@ -278,6 +277,7 @@ struct RenderObject {
     Model* model;
     
     bool isSkybox = false;
+    bool isLightSource = false;
 
     glm::vec3 pos{0.f};
     glm::vec3 rot{0.f};
@@ -305,7 +305,9 @@ struct CreateSceneData {
     float intensity[MAX_LIGHTS];
     glm::vec3 position[MAX_LIGHTS];
 
+    float modelScale;
     float bumpStrength;
+
     std::string modelPath;
     std::string skyboxPath;
 };
@@ -318,9 +320,7 @@ struct RenderContext {
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     bool enableSkybox = true;
-    bool displayLightSourceObjects = true;
-
-    
+    bool displayLightSourceObjects = false;
 
     float zNear = 0.1f;
     float zFar = 64.0f;
@@ -335,6 +335,7 @@ struct RenderContext {
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold = 1.f / 255.f;
 
+    float modelScale;
     std::string modelName;
     std::string skyboxName;
 

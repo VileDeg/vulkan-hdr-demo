@@ -8,6 +8,7 @@ layout(location = 3) in vec3 normal;
 layout(location = 0) out vec4 FragColor;
 
 #include "incl/defs.glsl"
+#include "incl/scene_structs.incl"
 #include "incl/light.glsl"
 #include "incl/bump_mapping.glsl" 
 

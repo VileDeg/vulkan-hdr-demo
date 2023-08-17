@@ -15,11 +15,11 @@ void Engine::setDisplayLightSourceObjects(bool display)
 		}
 	} else {
 		for (auto& l : _renderContext.lightObjects) {
-			if (std::find_if(_renderables.begin(), _renderables.end(), [&l](std::shared_ptr<RenderObject> ptr)
-				{
-					return ptr->tag == l->tag;
-				}) == _renderables.end()) 
-			{
+			// If not found
+			auto iter = std::find_if(_renderables.begin(), _renderables.end(), [&l](std::shared_ptr<RenderObject> ptr) {
+				return ptr->tag == l->tag;
+				});
+			if (iter == _renderables.end()) {
 				_renderables.push_back(l);
 			}
 		}
@@ -60,8 +60,11 @@ void RenderContext::UpdateLightRadius(int i)
 
 void RenderContext::Init(CreateSceneData data)
 {
+	
+
 	modelName  = data.modelPath;
 	skyboxName = data.skyboxPath;
+	modelScale = data.modelScale;
 
 	float off = 5.f;
 	std::vector<glm::vec3> lightPos = {
@@ -81,7 +84,7 @@ void RenderContext::Init(CreateSceneData data)
 	//std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
 	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
 	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
-	std::vector<bool> enable = { true, true, true, true };
+	std::vector<bool> enable = { true, false, false, false };
 
 
 	float amb = 0.05f;

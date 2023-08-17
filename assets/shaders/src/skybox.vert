@@ -9,6 +9,7 @@ layout(location = 0) out vec3 normal;
 layout(location = 1) out vec3 uvw; //For cubemap sampling
 
 #include "incl/defs.glsl"
+#include "incl/scene_structs.incl"
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
 	mat4 view;

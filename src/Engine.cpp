@@ -66,7 +66,9 @@ void Engine::Init()
     createFrameData();
     createPipelines();
     
-    loadScene(SCENE_PATH + "dobrovic-sponza.json");
+    //loadScene(SCENE_PATH + "dobrovic_sponza.json");
+    loadScene(SCENE_PATH + "fireplace_room.json");
+    //loadScene(SCENE_PATH + "living_room.json");
     
     ui_Init();
 
