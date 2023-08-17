@@ -15,7 +15,7 @@ void PostFXStage::Create(VkDevice device, VkSampler sampler,
 	comp.code = vk_utils::readShaderBinary(SHADER_PATH + shaderBinName);
 
 	if (vk_utils::createShaderModule(device, comp.code, &comp.module)) {
-		std::cout << "Compute shader successfully loaded." << std::endl;
+		std::cout << "Compute shader [" << shaderBinName << "] successfully loaded." << std::endl;
 	} else {
 		PRWRN("Failed to load compute shader");
 	}
@@ -210,56 +210,36 @@ PostFX::PostFX()
 	}
 	{
 		pref = getPrefixFromEffect(FUSION);
-		stages[pref+"0"] = { .shaderName = "ltm_fusion_0.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
-		stages[pref+"1"] = { .shaderName = "ltm_fusion_1.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
-		stages[pref+"2"] = { .shaderName = "ltm_fusion_2.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR } };
-		stages[pref+"4"] = { .shaderName = "ltm_fusion_4.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+		stages[pref + "lum_chrom_weight"] = { .shaderName = "ltm_fusion_lum_chrom_weight.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
+		
 
-		// TODO: change naming to "filter_horiz/vert"
-		stages[pref+"upsample0_sub"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample1_sub"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample2_sub"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "upsample0_sub"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+		stages[pref + "upsample1_sub"] = { .shaderName = "ltm_fusion_laplacian.comp.spv", .dsetBindings = { PYR, PYR, PYR, PYR }, .usesPushConstants = true };
 
-		stages[pref+"upsample0_add"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample1_add"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"upsample2_add"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "residual"] = { .shaderName = "ltm_fusion_residual.comp.spv", .dsetBindings = { IMG, IMG, IMG } };
 
-		stages[pref + "add"] = { .shaderName = "mipmap_add.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "subtract"] = { .shaderName = "mipmap_subtract.comp.spv", .dsetBindings = { UB, PYR, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "upsample0_add"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "upsample1_add"] = { .shaderName = "ltm_fusion_blended_laplacian_sum.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
 
-		stages[pref + "move"] = { .shaderName = "move.comp.spv", .dsetBindings = { UB, IMG, IMG } };
-
-
-		stages[pref + "downsample"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
-		/*stages[pref + "downsample0_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "downsample1_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "downsample2_lum"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-
-		stages[pref+"downsample0_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"downsample1_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"downsample2_weight"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };*/
+		stages[pref + "reconstruct"] = { .shaderName = "ltm_fusion_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+		
+		stages[pref + "downsample"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
 
 		att[pref+"chrom"] = {};
 
-		pyr[pref+"lum"] = pyr[pref+"weight"] = pyr[pref+"laplac"] = pyr[pref+"blendedLaplac"] = {};
+		pyr[pref+"lum"] = pyr[pref+"weight"] = pyr[pref+"blendedLaplac"] = {};
 		// Pyramid that will hold intermediate filtered images when upsampling
-		pyr[pref+"upsampled0"] = pyr[pref+"upsampled1"] = {};
-		// Pyramid that will hold intermediate filtered images when downsampling
-		pyr[pref+"downsampled0"] = pyr[pref+"downsampled1"] = {};
+		pyr[pref+"upsampled0"] = {};
 	}
 	{
 		pref = getPrefixFromEffect(BLOOM);
 		stages[pref + "threshold"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 		stages[pref + "downsample"] = { .shaderName = "bloom_downsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
 
-		/*stages[pref + "blur0"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
-		stages[pref + "blur1"] = { .shaderName = "bloom_blur.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };*/
-
 		stages[pref + "upsample"] = { .shaderName = "bloom_upsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
 		stages[pref + "combine"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 
 		pyr[pref + "highlights"] = {};
-		//pyr[pref + "blur"] = {};
 	}
 	{
 		pref = getPrefixFromEffect(EXPADP);

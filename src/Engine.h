@@ -113,7 +113,6 @@ private: /* Secondary methods */
     void bloom(FrameData& f, int imageIndex);
     void durand2002(VkCommandBuffer& cmd, int imageIndex);
 
-    void exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix);
     void exposureFusion(VkCommandBuffer& cmd, int imageIndex);
 
     void shadowPass(FrameData& f, int imageIndex);
@@ -139,7 +138,6 @@ private:
     void loadScene(std::string fullScenePath);
 
     void loadSkybox(std::string skyboxDirName);
-    //void cleanupSkybox();
 
 private:  // UI
 
@@ -191,7 +189,7 @@ private:
 
 private:
     float _fovY = 90.f; // degrees
-    //uint32_t modelLoaderGlobalMeshIndex = 0;
+
     uint32_t modelLoaderGlobalDiffuseTexIndex = 0;
     uint32_t modelLoaderGlobalBumpTexIndex = 0;
 

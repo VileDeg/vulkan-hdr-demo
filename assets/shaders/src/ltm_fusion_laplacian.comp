@@ -1,0 +1,51 @@
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/sampling.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+#include "incl/compPC.incl"
+pc;
+
+layout (rgba32f, set = 0, binding = 0) uniform readonly image2D inImage[MAX_VIEWPORT_MIPS];
+//layout (rgba32f, set = 0, binding = 1) uniform writeonly image2D outImage[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inLum[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inWeight[MAX_VIEWPORT_MIPS];
+
+layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D outBlendedLaplacian[MAX_VIEWPORT_MIPS];
+
+// 1D part of the pyramid filter, as defined in Merten's implementation:
+// https://github.com/Mericam/exposure-fusion
+//#define MSIZE 5
+//const float[MSIZE] f = { .0625, .25, .375, .25, .0625 };
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+	int mip_i = pc.mipIndex;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 dim = imageSize(inImage[mip_i]).xy;
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+#if	  FUSION_BLUR_MODE == 0
+		vec4 blurred = f3x3tent(inImage[mip_i], coords);
+#elif FUSION_BLUR_MODE == 1
+		vec4 blurred = f9x9tent(inImage[mip_i], coords);
+#elif FUSION_BLUR_MODE == 2
+		vec4 blurred = f9x9tent_reduced(inImage[mip_i], coords);
+#elif FUSION_BLUR_MODE == 3
+		vec4 blurred = f5x5tent(inImage[mip_i], coords);
+#endif
+
+		vec4 lum = imageLoad(inLum[mip_i], coords);
+		vec4 weight = imageLoad(inWeight[mip_i], coords);
+
+		vec4 laplac = lum - blurred;
+		float laplacBlended = dot(laplac.rgb, weight.rgb);
+
+		imageStore(outBlendedLaplacian[mip_i], coords, vec4(vec3(laplacBlended), 1.0));
+	}	
+}

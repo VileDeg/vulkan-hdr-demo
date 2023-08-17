@@ -391,74 +391,6 @@ void Engine::bloom(FrameData& f, int imageIndex)
 	endCmdDebugLabel(f.cmd);
 }
 
-void Engine::exposureFusion_Downsample(VkCommandBuffer& cmd, int imageIndex, std::string suffix)
-{
-	PostFX& cp = _postfx;
-	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE::" + cpp_utils::str_toupper(suffix));
-	{
-		cp.Stage(FUSION, "downsample0_"+suffix).Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, suffix), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "downsampled0"), 2)
-			.WriteSets(imageIndex);
-
-		cp.Stage(FUSION, "downsample1_"+suffix).Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "downsampled0"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "downsampled1"), 2)
-			.WriteSets(imageIndex);
-
-		cp.Stage(FUSION, "downsample2_"+suffix).Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "downsampled1"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, suffix), 2)
-			.WriteSets(imageIndex);
-
-		int first_i = 0;
-		uint32_t w = _viewport.width >> first_i;
-		uint32_t h = _viewport.height >> first_i;
-
-		for (int i = first_i; i < _postfx.ub.numOfViewportMips - 1; ++i) {
-			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE::" + cpp_utils::str_toupper(suffix) + "::MIP_" + std::to_string(i));
-
-			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
-			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
-
-			GPUCompPC pc = {
-				.mipIndex = i,
-				.horizontalPass = true
-			};
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "downsample0_"+suffix).pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			cp.Stage(FUSION, "downsample0_"+suffix).Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			pc.horizontalPass = false;
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "downsample1_"+suffix).pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			cp.Stage(FUSION, "downsample1_"+suffix).Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			// Decimate is run over higher mip so need to change mip index and groups number
-			pc.mipIndex = i + 1;
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "downsample2_"+suffix).pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-			cp.Stage(FUSION, "downsample2_"+suffix).Bind(cmd)
-				.Dispatch((w >> 1) / COMPUTE_THREADS_XY + 1, (h >> 1) / COMPUTE_THREADS_XY + 1, imageIndex)
-				.Barrier();
-
-			w >>= 1;
-			h >>= 1;
-
-			endCmdDebugLabel(cmd);
-		}
-	}
-	endCmdDebugLabel(cmd);
-}
 
 void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 {
@@ -469,7 +401,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		uint32_t groupsX = _viewport.width  / COMPUTE_THREADS_XY + 1;
 		uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
 
-		cp.Stage(FUSION, "0").Bind(cmd)
+		cp.Stage(FUSION, "lum_chrom_weight").Bind(cmd)
 			// In
 			.UpdateImage(_viewport.imageViews[imageIndex], 1)
 			// Out
@@ -481,7 +413,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 			.Barrier();
 	}
 	endCmdDebugLabel(cmd);
-#if 0
+
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE");
 	{
 		cp.Stage(FUSION, "downsample").Bind(cmd)
@@ -495,7 +427,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		uint32_t w = _viewport.width  >> first_i;
 		uint32_t h = _viewport.height >> first_i;
 
-		for (int i = first_i; i < _postfx.ub.numOfViewportMips - 1; ++i) {
+		for (int i = first_i; i < _postfx.ub.numOfViewportMips; ++i) {
 			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE" + "::MIP_" + std::to_string(i));
 
 			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
@@ -517,81 +449,47 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		}
 	}
 	endCmdDebugLabel(cmd);
-#else
-	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE");
-	{
-		cp.Stage(FUSION, "downsample").Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
-			.WriteSets(imageIndex);
-
-		int first_i = 1;
-		uint32_t w = _viewport.width >> first_i;
-		uint32_t h = _viewport.height >> first_i;
-
-		uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
-		uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
-
-		cp.Stage(FUSION, "downsample").Bind(cmd)
-			.Dispatch(groupsX, groupsY, imageIndex)
-			.Barrier();
-	}
-	endCmdDebugLabel(cmd);
-#endif
-
-	/*exposureFusion_Downsample(cmd, imageIndex, "lum");
-	exposureFusion_Downsample(cmd, imageIndex, "weight");*/
 	
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LAPLACIANS_MIPS");
 	{
 		{
-			uint32_t groupsX = _viewport.width  / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsX = _viewport.width / COMPUTE_THREADS_XY + 1;
 			uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
 
+			int last_i = _postfx.ub.numOfViewportMips - 1;
+
 			// Move highest lum mip (low-pass residual) to highest laplacian mip
-			cp.Stage(FUSION, "move").Bind(cmd)
+			cp.Stage(FUSION, "residual").Bind(cmd)
 				// In
-				.UpdateImage(cp.Pyr(FUSION, "lum").views[_postfx.ub.numOfViewportMips - 1], 1)
+				.UpdateImage(cp.Pyr(FUSION, "lum").views[last_i], 0)
+				.UpdateImage(cp.Pyr(FUSION, "weight").views[last_i], 1)
 				// Out
-				.UpdateImage(cp.Pyr(FUSION, "laplac").views[_postfx.ub.numOfViewportMips - 1], 2)
+				.UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[last_i], 2)
+
 				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 		}
 
-
 		cp.Stage(FUSION, "upsample0_sub").Bind(cmd)
 			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
 			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 2)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
+
 			.WriteSets(imageIndex);
-		// Horiz filter
+		
 		cp.Stage(FUSION, "upsample1_sub").Bind(cmd)
 			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
 			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled1"), 2)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 3)
 			.WriteSets(imageIndex);
-		// Vert filter
-		cp.Stage(FUSION, "upsample2_sub").Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled1"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 2)
-			.WriteSets(imageIndex);
-
-		cp.Stage(FUSION, "subtract").Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1) // Src
-			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 2) // Value
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "laplac"), 3) // Dst
-			.WriteSets(imageIndex);
+	
 
 		int first_i = _postfx.ub.numOfViewportMips - 2;
-		uint32_t w = _viewport.width >> first_i;
+		uint32_t w = _viewport.width  >> first_i;
 		uint32_t h = _viewport.height >> first_i;
 
 		for (int i = first_i; i >= 0; --i) {
@@ -601,27 +499,15 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
 
 			GPUCompPC pc = {
-				.mipIndex = i,
-				.horizontalPass = true
+				.mipIndex = i
 			};
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample1_sub").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample0_sub").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
 
 			cp.Stage(FUSION, "upsample0_sub").Bind(cmd)
 				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 
 			cp.Stage(FUSION, "upsample1_sub").Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			pc.horizontalPass = false;
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample2_sub").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			cp.Stage(FUSION, "upsample2_sub").Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			cp.Stage(FUSION, "subtract").Bind(cmd)
 				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
 
@@ -633,53 +519,21 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	}
 	endCmdDebugLabel(cmd);
 
-	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::BLEND_LAPLACIANS");
-	{
-		uint32_t groupsX = _viewport.width  / COMPUTE_THREADS_XY + 1;
-		uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
-
-		PostFXStage& cs = cp.Stage(FUSION, "2");
-		cs.Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "laplac"), 1)
-			.UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 3)
-
-			.Dispatch(groupsX, groupsY, imageIndex)
-			.Barrier();
-	}
-	endCmdDebugLabel(cmd);
-
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::SUM_BLENDED_LAPLACIANS");
 	{
 
 		cp.Stage(FUSION, "upsample0_add").Bind(cmd)
 			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 1)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 0)
 			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 2)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
 			.WriteSets(imageIndex);
 
 		cp.Stage(FUSION, "upsample1_add").Bind(cmd)
 			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
 			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled1"), 2)
-			.WriteSets(imageIndex);
-
-		cp.Stage(FUSION, "upsample2_add").Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled1"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 2)
-			.WriteSets(imageIndex);
-
-		cp.Stage(FUSION, "add").Bind(cmd)
-			// In
-			.UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
-			// Out
-			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 2)
+			.UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 1)
 			.WriteSets(imageIndex);
 
 		// TODO:numMips - 1 and change upsample0.comp instead
@@ -694,10 +548,9 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
 
 			GPUCompPC pc = {
-				.mipIndex = i,
-				.horizontalPass = true
+				.mipIndex = i
 			};
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample1_add").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample0_add").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
 
 			cp.Stage(FUSION, "upsample0_add").Bind(cmd)
 				.Dispatch(groupsX, groupsY, imageIndex)
@@ -706,18 +559,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 			cp.Stage(FUSION, "upsample1_add").Bind(cmd)
 				.Dispatch(groupsX, groupsY, imageIndex)
 				.Barrier();
-
-			pc.horizontalPass = false;
-			vkCmdPushConstants(cmd, cp.Stage(FUSION, "upsample2_add").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
-
-			cp.Stage(FUSION, "upsample2_add").Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
-			cp.Stage(FUSION, "add").Bind(cmd)
-				.Dispatch(groupsX, groupsY, imageIndex)
-				.Barrier();
-
+			
 			w <<= 1;
 			h <<= 1;
 
@@ -732,11 +574,10 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 		uint32_t groupsX = _viewport.width  / COMPUTE_THREADS_XY + 1;
 		uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
 
-		cp.Stage(FUSION, "4").Bind(cmd)
+		cp.Stage(FUSION, "reconstruct").Bind(cmd)
 			// In
 			.UpdateImage(cp.Att(FUSION, "chrom"), 1)
-			//.UpdateImage(_viewport.imageViews[imageIndex], 1)
-			//.UpdateImage(cp.Att(FUSION, "laplacSum"), 2)
+
 			.UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[0], 2)
 			// Out
 			.UpdateImage(_viewport.imageViews[imageIndex], 3)
@@ -746,7 +587,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	}
 	endCmdDebugLabel(cmd);
 
-	endCmdDebugLabel(cmd); // end of LTM::FUSION
+	endCmdDebugLabel(cmd);
 }
 
 

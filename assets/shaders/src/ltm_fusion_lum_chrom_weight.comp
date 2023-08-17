@@ -43,10 +43,10 @@ float saturation(vec3 col) {
 	return saturation;
 }
 
-float exposedness(vec3 col) {
-	float exposedness = exp(-pow(col.x - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
-	exposedness *= exp(-pow(col.y - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
-	exposedness *= exp(-pow(col.z - 0.5, 2) / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma) );
+float exposedness(vec3 col, float sigma) {
+	float exposedness = exp(-pow(col.x - 0.5, 2) / (2 * sigma * sigma) );
+	exposedness *= exp(-pow(col.y - 0.5, 2) / (2 * sigma * sigma) );
+	exposedness *= exp(-pow(col.z - 0.5, 2) / (2 * sigma * sigma) );
 
 	return exposedness;
 }
@@ -58,9 +58,6 @@ void main() {
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
-		//inpColor *= exp2(ub.midtonesExposure);
-
-
 
 		vec3 highlightsColor = applyToneMapping(inpColor * exp2(ub.highlightsExposure));
 		vec3 midtonesColor	 = applyToneMapping(inpColor);
@@ -72,16 +69,19 @@ void main() {
 			dot(shadowsColor, RGB_TO_LUM)
 		);
 
-		//vec3 chrom = midtonesColor / midtones;
-
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
-		vec3 diff = lums - vec3(0.5);
-        //vec3 exposedness = vec3(exp(-0.5 * diff * diff * ub.exposednessWeightSigma * ub.exposednessWeightSigma));
-		vec3 expos = vec3(exposedness(highlightsColor), exposedness(midtonesColor), exposedness(shadowsColor));
-		vec3 satur = vec3(saturation(highlightsColor), saturation(midtonesColor), saturation(shadowsColor));
+		vec3 expos = vec3(
+			exposedness(highlightsColor, ub.exposednessWeightSigma), 
+			exposedness(midtonesColor  , ub.exposednessWeightSigma), 
+			exposedness(shadowsColor   , ub.exposednessWeightSigma)
+		);
 
+#if FUSION_WEIGHT_MODE == 0
+		vec3 satur = vec3(saturation(highlightsColor), saturation(midtonesColor), saturation(shadowsColor));
+#else
+		vec3 satur = vec3(1);
+#endif
 		vec3 weights = expos * satur;
-        //vec3 weights = vec3(exp(-1 * diff * diff / (2 * ub.exposednessWeightSigma * ub.exposednessWeightSigma)));
 
 		// Normalize weights
         weights /= dot(weights, vec3(1.0)) + 0.00001;

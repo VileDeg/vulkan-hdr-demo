@@ -1,7 +1,6 @@
 #version 460
 
 #include "incl/defs.glsl"
-#include "incl/durand_defs.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32

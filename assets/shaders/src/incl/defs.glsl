@@ -45,8 +45,9 @@
         MatData mat[MAX_MESHES_PER_OBJECT];
     };
 
-    ivec2 borderClamp(ivec2 coords, ivec2 dim) {
-	    coords = clamp(coords, ivec2(0), dim-ivec2(1));
-	    return coords;
-    }
+    #define FUSION_WEIGHT_MODE 0
+    #define FUSION_BLUR_MODE 2
+
+    #define DURAND_CONVERT_LAB 1
+
 #endif

@@ -154,9 +154,9 @@ struct GPUCompUB {
     float sigmaR = 0.2;
     int numOfViewportMips;
 
-    float shadowsExposure = 2.8;
-    float midtonesExposure = 0.0;
-    float highlightsExposure = -1.6;
+    float shadowsExposure = 3.3;
+    float midtonesExposure = 0.0; // Unused
+    float highlightsExposure = -7;
     float exposednessWeightSigma = 5;
 
     float bloomWeight = 0.04f;

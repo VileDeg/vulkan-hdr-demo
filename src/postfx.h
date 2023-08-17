@@ -92,14 +92,14 @@ struct PostFX {
     float maxLogLuminance = 4.7f;
     float eyeAdaptationTimeCoefficient = 2.2f;
 
-    LTM localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
+    LTM localToneMappingMode = LTM::FUSION; // 0 - Durand2002, 1 - Exposure fusion
 
     float gamma = 2.2f;
     int gammaMode = 0; // 0 - forward, 1 - inverse
 
-    bool enableBloom = true;
-    bool enableGlobalToneMapping = true;
+    bool enableBloom = false;
+    bool enableGlobalToneMapping = false;
     bool enableGammaCorrection = false;
     bool enableAdaptation = false;
-    bool enableLocalToneMapping = false;
+    bool enableLocalToneMapping = true;
 };

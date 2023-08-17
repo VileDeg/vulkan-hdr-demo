@@ -6,36 +6,33 @@
 #define THREADS_X  32
 #define THREADS_Y  32
 
-layout (set = 0, binding = 0) 
-#include "incl/computeUB.incl" 
-ub;
-
 #include "incl/compPC.incl"
 pc;
 
-layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inBlendedLaplacian[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 0) uniform image2D inLum[MAX_VIEWPORT_MIPS];
 
-layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D upsample0[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 1) uniform writeonly image2D upsampled[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	int i = pc.mipIndex;
-	uvec2 dim = imageSize(upsample0[i]).xy;
+	uvec2 dim = imageSize(upsampled[i]).xy;
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (coords.x < dim.x && coords.y < dim.y) {
 		// Select only upper left pixel out of 4
 		// Store black color otherwise to erase left garbage values
 		if (mod(coords.x, 2) != 0 || mod(coords.y, 2) != 0) {
-			imageStore(upsample0[i], coords, vec4(vec3(0), 1.0));
+			imageStore(upsampled[i], coords, vec4(vec3(0), 1.0));
 			return;
 		}
 
-		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(inBlendedLaplacian[i+1]).xy);
+		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(inLum[i+1]).xy);
 		ivec2 coordsLower = coords >> 1;
-		// For normalization multiply by 4
-		vec3 px = imageLoad(inBlendedLaplacian[i+1], coordsLower).rgb * 4;
+		// Multiply by 4 to not loose color value when blurring 
+		// because we only store every 2nd pixel since we're upsampling from lower res
+		vec3 px = imageLoad(inLum[i+1], coordsLower).rgb * 4;
 
-		imageStore(upsample0[i], coords, vec4(px, 1.0));
+		imageStore(upsampled[i], coords, vec4(px, 1.0));
 	}
 }
