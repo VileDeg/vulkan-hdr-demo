@@ -1,0 +1,67 @@
+#version 460
+
+#include "incl/defs.glsl"
+#include "incl/sampling.glsl"
+
+#define GROUP_SIZE 1024
+#define THREADS_X  32
+#define THREADS_Y  32
+
+#if 1
+	layout (set = 0, binding = 0) 
+	#include "incl/computeUB.incl" 
+	ub;
+#else
+	#include "incl/compPC.incl"
+	pc;
+#endif
+
+layout (rgba32f, set = 0, binding = 1) uniform image2D lumImage[MAX_VIEWPORT_MIPS];
+layout (rgba32f, set = 0, binding = 2) uniform image2D weightImage[MAX_VIEWPORT_MIPS];
+
+// 1D part of the pyramid filter, as defined in Merten's implementation:
+// https://github.com/Mericam/exposure-fusion
+/*#define MSIZE 5
+const float[MSIZE] f = { .0625, .25, .375, .25, .0625 };*/
+
+layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+void main() {
+#if 0
+	int i = pc.mipIndex;
+	ivec2 dim = imageSize(lumImage[i]).xy;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
+	if (coords.x < dim.x && coords.y < dim.y) {
+		ivec2 coordsHigher = coords << 1;
+
+        vec4 pxLum	  = f3x3tent(lumImage[i-1], coordsHigher);
+		vec4 pxWeight = f3x3tent(weightImage[i-1], coordsHigher);
+
+		imageStore(lumImage[i], coords, pxLum);
+		imageStore(weightImage[i], coords, pxWeight);
+	}
+#else
+	// Downsampling multiple mips in one dispatch is a somewhat invalid approach 
+	// because barrier() does not synchronize between groups 
+	// so when 3x3 sampling goes out of bounds of a group it might read old memory
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	for (int i = 1; i < ub.numOfViewportMips; ++i) {
+		ivec2 dim = imageSize(lumImage[i]).xy;
+
+		if (coords.x < dim.x && coords.y < dim.y) {
+			ivec2 coordsHigher = coords << 1;
+
+			vec4 pxLum	  = f3x3tent(lumImage[i-1], coordsHigher);
+			vec4 pxWeight = f3x3tent(weightImage[i-1], coordsHigher);
+
+			imageStore(lumImage[i], coords, pxLum);
+			imageStore(weightImage[i], coords, pxWeight);
+			// In theory there there must be a barrier here
+			// but it makes no noticable visual difference
+			//barrier();
+
+			coords >>= 1;
+		}
+	}
+#endif
+}

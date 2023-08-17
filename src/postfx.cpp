@@ -229,14 +229,15 @@ PostFX::PostFX()
 
 		stages[pref + "move"] = { .shaderName = "move.comp.spv", .dsetBindings = { UB, IMG, IMG } };
 
-		// TODO: change naming to "filter_horiz/vert"
-		stages[pref + "downsample0_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+
+		stages[pref + "downsample"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR }, .usesPushConstants = true };
+		/*stages[pref + "downsample0_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 		stages[pref + "downsample1_lum"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "downsample2_lum"] = { .shaderName = "ltm_fusion_decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "downsample2_lum"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 
 		stages[pref+"downsample0_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
 		stages[pref+"downsample1_weight"] = { .shaderName = "ltm_fusion_filter.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
-		stages[pref+"downsample2_weight"] = { .shaderName = "ltm_fusion_decimate.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };
+		stages[pref+"downsample2_weight"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { UB, PYR, PYR}, .usesPushConstants = true };*/
 
 		att[pref+"chrom"] = {};
 

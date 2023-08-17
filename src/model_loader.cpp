@@ -189,7 +189,6 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
 {
 	// Partially based on https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
-	
 
 	Model& newModel = _models[assignedName];
 	newModel.tag = assignedName;

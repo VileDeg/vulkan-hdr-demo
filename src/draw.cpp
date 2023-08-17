@@ -466,7 +466,7 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 	auto& cp = _postfx;
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LUM_CHROM_WEIGHT");
 	{
-		uint32_t groupsX = _viewport.width / COMPUTE_THREADS_XY + 1;
+		uint32_t groupsX = _viewport.width  / COMPUTE_THREADS_XY + 1;
 		uint32_t groupsY = _viewport.height / COMPUTE_THREADS_XY + 1;
 
 		cp.Stage(FUSION, "0").Bind(cmd)
@@ -481,9 +481,68 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 			.Barrier();
 	}
 	endCmdDebugLabel(cmd);
+#if 0
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE");
+	{
+		cp.Stage(FUSION, "downsample").Bind(cmd)
+			// In
+			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
+			// Out
+			.UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 1)
+			.WriteSets(imageIndex);
 
-	exposureFusion_Downsample(cmd, imageIndex, "lum");
-	exposureFusion_Downsample(cmd, imageIndex, "weight");
+		int first_i = 1;
+		uint32_t w = _viewport.width  >> first_i;
+		uint32_t h = _viewport.height >> first_i;
+
+		for (int i = first_i; i < _postfx.ub.numOfViewportMips - 1; ++i) {
+			beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE" + "::MIP_" + std::to_string(i));
+
+			uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
+			uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
+
+			GPUCompPC pc = {
+				.mipIndex = i
+			};
+			vkCmdPushConstants(cmd, cp.Stage(FUSION, "downsample").pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPUCompPC), &pc);
+
+			cp.Stage(FUSION, "downsample").Bind(cmd)
+				.Dispatch(groupsX, groupsY, imageIndex)
+				.Barrier();
+
+			w >>= 1;
+			h >>= 1;
+
+			endCmdDebugLabel(cmd);
+		}
+	}
+	endCmdDebugLabel(cmd);
+#else
+	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::DOWNSAMPLE");
+	{
+		cp.Stage(FUSION, "downsample").Bind(cmd)
+			// In
+			.UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
+			// Out
+			.UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
+			.WriteSets(imageIndex);
+
+		int first_i = 1;
+		uint32_t w = _viewport.width >> first_i;
+		uint32_t h = _viewport.height >> first_i;
+
+		uint32_t groupsX = w / COMPUTE_THREADS_XY + 1;
+		uint32_t groupsY = h / COMPUTE_THREADS_XY + 1;
+
+		cp.Stage(FUSION, "downsample").Bind(cmd)
+			.Dispatch(groupsX, groupsY, imageIndex)
+			.Barrier();
+	}
+	endCmdDebugLabel(cmd);
+#endif
+
+	/*exposureFusion_Downsample(cmd, imageIndex, "lum");
+	exposureFusion_Downsample(cmd, imageIndex, "weight");*/
 	
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::LAPLACIANS_MIPS");
 	{

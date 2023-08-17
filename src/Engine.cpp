@@ -522,25 +522,6 @@ void Engine::initDescriptors()
 
     _descriptorLayoutCache = new DescriptorLayoutCache{};
     _descriptorLayoutCache->init(_device);
-
-    //{ // Diffuse texture descriptor set (push descriptor set)
-    //    std::vector<VkDescriptorSetLayoutBinding> bindings = {
-    //        // Diffuse texture
-    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0), 
-    //        // Bump map
-    //        vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1)
-    //    };
-
-    //    VkDescriptorSetLayoutCreateInfo diffuseSetInfo = {
-    //        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-    //        // This is a push descriptor set !
-    //        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-    //        .bindingCount = static_cast<uint32_t>(bindings.size()),
-    //        .pBindings = bindings.data()
-    //    };
-    // 
-    //    _diffuseTextureSetLayout = _descriptorLayoutCache->create_descriptor_layout(&diffuseSetInfo);
-    //}
 }
 
 void Engine::initUploadContext()
@@ -549,10 +530,10 @@ void Engine::initUploadContext()
     VK_ASSERT(vkCreateFence(_device, &uploadFenceCreateInfo, nullptr, &_uploadContext.uploadFence));
 
     VkCommandPoolCreateInfo uploadCommandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily);
-    //create pool for upload context
+    // Create pool for upload context
     VK_ASSERT(vkCreateCommandPool(_device, &uploadCommandPoolInfo, nullptr, &_uploadContext.commandPool));
 
-    //allocate the default command buffer that we will use for the instant commands
+    // Allocate the default command buffer that we will use for the instant commands
     VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
 
     VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
@@ -560,7 +541,7 @@ void Engine::initUploadContext()
     _deletionStack.push([&]() {
         vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
         vkDestroyFence(_device, _uploadContext.uploadFence, nullptr);
-        });
+    });
 }
 
 
