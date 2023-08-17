@@ -164,7 +164,6 @@ void Engine::createSwapchain()
 
     for (int i = 0; i < _swapchain.images.size(); ++i) {
         setDebugName(VK_OBJECT_TYPE_IMAGE, _swapchain.images[i], "Swapchain Image " + std::to_string(i));
-        
     }
 }
 

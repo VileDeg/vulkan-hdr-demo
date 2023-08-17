@@ -58,13 +58,11 @@ void Engine::Init()
     initUploadContext();
     
     createSwapchain();
-    
+
     prepareSwapchainPass();
     prepareViewportPass(_swapchain.width, _swapchain.height);
     prepareShadowPass();
-
-    initDescriptors();
-
+    
     createFrameData();
     createPipelines();
     
@@ -290,6 +288,163 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
             );
         }
 
+        // First time this functions is called compute stages where not yet created
+        if (_isInitialized) {
+            updatePostFXStagesDescriptorSets();
+        }
+    }
+}
+
+void Engine::updatePostFXStagesDescriptorSets()
+{
+    int i = 0;
+    for (auto& f : _frames) {
+        auto& cp = _postfx;
+        int imageIndex = i;
+
+        { // Durand
+            _postfx.Stage(DURAND, "lum_chrom")
+                // In
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                // Out
+                .UpdateImage(cp.Att(DURAND, "lum").view, 2)
+                .UpdateImage(cp.Att(DURAND, "chrom").view, 3)
+
+                .WriteSets(imageIndex);
+
+            _postfx.Stage(DURAND, "bilateral")
+                // In
+                .UpdateImage(cp.Att(DURAND, "lum").view, 1)
+                // Out
+                .UpdateImage(cp.Att(DURAND, "base").view, 2)
+                .UpdateImage(cp.Att(DURAND, "detail").view, 3)
+
+                .WriteSets(imageIndex);
+
+            _postfx.Stage(DURAND, "reconstruct")
+                // In
+                .UpdateImage(cp.Att(DURAND, "lum").view, 1)
+                .UpdateImage(cp.Att(DURAND, "chrom").view, 2)
+                .UpdateImage(cp.Att(DURAND, "base").view, 3)
+                .UpdateImage(cp.Att(DURAND, "detail").view, 4)
+                // Out
+                .UpdateImage(_viewport.imageViews[imageIndex], 5)
+
+                .WriteSets(imageIndex);
+        }
+
+        { // Bloom
+            cp.Stage(BLOOM, "threshold")
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                .UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
+                .WriteSets(imageIndex);
+
+            cp.Stage(BLOOM, "downsample")
+                .UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
+                .WriteSets(imageIndex);
+
+            cp.Stage(BLOOM, "upsample")
+                .UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
+                .WriteSets(imageIndex);
+
+            cp.Stage(BLOOM, "combine")
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                .UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
+                .WriteSets(imageIndex);
+        }
+
+        { // Exposure fusion
+            cp.Stage(FUSION, "lum_chrom_weight")
+                // Out
+                .UpdateImage(_viewport.imageViews[i], 1)
+                .UpdateImage(cp.Att(FUSION, "chrom"), 2)
+                .UpdateImage(cp.Pyr(FUSION, "lum").views[0], 3)
+                .UpdateImage(cp.Pyr(FUSION, "weight").views[0], 4)
+                .WriteSets(imageIndex);
+
+            cp.Stage(FUSION, "downsample")
+                // In
+                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
+                // Out
+                .UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 1)
+                .WriteSets(imageIndex);
+
+
+            int last_i = _postfx.ub.numOfViewportMips - 1;
+            cp.Stage(FUSION, "residual")
+                // In
+                .UpdateImage(cp.Pyr(FUSION, "lum").views[last_i], 0)
+                .UpdateImage(cp.Pyr(FUSION, "weight").views[last_i], 1)
+                // Out
+                .UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[last_i], 2)
+                .WriteSets(imageIndex);
+
+
+            cp.Stage(FUSION, "upsample0_sub")
+                // In
+                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
+                // Out
+                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
+
+                .WriteSets(imageIndex);
+
+            cp.Stage(FUSION, "upsample1_sub")
+                // In
+                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
+                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
+                .UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
+                // Out
+                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 3)
+                .WriteSets(imageIndex);
+
+            cp.Stage(FUSION, "upsample0_add")
+                // In
+                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 0)
+                // Out
+                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
+                .WriteSets(imageIndex);
+
+            cp.Stage(FUSION, "upsample1_add")
+                // In
+                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
+                // Out
+                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 1)
+                .WriteSets(imageIndex);
+
+            cp.Stage(FUSION, "reconstruct")
+                // In
+                .UpdateImage(cp.Att(FUSION, "chrom"), 1)
+
+                .UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[0], 2)
+                // Out
+                .UpdateImage(_viewport.imageViews[imageIndex], 3)
+
+                .WriteSets(imageIndex);
+        }
+
+        { // Exposure adaptation
+            cp.Stage(EXPADP, "histogram")
+                .UpdateImage(_viewport.imageViews[imageIndex], 2)
+                .WriteSets(imageIndex);
+
+            cp.Stage(EXPADP, "eyeadp")
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                .WriteSets(imageIndex);
+        }
+
+        { // Global tone mapping
+            cp.Stage(GTMO, "0")
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                .WriteSets(imageIndex);
+        }
+
+        { // Gamma correction
+            cp.Stage(GAMMA, "0")
+                .UpdateImage(_viewport.imageViews[imageIndex], 1)
+                .WriteSets(imageIndex);
+        }
+
+        ++i;
     }
 }
 
@@ -515,14 +670,6 @@ void Engine::prepareShadowPass()
 }
 
 
-void Engine::initDescriptors()
-{
-    _descriptorAllocator = new DescriptorAllocator{};
-    _descriptorAllocator->init(_device);
-
-    _descriptorLayoutCache = new DescriptorLayoutCache{};
-    _descriptorLayoutCache->init(_device);
-}
 
 void Engine::initUploadContext()
 {
@@ -545,111 +692,116 @@ void Engine::initUploadContext()
 }
 
 
-void Engine::initFrame(FrameData& f, int frame_i)
-{
-    {
-        // Command pool
-        VkCommandPoolCreateInfo poolInfo{
-            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-            .queueFamilyIndex = _graphicsQueueFamily
-        };
-
-        VK_ASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
-
-        // Main command buffer
-        VkCommandBufferAllocateInfo cmdBufferAllocInfo{
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = f.commandPool,
-            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1
-        };
-
-        VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
-
-        setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
-
-        // Synchronization primitives
-        VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
-        VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-
-        VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
-        VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
-
-        VK_ASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
-    }
-
-    {
-        { // Camera + scene + mat buffers descriptor set
-            f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.sceneBuffer  = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-            // Image descriptor for the shadow cube map
-            _shadow.cubemapArray.allocImage.descInfo = {
-                .sampler = _shadow.sampler,
-                .imageView = _shadow.cubemapArray.view,
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-            };
-
-            DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // Camera UB
-                .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Scene UB
-                .bind_buffer(2, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // Objects SSBO
-
-                .bind_image(3, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap sampler (Skybox will be passed later when loaded)
-                .bind_image(4, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap sampler
-
-                .bind_image_empty(5, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Diffuse textures
-                .bind_image_empty(6, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Bump textures
-
-                .build(f.sceneSet, _sceneSetLayout);
-
-            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.sceneSet, "DESCRIPTOR_SET::VIEWPORT_GLOBAL::FRAME_" + std::to_string(frame_i));
-        }
-
-        { // Shadow pass descriptor set
-            DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
-                .bind_buffer(0, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-                //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-                .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
-                .build(f.shadowPassSet, _shadowSetLayout);
-            setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.shadowPassSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
-        }
-
-        { // Compute descriptor sets
-            f.compSSBO = allocateBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            f.compUB   = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-            for (auto& stage : _postfx.stages) {
-                stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
-                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::COMPUTE::" + stage.first + "::FRAME_" + std::to_string(frame_i));
-            }
-        }
-    }
-
-    _deletionStack.push([&]() {
-        f.cameraBuffer.destroy(_allocator);
-        f.sceneBuffer.destroy(_allocator);
-
-        f.objectBuffer.destroy(_allocator);
-
-        f.compSSBO.destroy(_allocator);
-        f.compUB.destroy(_allocator);
-
-        vkDestroyFence(_device, f.inFlightFence, nullptr);
-
-        vkDestroySemaphore(_device, f.imageAvailableSemaphore, nullptr);
-        vkDestroySemaphore(_device, f.renderFinishedSemaphore, nullptr);
-
-        vkDestroyCommandPool(_device, f.commandPool, nullptr);
-    });
-}
 
 void Engine::createFrameData()
 {
+    _descriptorAllocator = new DescriptorAllocator{};
+    _descriptorAllocator->init(_device);
+
+    _descriptorLayoutCache = new DescriptorLayoutCache{};
+    _descriptorLayoutCache->init(_device);
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        initFrame(_frames[i], i);
+        int frame_i = i;
+        auto& f = _frames[i];
+
+        {
+            // Command pool
+            VkCommandPoolCreateInfo poolInfo{
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+                .queueFamilyIndex = _graphicsQueueFamily
+            };
+
+            VK_ASSERT(vkCreateCommandPool(_device, &poolInfo, nullptr, &f.commandPool));
+
+            // Main command buffer
+            VkCommandBufferAllocateInfo cmdBufferAllocInfo{
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .commandPool = f.commandPool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = 1
+            };
+
+            VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdBufferAllocInfo, &f.cmd));
+
+            setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, f.cmd, "Command buffer. Frame " + std::to_string(frame_i));
+
+            // Synchronization primitives
+            VkSemaphoreCreateInfo semaphoreInfo = vkinit::semaphore_create_info();
+            VkFenceCreateInfo fenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+
+            VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.imageAvailableSemaphore));
+            VK_ASSERT(vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &f.renderFinishedSemaphore));
+
+            VK_ASSERT(vkCreateFence(_device, &fenceInfo, nullptr, &f.inFlightFence));
+        }
+
+        {
+            { // Camera + scene + mat buffers descriptor set
+                f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                f.sceneBuffer = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+                // Image descriptor for the shadow cube map
+                _shadow.cubemapArray.allocImage.descInfo = {
+                    .sampler = _shadow.sampler,
+                    .imageView = _shadow.cubemapArray.view,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                };
+
+                DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                    .bind_buffer(0, &f.cameraBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // Camera UB
+                    .bind_buffer(1, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT) // Scene UB
+                    .bind_buffer(2, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT) // Objects SSBO
+
+                    .bind_image(3, nullptr, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Skybox cubemap sampler (Skybox will be passed later when loaded)
+                    .bind_image(4, &_shadow.cubemapArray.allocImage.descInfo, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Shadow cubemap sampler
+
+                    .bind_image_empty(5, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Diffuse textures
+                    .bind_image_empty(6, MAX_TEXTURES, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT) // Bump textures
+
+                    .build(f.sceneSet, _sceneSetLayout);
+
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.sceneSet, "DESCRIPTOR_SET::VIEWPORT_GLOBAL::FRAME_" + std::to_string(frame_i));
+            }
+
+            { // Shadow pass descriptor set
+                DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
+                    .bind_buffer(0, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+                    //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
+                    .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
+                    .build(f.shadowPassSet, _shadowSetLayout);
+                setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.shadowPassSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
+            }
+
+            { // Compute descriptor sets
+                f.compSSBO = allocateBuffer(sizeof(GPUCompSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                f.compUB = allocateBuffer(sizeof(GPUCompUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+                for (auto& stage : _postfx.stages) {
+                    stage.second.InitDescriptorSets(_descriptorLayoutCache, _descriptorAllocator, f, frame_i);
+                    setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, stage.second.sets[frame_i], "DESCRIPTOR_SET::COMPUTE::" + stage.first + "::FRAME_" + std::to_string(frame_i));
+                }
+            }
+        }
+
+        _deletionStack.push([&]() {
+            f.cameraBuffer.destroy(_allocator);
+            f.sceneBuffer.destroy(_allocator);
+
+            f.objectBuffer.destroy(_allocator);
+
+            f.compSSBO.destroy(_allocator);
+            f.compUB.destroy(_allocator);
+
+            vkDestroyFence(_device, f.inFlightFence, nullptr);
+
+            vkDestroySemaphore(_device, f.imageAvailableSemaphore, nullptr);
+            vkDestroySemaphore(_device, f.renderFinishedSemaphore, nullptr);
+
+            vkDestroyCommandPool(_device, f.commandPool, nullptr);
+        });
     }
 }
 

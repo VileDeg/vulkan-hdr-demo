@@ -134,6 +134,7 @@ void Engine::createGraphicsPipeline(const std::string& name, const std::string v
         vkDestroyPipelineLayout(_device, mat.pipelineLayout, nullptr);
     });
 }
+
 void Engine::createPipelines()
 {
     // Find a suitable depth format
@@ -146,7 +147,7 @@ void Engine::createPipelines()
             "scene.vert.spv", "scene.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
             { _sceneSetLayout },
-            _viewport.colorFormat, _viewport.depthFormat, 
+            _viewport.colorFormat, _viewport.depthFormat,
             VK_CULL_MODE_BACK_BIT
         );
 
@@ -173,8 +174,10 @@ void Engine::createPipelines()
         for (auto& stage : _postfx.stages) {
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }
-    }
 
+        updatePostFXStagesDescriptorSets();
+    }
+    
     _deletionStack.push([=]() mutable {
         for (auto& stage : _postfx.stages) {
             stage.second.Destroy();

@@ -97,9 +97,9 @@ struct PostFX {
     float gamma = 2.2f;
     int gammaMode = 0; // 0 - forward, 1 - inverse
 
-    bool enableBloom = false;
+    bool enableBloom = true;
     bool enableGlobalToneMapping = false;
-    bool enableGammaCorrection = false;
-    bool enableAdaptation = false;
+    bool enableGammaCorrection = true;
+    bool enableAdaptation = true;
     bool enableLocalToneMapping = true;
 };

@@ -43,6 +43,7 @@ private: /* Methods used from Init directly */
     void createFrameData();
     void createSamplers();
 
+    void writeTextureDescriptorSets();
     void createScene(CreateSceneData data);
     void cleanupScene();
 
@@ -61,9 +62,11 @@ private: /* Secondary methods */
     void recreateViewport(uint32_t extentX, uint32_t extentY);
     void cleanupViewportResources();
 
-    void initDescriptors();
+
     void initUploadContext();
-    void initFrame(FrameData& f, int frame_i);
+
+    void updatePostFXStagesDescriptorSets();
+
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
 

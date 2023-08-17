@@ -7,6 +7,59 @@
 
 #include "json/json.hpp"
 
+void Engine::writeTextureDescriptorSets()
+{
+	uint32_t diffuseTexBinding = 5;
+	uint32_t bumpTexBinding = 6;
+
+	std::vector<VkDescriptorImageInfo> diffuseImageInfos;
+	std::vector<VkDescriptorImageInfo> bumpImageInfos;
+
+	for (auto& tex : _diffTexInsertionOrdered) {
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = _linearSampler,
+			.imageView = tex->view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		diffuseImageInfos.push_back(imgInfo);
+	}
+	for (auto& tex : _bumpTexInsertionOrdered) {
+		VkDescriptorImageInfo imgInfo = {
+			.sampler = _linearSampler,
+			.imageView = tex->view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		bumpImageInfos.push_back(imgInfo);
+	}
+
+	std::vector<VkWriteDescriptorSet> writes;
+	VkWriteDescriptorSet writeDiff = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.pNext = nullptr,
+
+		.dstBinding = diffuseTexBinding,
+
+		.descriptorCount = static_cast<uint32_t>(diffuseImageInfos.size()),
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = diffuseImageInfos.data()
+	};
+
+	VkWriteDescriptorSet writeBump = writeDiff;
+	writeBump.dstBinding = bumpTexBinding;
+	writeBump.descriptorCount = bumpImageInfos.size();
+	writeBump.pImageInfo = bumpImageInfos.data();
+
+	for (auto& f : _frames) {
+		writeDiff.dstSet = f.sceneSet;
+		writeBump.dstSet = f.sceneSet;
+
+		writes.push_back(writeDiff);
+		writes.push_back(writeBump);
+	}
+
+	vkUpdateDescriptorSets(_device, writes.size(), writes.data(), 0, nullptr);
+}
+
 void Engine::createScene(CreateSceneData data)
 {
 	// Reset for when we load a scene at runtime
@@ -26,57 +79,7 @@ void Engine::createScene(CreateSceneData data)
 		}
 	}
 
-	{
-		uint32_t diffuseTexBinding = 5;
-		uint32_t bumpTexBinding = 6;
-
-		std::vector<VkDescriptorImageInfo> diffuseImageInfos;
-		std::vector<VkDescriptorImageInfo> bumpImageInfos;
-
-		for (auto& tex : _diffTexInsertionOrdered) {
-			VkDescriptorImageInfo imgInfo = {
-				.sampler = _linearSampler,
-				.imageView = tex->view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-			diffuseImageInfos.push_back(imgInfo);
-		}
-		for (auto& tex : _bumpTexInsertionOrdered) {
-			VkDescriptorImageInfo imgInfo = {
-				.sampler = _linearSampler,
-				.imageView = tex->view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-			bumpImageInfos.push_back(imgInfo);
-		}
-
-		std::vector<VkWriteDescriptorSet> writes;
-		VkWriteDescriptorSet writeDiff = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.pNext = nullptr,
-
-			.dstBinding = diffuseTexBinding,
-		
-			.descriptorCount = static_cast<uint32_t>(diffuseImageInfos.size()),
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = diffuseImageInfos.data()
-		};
-
-		VkWriteDescriptorSet writeBump = writeDiff;
-		writeBump.dstBinding = bumpTexBinding;
-		writeBump.descriptorCount = bumpImageInfos.size();
-		writeBump.pImageInfo = bumpImageInfos.data();
-
-		for (auto& f : _frames) {
-			writeDiff.dstSet = f.sceneSet;
-			writeBump.dstSet = f.sceneSet;
-
-			writes.push_back(writeDiff);
-			writes.push_back(writeBump);
-		}
-
-		vkUpdateDescriptorSets(_device, writes.size(), writes.data(), 0, nullptr);
-	}
+	writeTextureDescriptorSets();
 
 	loadSkybox(data.skyboxPath);
 
@@ -135,7 +138,7 @@ void Engine::createScene(CreateSceneData data)
 
 	_deletionStack.push([this]() {
 		cleanupScene();
-		});
+	});
 }
 
 
