@@ -1,5 +1,5 @@
 {
-  "model_scale": 35.0,
+  "model_scale": 40.0,
   "bump_strength": 2.5,
   "lights": [
     {
@@ -36,5 +36,5 @@
     }
   ],
   "model_name": "fireplace_room/fireplace_room.obj",
-  "skybox": "burnt_warehouse"
+  "skybox": "small_cave"
 }

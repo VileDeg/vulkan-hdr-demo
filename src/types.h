@@ -315,25 +315,22 @@ struct CreateSceneData {
 struct RenderContext {
     GPUSceneUB sceneData{};
     
-
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
-    bool enableSkybox = true;
-    bool displayLightSourceObjects = false;
+    std::array<glm::mat4, 6> lightView; // Matrices of 6 sides of light
 
-    float zNear = 0.1f;
-    float zFar = 64.0f;
+    bool enableSkybox;
+    bool displayLightSourceObjects;
 
-    std::array<glm::mat4, 6> lightView;
+    float fovY; // degrees
+    float zNear;
+    float zFar;
 
-    bool showNormals = false;
-
-
-   
+    bool showNormals;
 
     // Treshold to calculate light's effective radius for optimization
-    float lightRadiusTreshold = 1.f / 255.f;
+    float lightRadiusTreshold;
 
     float modelScale;
     std::string modelName;

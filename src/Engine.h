@@ -65,7 +65,7 @@ private: /* Secondary methods */
 
     void initUploadContext();
 
-    void updatePostFXStagesDescriptorSets();
+    //void updatePostFXStagesDescriptorSets();
 
 
     bool loadModelFromObj(const std::string assignedName, const std::string path);
@@ -191,7 +191,7 @@ private:
     void endCmdDebugLabel(VkCommandBuffer cmd);
 
 private:
-    float _fovY = 90.f; // degrees
+    
 
     uint32_t modelLoaderGlobalDiffuseTexIndex = 0;
     uint32_t modelLoaderGlobalBumpTexIndex = 0;
@@ -225,7 +225,7 @@ private:
     ShadowPass _shadow;
     PostFX _postfx;
 
-    uint32_t _frameInFlightNum = 0;
+    uint32_t _currentFrameInFlight = 0;
 
     float _frameRate = 60.f; // Updated from ImGui io.framerate
     float _deltaTime = 0.016f;

@@ -19,7 +19,7 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
     // * First call will only recreate the swapchain, second call will render the image. */
     e.recreateSwapchain();
     // Need to reset frames counter otherwise viewport image layout error occurs on window resize
-    e._frameInFlightNum = 0;
+    e._currentFrameInFlight = 0;
 
     e.drawFrame();
     //eng.drawFrame();

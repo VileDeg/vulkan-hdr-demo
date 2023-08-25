@@ -11,17 +11,11 @@
 pc;
 
 layout (rgba32f, set = 0, binding = 0) uniform readonly image2D inImage[MAX_VIEWPORT_MIPS];
-//layout (rgba32f, set = 0, binding = 1) uniform writeonly image2D outImage[MAX_VIEWPORT_MIPS];
 
 layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inLum[MAX_VIEWPORT_MIPS];
 layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inWeight[MAX_VIEWPORT_MIPS];
 
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D outBlendedLaplacian[MAX_VIEWPORT_MIPS];
-
-// 1D part of the pyramid filter, as defined in Merten's implementation:
-// https://github.com/Mericam/exposure-fusion
-//#define MSIZE 5
-//const float[MSIZE] f = { .0625, .25, .375, .25, .0625 };
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {

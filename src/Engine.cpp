@@ -266,7 +266,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
 
         _postfx.ub.numOfViewportMips = numOfViewportMips;
-        _postfx.numOfBloomMips = numOfViewportMips-2;
+        _postfx.numOfBloomMips = numOfViewportMips;
 
         for (auto& att : _postfx.att) {
             createAttachment(
@@ -292,161 +292,8 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
         // First time this functions is called compute stages where not yet created
         if (_isInitialized) {
-            updatePostFXStagesDescriptorSets();
+            _postfx.UpdateStagesDescriptorSets(MAX_FRAMES_IN_FLIGHT, _viewport.imageViews);
         }
-    }
-}
-
-void Engine::updatePostFXStagesDescriptorSets()
-{
-    int i = 0;
-    for (auto& f : _frames) {
-        auto& cp = _postfx;
-        int imageIndex = i;
-
-        { // Durand
-            _postfx.Stage(DURAND, "lum_chrom")
-                // In
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                // Out
-                .UpdateImage(cp.Att(DURAND, "lum").view, 2)
-                .UpdateImage(cp.Att(DURAND, "chrom").view, 3)
-
-                .WriteSets(imageIndex);
-
-            _postfx.Stage(DURAND, "bilateral")
-                // In
-                .UpdateImage(cp.Att(DURAND, "lum").view, 1)
-                // Out
-                .UpdateImage(cp.Att(DURAND, "base").view, 2)
-                .UpdateImage(cp.Att(DURAND, "detail").view, 3)
-
-                .WriteSets(imageIndex);
-
-            _postfx.Stage(DURAND, "reconstruct")
-                // In
-                .UpdateImage(cp.Att(DURAND, "lum").view, 1)
-                .UpdateImage(cp.Att(DURAND, "chrom").view, 2)
-                .UpdateImage(cp.Att(DURAND, "base").view, 3)
-                .UpdateImage(cp.Att(DURAND, "detail").view, 4)
-                // Out
-                .UpdateImage(_viewport.imageViews[imageIndex], 5)
-
-                .WriteSets(imageIndex);
-        }
-
-        { // Bloom
-            cp.Stage(BLOOM, "threshold")
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                .UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
-                .WriteSets(imageIndex);
-
-            cp.Stage(BLOOM, "downsample")
-                .UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
-                .WriteSets(imageIndex);
-
-            cp.Stage(BLOOM, "upsample")
-                .UpdateImagePyramid(cp.Pyr(BLOOM, "highlights"), 0)
-                .WriteSets(imageIndex);
-
-            cp.Stage(BLOOM, "combine")
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                .UpdateImage(cp.Pyr(BLOOM, "highlights").views[0], 2)
-                .WriteSets(imageIndex);
-        }
-
-        { // Exposure fusion
-            cp.Stage(FUSION, "lum_chrom_weight")
-                // Out
-                .UpdateImage(_viewport.imageViews[i], 1)
-                .UpdateImage(cp.Att(FUSION, "chrom"), 2)
-                .UpdateImage(cp.Pyr(FUSION, "lum").views[0], 3)
-                .UpdateImage(cp.Pyr(FUSION, "weight").views[0], 4)
-                .WriteSets(imageIndex);
-
-            cp.Stage(FUSION, "downsample")
-                // In
-                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
-                // Out
-                .UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 1)
-                .WriteSets(imageIndex);
-
-
-            int last_i = _postfx.ub.numOfViewportMips - 1;
-            cp.Stage(FUSION, "residual")
-                // In
-                .UpdateImage(cp.Pyr(FUSION, "lum").views[last_i], 0)
-                .UpdateImage(cp.Pyr(FUSION, "weight").views[last_i], 1)
-                // Out
-                .UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[last_i], 2)
-                .WriteSets(imageIndex);
-
-
-            cp.Stage(FUSION, "upsample0_sub")
-                // In
-                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 0)
-                // Out
-                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
-
-                .WriteSets(imageIndex);
-
-            cp.Stage(FUSION, "upsample1_sub")
-                // In
-                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
-                .UpdateImagePyramid(cp.Pyr(FUSION, "lum"), 1)
-                .UpdateImagePyramid(cp.Pyr(FUSION, "weight"), 2)
-                // Out
-                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 3)
-                .WriteSets(imageIndex);
-
-            cp.Stage(FUSION, "upsample0_add")
-                // In
-                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 0)
-                // Out
-                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 1)
-                .WriteSets(imageIndex);
-
-            cp.Stage(FUSION, "upsample1_add")
-                // In
-                .UpdateImagePyramid(cp.Pyr(FUSION, "upsampled0"), 0)
-                // Out
-                .UpdateImagePyramid(cp.Pyr(FUSION, "blendedLaplac"), 1)
-                .WriteSets(imageIndex);
-
-            cp.Stage(FUSION, "reconstruct")
-                // In
-                .UpdateImage(cp.Att(FUSION, "chrom"), 1)
-
-                .UpdateImage(cp.Pyr(FUSION, "blendedLaplac").views[0], 2)
-                // Out
-                .UpdateImage(_viewport.imageViews[imageIndex], 3)
-
-                .WriteSets(imageIndex);
-        }
-
-        { // Exposure adaptation
-            cp.Stage(EXPADP, "histogram")
-                .UpdateImage(_viewport.imageViews[imageIndex], 2)
-                .WriteSets(imageIndex);
-
-            cp.Stage(EXPADP, "eyeadp")
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                .WriteSets(imageIndex);
-        }
-
-        { // Global tone mapping
-            cp.Stage(GTMO, "0")
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                .WriteSets(imageIndex);
-        }
-
-        { // Gamma correction
-            cp.Stage(GAMMA, "0")
-                .UpdateImage(_viewport.imageViews[imageIndex], 1)
-                .WriteSets(imageIndex);
-        }
-
-        ++i;
     }
 }
 
@@ -487,7 +334,6 @@ void Engine::cleanupViewportResources()
 
     _viewport.images.clear();
 }
-
 
 void Engine::prepareShadowPass()
 {
@@ -671,8 +517,6 @@ void Engine::prepareShadowPass()
     });
 }
 
-
-
 void Engine::initUploadContext()
 {
     VkFenceCreateInfo uploadFenceCreateInfo = vkinit::fence_create_info();
@@ -692,8 +536,6 @@ void Engine::initUploadContext()
         vkDestroyFence(_device, _uploadContext.uploadFence, nullptr);
     });
 }
-
-
 
 void Engine::createFrameData()
 {

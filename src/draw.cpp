@@ -60,7 +60,7 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		ASSERT(mesh && mesh->material);
 
 		// Always add the sceneData and SSBO descriptor
-		std::vector<VkDescriptorSet> sets = { _frames[_frameInFlightNum].sceneSet };
+		std::vector<VkDescriptorSet> sets = { _frames[_currentFrameInFlight].sceneSet };
 
 		// Load push constants to GPU
 		bool hasDiff = mesh->diffuseTex != nullptr;
@@ -231,7 +231,7 @@ void Engine::loadDataToGPU()
 
 	{ // Load UNIFORM BUFFER of camera to GPU
 		glm::mat4 viewMat = _camera.GetViewMat();
-		glm::mat4 projMat = _camera.GetProjMat(_fovY, _viewport.width, _viewport.height);
+		glm::mat4 projMat = _camera.GetProjMat(_renderContext.fovY, _viewport.width, _viewport.height);
 
 		*_gpu.camera = {
 			.view = viewMat,
@@ -632,7 +632,17 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 	}
 
 	if (_postfx.enableBloom) {
+		// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
+		vk_utils::memoryBarrier(f.cmd,
+			VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
 		bloom(f, imageIndex);
+
+		// A read & write compute barrier to avoid WRITE_AFTER_WRITE hazards between queue submits
+		vk_utils::memoryBarrier(f.cmd,
+			VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 	}
 
 	if (_postfx.enableLocalToneMapping) {
@@ -761,7 +771,7 @@ void Engine::recordCommandBuffer(FrameData& f, uint32_t imageIndex)
 
 void Engine::drawFrame()
 {
-	FrameData& f = _frames[_frameInFlightNum];
+	FrameData& f = _frames[_currentFrameInFlight];
 
 	// Since we have descriptor set copies for each frame in flight,
 	// we set the pointers to current frame's descriptor set buffers
@@ -828,6 +838,6 @@ void Engine::drawFrame()
         VK_ASSERTMSG(result, "failed to present swap chain image!");
     }
 
-	_frameInFlightNum = (_frameInFlightNum + 1) % MAX_FRAMES_IN_FLIGHT;
+	_currentFrameInFlight = (_currentFrameInFlight + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 

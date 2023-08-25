@@ -60,7 +60,17 @@ void RenderContext::UpdateLightRadius(int i)
 
 void RenderContext::Init(CreateSceneData data)
 {
-	
+	enableSkybox = true;
+	displayLightSourceObjects = false;
+
+	fovY = 120.f; // degrees
+	zNear = 0.1f;
+	zFar = 64.0f;
+
+	showNormals = false;
+
+	// Treshold to calculate light's effective radius for optimization
+	lightRadiusTreshold = 1.f / 255.f;
 
 	modelName  = data.modelPath;
 	skyboxName = data.skyboxPath;

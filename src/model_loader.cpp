@@ -411,22 +411,14 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 			.specularColor = glm::make_vec3(mp->specular)
 		};
 
-
+		// Dissolve corresponds to 'd' component of a material in .mtl file.
+		// It's default value is 1 which means that meaterial is fully opaque.
 		if (mp->dissolve < 0.75) {
-			/*glm::vec3 trans = glm::make_vec3(mp->transmittance);
-
-			float thresh = 0.5;
-			if (trans.x < thresh || trans.y < thresh || trans.z < thresh) {
-				newModel.meshes[mesh_i]->isTransparent = true;
-			}*/
 			newModel.meshes[mesh_i]->isTransparent = true;
 		}
 
 		++mesh_i;
 	}
-
-	/*pr("\tbmin = " << bmin[0] << ", " << bmin[1] << ", " << bmin[2]);
-	pr("\tbmax = " << bmax[0] << ", " << bmax[1] << ", " << bmax[2]);*/
 
 	// Max extent is half of biggest difference of a bounds coordinate
 	float maxExtent = 0.5f * (bmax[0] - bmin[0]);

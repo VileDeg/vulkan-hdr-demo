@@ -2,7 +2,6 @@
 #version 460
 
 #include "incl/defs.glsl"
-#include "incl/tone_mapping.glsl"
 
 #define THREADS_X  32
 #define THREADS_Y  32
@@ -12,8 +11,6 @@ layout (set = 0, binding = 0)
 ssbo;
 
 layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
-
-const float WHITE_POINT = 10.0;
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {

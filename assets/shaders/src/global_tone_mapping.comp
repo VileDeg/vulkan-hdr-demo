@@ -13,8 +13,6 @@ ub;
 
 layout (rgba32f, set = 0, binding = 1) uniform image2D inOutHDRImage;
 
-const float WHITE_POINT = 10.0;
-
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
     uvec2 dim = imageSize(inOutHDRImage).xy;
@@ -24,13 +22,7 @@ void main() {
         vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
         
         // Apply tone mapping
-        switch (ub.toneMappingMode) {
-            case 0: outColor = ReinhardExtended(outColor, WHITE_POINT); break;
-            case 1: outColor = Reinhard(outColor); break;
-            case 2: outColor = Uncharted2Filmic(outColor); break;
-            case 3: outColor = ACESFilm(outColor); break;
-            case 4: outColor = ACESFitted(outColor); break;
-        }
+        outColor = applyGlobalToneMapping(outColor, ub.toneMappingMode);
 
         // Store final color
         imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(outColor, 1.0));

@@ -5,6 +5,243 @@
 
 #include "vk_descriptors.h"
 
+PostFX::PostFX()
+{
+	numOfBloomMips = 5;
+
+	lumPixelLowerBound = 0.2f;
+	lumPixelUpperBound = 0.95f;
+
+	maxLogLuminance = 4.7f;
+	eyeAdaptationTimeCoefficient = 2.2f;
+
+	localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
+
+	gamma = 2.2f;
+	gammaMode = 0; // 0 - forward, 1 - inverse
+
+	enableBloom = true;
+	enableGlobalToneMapping = false;
+	enableGammaCorrection = false;
+	enableAdaptation = false;
+	enableLocalToneMapping = false;
+
+	effectPrefixMap[EXPADP] = "expadp_";
+	effectPrefixMap[DURAND] = "durand_";
+	effectPrefixMap[FUSION] = "fusion_";
+	effectPrefixMap[BLOOM] = "bloom_";
+	effectPrefixMap[GTMO] = "gtmo_";
+	effectPrefixMap[GAMMA] = "gamma_";
+
+	std::string pref = "";
+	{
+		pref = getPrefixFromEffect(DURAND);
+		stages[pref + "lum_chrom"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+		stages[pref + "bilateral"] = { .shaderName = "ltm_durand_bilateral.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
+		stages[pref + "reconstruct"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG } };
+
+		att[pref + "lum"] = {};
+		att[pref + "chrom"] = {};
+		att[pref + "base"] = {};
+		att[pref + "detail"] = {};
+	}
+	{
+		pref = getPrefixFromEffect(FUSION);
+		stages[pref + "lum_chrom_weight"] = { .shaderName = "ltm_fusion_lum_chrom_weight.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
+
+
+		stages[pref + "upsample0_sub"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+		stages[pref + "upsample1_sub"] = { .shaderName = "ltm_fusion_laplacian.comp.spv", .dsetBindings = { PYR, PYR, PYR, PYR }, .usesPushConstants = true };
+
+		stages[pref + "residual"] = { .shaderName = "ltm_fusion_residual.comp.spv", .dsetBindings = { IMG, IMG, IMG } };
+
+		stages[pref + "upsample0_add"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
+		stages[pref + "upsample1_add"] = { .shaderName = "ltm_fusion_blended_laplacian_sum.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
+
+		stages[pref + "reconstruct"] = { .shaderName = "ltm_fusion_reconstruct.comp.spv", .dsetBindings = { IMG, IMG, IMG} };
+
+		stages[pref + "downsample"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
+
+		att[pref + "chrom"] = {};
+
+		pyr[pref + "lum"] = pyr[pref + "weight"] = pyr[pref + "blendedLaplac"] = {};
+		// Pyramid that will hold intermediate filtered images when upsampling
+		pyr[pref + "upsampled0"] = {};
+	}
+	{
+		pref = getPrefixFromEffect(BLOOM);
+		stages[pref + "threshold"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
+		stages[pref + "downsample"] = { .shaderName = "bloom_downsample.comp.spv", .dsetBindings = { UB, PYR }, .usesPushConstants = true };
+
+		stages[pref + "upsample"] = { .shaderName = "bloom_upsample.comp.spv", .dsetBindings = { UB, PYR }, .usesPushConstants = true };
+		stages[pref + "combine"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
+
+		pyr[pref + "highlights"] = {};
+	}
+	{
+		pref = getPrefixFromEffect(EXPADP);
+		stages[pref + "histogram"] = { .shaderName = "expadp_histogram.comp.spv", .dsetBindings = { SSBO, UB, IMG } };
+		stages[pref + "avglum"] = { .shaderName = "expadp_average_luminance.comp.spv", .dsetBindings = { SSBO, UB } };
+		stages[pref + "eyeadp"] = { .shaderName = "expadp_eye_adaptation.comp.spv", .dsetBindings = { SSBO, IMG } };
+	}
+	{
+		pref = getPrefixFromEffect(GTMO);
+		stages[pref + "0"] = { .shaderName = "global_tone_mapping.comp.spv", .dsetBindings = { UB, IMG } };
+	}
+	{
+		pref = getPrefixFromEffect(GAMMA);
+		stages[pref + "0"] = { .shaderName = "gamma_correction.comp.spv", .dsetBindings = { UB, IMG } };
+	}
+}
+
+void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkImageView>& viewportImageViews)
+{
+	for (int i = 0; i < numOfFrames; ++i) {
+		int imageIndex = i;
+
+		{ // Durand
+			Stage(DURAND, "lum_chrom")
+				// In
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				// Out
+				.UpdateImage(Att(DURAND, "lum").view, 2)
+				.UpdateImage(Att(DURAND, "chrom").view, 3)
+
+				.WriteSets(imageIndex);
+
+			Stage(DURAND, "bilateral")
+				// In
+				.UpdateImage(Att(DURAND, "lum").view, 1)
+				// Out
+				.UpdateImage(Att(DURAND, "base").view, 2)
+				.UpdateImage(Att(DURAND, "detail").view, 3)
+
+				.WriteSets(imageIndex);
+
+			Stage(DURAND, "reconstruct")
+				// In
+				.UpdateImage(Att(DURAND, "chrom").view, 1)
+				.UpdateImage(Att(DURAND, "base").view, 2)
+				.UpdateImage(Att(DURAND, "detail").view, 3)
+				// Out
+				.UpdateImage(viewportImageViews[imageIndex], 4)
+
+				.WriteSets(imageIndex);
+		}
+
+		{ // Bloom
+			Stage(BLOOM, "threshold")
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				.UpdateImage(Pyr(BLOOM, "highlights").views[0], 2)
+				.WriteSets(imageIndex);
+
+			Stage(BLOOM, "downsample")
+				.UpdateImagePyramid(Pyr(BLOOM, "highlights"), 1)
+				.WriteSets(imageIndex);
+
+			Stage(BLOOM, "upsample")
+				.UpdateImagePyramid(Pyr(BLOOM, "highlights"), 1)
+				.WriteSets(imageIndex);
+
+			Stage(BLOOM, "combine")
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				.UpdateImage(Pyr(BLOOM, "highlights").views[0], 2)
+				.WriteSets(imageIndex);
+		}
+
+		{ // Exposure fusion
+			Stage(FUSION, "lum_chrom_weight")
+				// Out
+				.UpdateImage(viewportImageViews[i], 1)
+				.UpdateImage(Att(FUSION, "chrom"), 2)
+				.UpdateImage(Pyr(FUSION, "lum").views[0], 3)
+				.UpdateImage(Pyr(FUSION, "weight").views[0], 4)
+				.WriteSets(imageIndex);
+
+			Stage(FUSION, "downsample")
+				// In
+				.UpdateImagePyramid(Pyr(FUSION, "lum"), 0)
+				// Out
+				.UpdateImagePyramid(Pyr(FUSION, "weight"), 1)
+				.WriteSets(imageIndex);
+
+
+			int last_i = ub.numOfViewportMips - 1;
+			Stage(FUSION, "residual")
+				// In
+				.UpdateImage(Pyr(FUSION, "lum").views[last_i], 0)
+				.UpdateImage(Pyr(FUSION, "weight").views[last_i], 1)
+				// Out
+				.UpdateImage(Pyr(FUSION, "blendedLaplac").views[last_i], 2)
+				.WriteSets(imageIndex);
+
+
+			Stage(FUSION, "upsample0_sub")
+				// In
+				.UpdateImagePyramid(Pyr(FUSION, "lum"), 0)
+				// Out
+				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 1)
+
+				.WriteSets(imageIndex);
+
+			Stage(FUSION, "upsample1_sub")
+				// In
+				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 0)
+				.UpdateImagePyramid(Pyr(FUSION, "lum"), 1)
+				.UpdateImagePyramid(Pyr(FUSION, "weight"), 2)
+				// Out
+				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 3)
+				.WriteSets(imageIndex);
+
+			Stage(FUSION, "upsample0_add")
+				// In
+				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 0)
+				// Out
+				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 1)
+				.WriteSets(imageIndex);
+
+			Stage(FUSION, "upsample1_add")
+				// In
+				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 0)
+				// Out
+				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 1)
+				.WriteSets(imageIndex);
+
+			Stage(FUSION, "reconstruct")
+				// In
+				.UpdateImage(Att(FUSION, "chrom"), 0)
+
+				.UpdateImage(Pyr(FUSION, "blendedLaplac").views[0], 1)
+				// Out
+				.UpdateImage(viewportImageViews[imageIndex], 2)
+
+				.WriteSets(imageIndex);
+		}
+
+		{ // Exposure adaptation
+			Stage(EXPADP, "histogram")
+				.UpdateImage(viewportImageViews[imageIndex], 2)
+				.WriteSets(imageIndex);
+
+			Stage(EXPADP, "eyeadp")
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				.WriteSets(imageIndex);
+		}
+
+		{ // Global tone mapping
+			Stage(GTMO, "0")
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				.WriteSets(imageIndex);
+		}
+
+		{ // Gamma correction
+			Stage(GAMMA, "0")
+				.UpdateImage(viewportImageViews[imageIndex], 1)
+				.WriteSets(imageIndex);
+		}
+	}
+}
+
 void PostFXStage::Create(VkDevice device, VkSampler sampler,
 	const std::string& shaderBinName, bool usePushConstants/* = false*/)
 {
@@ -181,81 +418,14 @@ void PostFXStage::InitDescriptorSets(
 	builder.build(sets[frame_i], setLayout);
 }
 
+
 void PostFXStage::Destroy()
 {
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 }
 
-PostFX::PostFX()
-{
-	effectPrefixMap[EXPADP] = "expadp_";
-	effectPrefixMap[DURAND] = "durand_";
-	effectPrefixMap[FUSION] = "fusion_";
-	effectPrefixMap[BLOOM]  = "bloom_";
-	effectPrefixMap[GTMO]   = "gtmo_";
-	effectPrefixMap[GAMMA]  = "gamma_";
 
-	std::string pref = "";
-	{
-		pref = getPrefixFromEffect(DURAND);
-		stages[pref+"lum_chrom"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
-		stages[pref+"bilateral"] = { .shaderName = "ltm_durand_bilateral.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
-		stages[pref+"reconstruct"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG, IMG } };
-
-		att[pref+"lum"] = {};
-		att[pref+"chrom"] = {};
-		att[pref+"base"] = {};
-		att[pref+"detail"] = {};
-	}
-	{
-		pref = getPrefixFromEffect(FUSION);
-		stages[pref + "lum_chrom_weight"] = { .shaderName = "ltm_fusion_lum_chrom_weight.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG} };
-		
-
-		stages[pref + "upsample0_sub"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
-		stages[pref + "upsample1_sub"] = { .shaderName = "ltm_fusion_laplacian.comp.spv", .dsetBindings = { PYR, PYR, PYR, PYR }, .usesPushConstants = true };
-
-		stages[pref + "residual"] = { .shaderName = "ltm_fusion_residual.comp.spv", .dsetBindings = { IMG, IMG, IMG } };
-
-		stages[pref + "upsample0_add"] = { .shaderName = "ltm_fusion_upsample.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
-		stages[pref + "upsample1_add"] = { .shaderName = "ltm_fusion_blended_laplacian_sum.comp.spv", .dsetBindings = { PYR, PYR}, .usesPushConstants = true };
-
-		stages[pref + "reconstruct"] = { .shaderName = "ltm_fusion_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
-		
-		stages[pref + "downsample"] = { .shaderName = "ltm_fusion_downsample.comp.spv", .dsetBindings = { PYR, PYR }, .usesPushConstants = true };
-
-		att[pref+"chrom"] = {};
-
-		pyr[pref+"lum"] = pyr[pref+"weight"] = pyr[pref+"blendedLaplac"] = {};
-		// Pyramid that will hold intermediate filtered images when upsampling
-		pyr[pref+"upsampled0"] = {};
-	}
-	{
-		pref = getPrefixFromEffect(BLOOM);
-		stages[pref + "threshold"] = { .shaderName = "bloom_threshold.comp.spv", .dsetBindings = { UB, IMG, IMG } };
-		stages[pref + "downsample"] = { .shaderName = "bloom_downsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
-
-		stages[pref + "upsample"] = { .shaderName = "bloom_upsample.comp.spv", .dsetBindings = { PYR }, .usesPushConstants = true };
-		stages[pref + "combine"] = { .shaderName = "bloom_combine.comp.spv", .dsetBindings = { UB, IMG, IMG } };
-
-		pyr[pref + "highlights"] = {};
-	}
-	{
-		pref = getPrefixFromEffect(EXPADP);
-		stages[pref + "histogram"] = { .shaderName = "expadp_histogram.comp.spv", .dsetBindings = { SSBO, UB, IMG } };
-		stages[pref + "avglum"] = { .shaderName = "expadp_average_luminance.comp.spv", .dsetBindings = { SSBO, UB } };
-		stages[pref + "eyeadp"] = { .shaderName = "expadp_eye_adaptation.comp.spv", .dsetBindings = { SSBO, IMG } };
-	}
-	{
-		pref = getPrefixFromEffect(GTMO);
-		stages[pref + "0"] = { .shaderName = "global_tone_mapping.comp.spv", .dsetBindings = { UB, IMG } };
-	}
-	{
-		pref = getPrefixFromEffect(GAMMA);
-		stages[pref + "0"] = { .shaderName = "gamma_correction.comp.spv", .dsetBindings = { UB, IMG } };
-	}
-}
 
 PostFXStage& PostFX::Stage(Effect fct, std::string key) {
 	std::string _key = getPrefixFromEffect(fct) + key;

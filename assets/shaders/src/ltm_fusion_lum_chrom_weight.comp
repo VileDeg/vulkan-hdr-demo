@@ -19,25 +19,12 @@ layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D chrominanceImag
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D luminanceImage;
 layout (rgba32f, set = 0, binding = 4) uniform writeonly image2D weightImage;
 
-const float WHITE_POINT = 10.0;
-
-vec3 applyToneMapping(vec3 col) {
-	vec3 outCol = col;
-	switch (ub.toneMappingMode) {
-        case 0: outCol = ReinhardExtended(col, WHITE_POINT); break;
-        case 1: outCol = Reinhard(col); break;
-        case 2: outCol = Uncharted2Filmic(col); break;
-        case 3: outCol = ACESFilm(col); break;
-        case 4: outCol = ACESFitted(col); break;
-    }
-	return outCol;
-}
-
 float saturation(vec3 col) {
 	float sum0 = dot(col, vec3(1)) / 3;
-	float sum1 = pow(col.x - sum0, 2);
-	sum1 += pow(col.y - sum0, 2);
-	sum1 += pow(col.z - sum0, 2);
+
+	vec3 pw = col - sum0;
+	pw *= pw;
+	float sum1 = pw.x + pw.y + pw.z;
 
 	float saturation = sqrt(sum1 / 3);
 	return saturation;
@@ -59,9 +46,9 @@ void main() {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
 
-		vec3 highlightsColor = applyToneMapping(inpColor * exp2(ub.highlightsExposure));
-		vec3 midtonesColor	 = applyToneMapping(inpColor);
-		vec3 shadowsColor	 = applyToneMapping(inpColor * exp2(ub.shadowsExposure));
+		vec3 highlightsColor = applyGlobalToneMapping(inpColor * exp2(ub.highlightsExposure), ub.toneMappingMode);
+		vec3 midtonesColor	 = applyGlobalToneMapping(inpColor, ub.toneMappingMode);
+		vec3 shadowsColor	 = applyGlobalToneMapping(inpColor * exp2(ub.shadowsExposure), ub.toneMappingMode);
 
 		vec3 lums  = vec3(
 			dot(highlightsColor, RGB_TO_LUM), 

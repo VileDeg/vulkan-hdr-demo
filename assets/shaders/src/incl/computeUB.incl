@@ -28,7 +28,9 @@ uniform ComputeUB {
 
     float bloomHighlightsWeight;
     int durandBilateralRadius;
+    float bloomBlurRadiusMultiplier;
     int _pad0;
-    int _pad1;
+
+    vec4 normalizationColor;
 }
 

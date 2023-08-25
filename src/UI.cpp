@@ -450,7 +450,7 @@ void Engine::ui_Scene()
 		}
 
 		ImGui::Separator();
-		ImGui::SliderFloat("Field of view", &_fovY, 45.f, 120.f);
+		ImGui::SliderFloat("Field of view", &_renderContext.fovY, 45.f, 120.f);
 
 		ImGui::TreePop();
 	}
@@ -465,6 +465,8 @@ void Engine::ui_HDR()
 
 			//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
 			ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloomWeight, 0.001, 0.5f);
+			//ImGui::SliderInt("Bloom Mips", &_postfx.numOfBloomMips, 1, _postfx.ub.numOfViewportMips);
+			//ImGui::DragFloat("Bloom Blur Radius Multiplier", &_postfx.ub.bloomBlurRadiusMultiplier, 0.001, 0.05f, 10.f);
 
 			ImGui::TreePop();
 		}
@@ -500,8 +502,10 @@ void Engine::ui_HDR()
 			}
 
 			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::SliderFloat("Base Scale", &_postfx.ub.baseScale, 0.001f, 1.f);
-				ImGui::SliderFloat("Base Offset", &_postfx.ub.baseOffset, -0.999f, 0.999f);
+				ImGui::DragFloat("Base Scale", &_postfx.ub.baseScale, 0.001f, 0.001f, 1.f);
+				ImGui::DragFloat("Base Offset", &_postfx.ub.baseOffset, 0.1f, 0.f, 100.f);
+
+				//ImGui::SliderFloat3("Normalization Color", &_postfx.ub.normalizationColor[0], 0.f, 1.f);
 
 				//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
 				ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durandBilateralRadius, 1, 25);
@@ -847,7 +851,7 @@ void Engine::ui_Viewport()
 		_wasViewportResized = true;
 	}
 
-	ImGui::Image(_viewport.ui_texids[_frameInFlightNum], ImVec2(_viewport.width, _viewport.height));
+	ImGui::Image(_viewport.ui_texids[_currentFrameInFlight], ImVec2(_viewport.width, _viewport.height));
 }
 
 void Engine::ui_PostFXPipeline()

@@ -147,7 +147,7 @@ struct GPUCompUB {
     float bloomThreshold = 0.5f;
     int toneMappingMode = 3;
     int gammaMode = 0; // 0 - off, 1 - on, 2 - inverse
-    float baseScale = 0.288;
+    float baseScale = 1.0;
 
     float baseOffset = 0;
     float sigmaS = 20; // Is automatically set to 2% of image size
@@ -159,8 +159,10 @@ struct GPUCompUB {
     float highlightsExposure = -7;
     float exposednessWeightSigma = 5;
 
-    float bloomWeight = 0.04f;
+    float bloomWeight = 0.03f;
     int durandBilateralRadius = 5; // Controls how coarse the bilateral filter will be
+    float bloomBlurRadiusMultiplier = 0.5f;
     int _pad0;
-    int _pad1;
+
+    glm::vec4 normalizationColor = { 1,1,1,1 };
 };

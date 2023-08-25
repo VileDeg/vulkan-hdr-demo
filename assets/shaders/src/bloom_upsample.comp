@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/sampling.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
@@ -9,10 +10,13 @@
 #include "incl/compPC.incl"
 pc;
 
-layout (rgba32f, set = 0, binding = 0) uniform image2D image[MAX_VIEWPORT_MIPS];
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 1) uniform image2D image[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
-
 
 void main() {
 	int mip_i = pc.mipIndex;
@@ -26,20 +30,26 @@ void main() {
 
 		ivec2 coordsHigher = coords >> 1;
 
-		vec4 px;
-		px =  imageLoad(image[mip_i+1], (coordsHigher - d.xy));
-		px += imageLoad(image[mip_i+1], (coordsHigher - d.wy)) * 2.0;
-		px += imageLoad(image[mip_i+1], (coordsHigher - d.zy));
-
-		px += imageLoad(image[mip_i+1], (coordsHigher + d.zw)) * 2.0;
-		px += imageLoad(image[mip_i+1], (coordsHigher       )) * 4.0;
-		px += imageLoad(image[mip_i+1], (coordsHigher + d.xw)) * 2.0;
-
-		px += imageLoad(image[mip_i+1], (coordsHigher + d.zy));
-		px += imageLoad(image[mip_i+1], (coordsHigher + d.wy)) * 2.0;
-		px += imageLoad(image[mip_i+1], (coordsHigher + d.xy));
-
-		px *= 0.0625; // 0.0625 = 1/16
+		
+#if 1
+	#if	  BLOOM_BLUR_MODE == 0 
+		vec4 px = f3x3tent(image[mip_i+1], coordsHigher);
+		//vec4 px = f5x5tent(image[mip_i+1], coordsHigher);
+		//float r = ub.bloomBlurRadiusMultiplier;
+		//vec4 px = f3x3tent_r(image[mip_i+1], coordsHigher, r);
+	#elif BLOOM_BLUR_MODE == 1
+		vec4 px = f5x5tent(image[mip_i+1], coordsHigher);
+	#elif BLOOM_BLUR_MODE == 2
+		vec4 px = f9x9tent(image[mip_i+1], coordsHigher);
+	#endif
+#else
+		//float r = 1.0 / (mip_i + 1) * ub.bloomBlurRadiusMultiplier;
+		//float r = 1.0;
+		float r = 1.0 / exp2(mip_i+1) * ub.bloomBlurRadiusMultiplier;
+		vec4 px = f3x3tent_r(image[mip_i+1], coordsHigher, r);
+		//vec2 tc = coordsHigher + vec2(0.5, 0.5);
+		//vec4 px = bilinear(image[mip_i+1], tc);
+#endif
 
 		imageStore(image[mip_i], coords, current + px);
 	}

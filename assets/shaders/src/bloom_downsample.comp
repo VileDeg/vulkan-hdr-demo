@@ -10,19 +10,31 @@
 #include "incl/compPC.incl"
 pc;
 
-layout (rgba32f, set = 0, binding = 0) uniform image2D image[MAX_VIEWPORT_MIPS];
+layout (set = 0, binding = 0) 
+#include "incl/computeUB.incl" 
+ub;
+
+layout (rgba32f, set = 0, binding = 1) uniform image2D image[MAX_VIEWPORT_MIPS];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-	int i = pc.mipIndex;
-	ivec2 dim = imageSize(image[i]).xy;
+	int mip_i = pc.mipIndex;
+	ivec2 dim = imageSize(image[mip_i]).xy;
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 	if (coords.x < dim.x && coords.y < dim.y) {
-		ivec2 coordsHigher = coords << 1;
+		ivec2 coordsLower = coords << 1;
+#if 0
+        //vec4 px = f9x9tent(image[mip_i-1], coordsLower);
+		//vec4 px = f5x5tent(image[mip_i-1], coordsLower);
+		vec4 px = f3x3tent(image[mip_i-1], coordsLower);
+		//float r = ub.bloomBlurRadiusMultiplier;
+		//vec4 px = f9x9tent_r(image[mip_i-1], coordsLower, r);
+#else
+		f13bilinear(image[mip_i-1], coordsLower);
+		vec4 px = _f13bilinearOut;
+#endif
 
-        vec4 px = f9x9tent(image[i-1], coordsHigher);
-
-		imageStore(image[i], coords, px);
+		imageStore(image[mip_i], coords, px);
 	}
 }

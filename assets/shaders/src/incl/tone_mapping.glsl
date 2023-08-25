@@ -1,3 +1,5 @@
+#include "defs.glsl"
+
 vec3 Reinhard(vec3 color) {
 	return color / (color + vec3(1.0));
 }
@@ -15,20 +17,11 @@ float sRGBtoLin(float colorChannel) {
 }
 
 float luminance(vec3 rgb) {
-    return dot(rgb, vec3(0.2126f, 0.7152f, 0.0722f));
+    return dot(rgb, RGB_TO_LUM);
 }
 
-/*vec3 changeLuminance(vec3 c_in, float l_out) {
-    float l_in = luminance(c_in);
-    return c_in * (l_out / l_in);
-}*/
-
-vec3 ReinhardExtended(vec3 v, float max_white_lum)  {
-	//float l_old = luminance(v);
-    //float numerator = l_old * (1.0f + (l_old / (max_white_lum * max_white_lum)));
-    //float l_new = numerator / (1.0f + l_old);
-    //return changeLuminance(v, l_new);
-    vec3 numerator = v * (1.0 + v / (max_white_lum * max_white_lum));
+vec3 ReinhardExtended(vec3 v)  { //, float max_white_lum
+    vec3 numerator = v * (1.0 + v / (WHITE_POINT * WHITE_POINT));
     return numerator / (1.0 + v);
 }
 
@@ -46,18 +39,18 @@ vec3 Uncharted2Filmic(vec3 v) {
     float exposure_bias = 2.0;
     vec3 curr = Uncharted2TonemapPartial(v * exposure_bias);
 
-    vec3 W = vec3(11.2f);
-    vec3 white_scale = vec3(1.0f) / Uncharted2TonemapPartial(W);
+    vec3 W = vec3(11.2);
+    vec3 white_scale = vec3(1.0) / Uncharted2TonemapPartial(W);
     return curr * white_scale;
 }
 
 vec3 ACESFilm(vec3 x) {
 	/* From https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/ */
-	float a = 2.51f;
-	float b = 0.03f;
-	float c = 2.43f;
-	float d = 0.59f;
-	float e = 0.14f;
+	float a = 2.51;
+	float b = 0.03;
+	float c = 2.43;
+	float d = 0.59;
+	float e = 0.14;
 
 	return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0, 1);
 }
@@ -81,8 +74,8 @@ const mat3 ACESOutputMat = mat3(
 
 vec3 RRTAndODTFit(vec3 v)
 {
-    vec3 a = v * (v + 0.0245786f) - 0.000090537f;
-    vec3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+    vec3 a = v * (v + 0.0245786) - 0.000090537;
+    vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
     return a / b;
 }
 
@@ -108,4 +101,17 @@ float howCloseToHalf(float val) {
 
 float RGBHowCloseToHalf(vec3 rgb) {
     return howCloseToHalf(rgb.r) * howCloseToHalf(rgb.g) * howCloseToHalf(rgb.b);
+}
+
+
+vec3 applyGlobalToneMapping(vec3 col, int mode) {
+	vec3 outCol = col;
+	switch (mode) {
+        case 0: outCol = ReinhardExtended(col); break;
+        case 1: outCol = Reinhard(col); break;
+        case 2: outCol = Uncharted2Filmic(col); break;
+        case 3: outCol = ACESFilm(col); break;
+        case 4: outCol = ACESFitted(col); break;
+    }
+	return outCol;
 }

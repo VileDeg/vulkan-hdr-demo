@@ -72,6 +72,8 @@ struct PostFX {
 
     PostFX();
 
+    void UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkImageView>& viewportImageViews);
+
     PostFXStage& Stage(Effect fct, std::string key);
     Attachment& Att(Effect fct, std::string key);
     AttachmentPyramid& Pyr(Effect fct, std::string key);
@@ -86,20 +88,20 @@ struct PostFX {
     GPUCompUB ub{};
 
     int numOfBloomMips;
-    float lumPixelLowerBound = 0.2f;
-    float lumPixelUpperBound = 0.95f;
+    float lumPixelLowerBound;
+    float lumPixelUpperBound;
 
-    float maxLogLuminance = 4.7f;
-    float eyeAdaptationTimeCoefficient = 2.2f;
+    float maxLogLuminance;
+    float eyeAdaptationTimeCoefficient;
 
-    LTM localToneMappingMode = LTM::FUSION; // 0 - Durand2002, 1 - Exposure fusion
+    LTM localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
 
-    float gamma = 2.2f;
-    int gammaMode = 0; // 0 - forward, 1 - inverse
+    float gamma;
+    int gammaMode; // 0 - forward, 1 - inverse
 
-    bool enableBloom = true;
-    bool enableGlobalToneMapping = false;
-    bool enableGammaCorrection = true;
-    bool enableAdaptation = true;
-    bool enableLocalToneMapping = true;
+    bool enableBloom;
+    bool enableGlobalToneMapping;
+    bool enableGammaCorrection;
+    bool enableAdaptation;
+    bool enableLocalToneMapping;
 };

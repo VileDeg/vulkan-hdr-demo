@@ -175,7 +175,7 @@ void Engine::createPipelines()
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }
 
-        updatePostFXStagesDescriptorSets();
+        _postfx.UpdateStagesDescriptorSets(MAX_FRAMES_IN_FLIGHT, _viewport.imageViews);
     }
     
     _deletionStack.push([=]() mutable {
