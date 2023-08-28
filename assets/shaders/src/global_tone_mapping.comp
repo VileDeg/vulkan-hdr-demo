@@ -2,6 +2,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 #include "incl/tone_mapping.glsl"
 
 #define THREADS_X  32
@@ -22,7 +23,7 @@ void main() {
         vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
         
         // Apply tone mapping
-        outColor = applyGlobalToneMapping(outColor, ub.toneMappingMode);
+        outColor = applyGlobalToneMapping(outColor, ub.gtm.mode);
 
         // Store final color
         imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(outColor, 1.0));

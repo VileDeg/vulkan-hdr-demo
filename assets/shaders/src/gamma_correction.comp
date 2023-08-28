@@ -2,6 +2,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 #include "incl/tone_mapping.glsl"
 
 #define THREADS_X  32
@@ -22,7 +23,7 @@ void main() {
         vec3 outColor = imageLoad(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
 
         // Gamma correction
-        outColor = pow(outColor, vec3(ub.gamma));
+        outColor = pow(outColor, vec3(ub.gamma.gamma));
 
         // Store final color
         imageStore(inOutHDRImage, ivec2(gl_GlobalInvocationID.xy), vec4(outColor, 1.0));

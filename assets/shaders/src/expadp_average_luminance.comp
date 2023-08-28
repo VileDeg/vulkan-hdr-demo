@@ -2,6 +2,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 
 #define GROUP_SIZE 256
 #define THREADS_X 256
@@ -25,7 +26,7 @@ void main() {
   // Get the count from the histogram buffer
   uint countForThisBin = ssbo.histogram[localIndex];
 
-  histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ub.weights.x));
+  histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ub.adp.weights.x));
   //histogramShared[localIndex] = uint(countForThisBin);
 
   barrier();
@@ -34,7 +35,7 @@ void main() {
   if (localIndex == 0) {
     uint sum = 0;
     uint total_pixels = 0;
-    for (uint i = ub.lumLowerIndex; i < ub.lumUpperIndex+1; ++i) {
+    for (uint i = ub.adp.lumLowerIndex; i < ub.adp.lumUpperIndex+1; ++i) {
     //for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
         sum += histogramShared[i];
         total_pixels += ssbo.histogram[i];
@@ -47,8 +48,9 @@ void main() {
     //float weightedLogAverage = (sum / max(float(ub.totalPixelNum), 1.0)) - 1.0; //  - float(countForThisBin)
     float weightedLogAverage = (sum / max(float(total_pixels), 1.0)) - 1.0;
 
+    float logLumRange = ub.adp.maxLogLum - ub.adp.minLogLum;
     // Map from our histogram space to actual luminance
-    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * ub.logLumRange) + ub.minLogLum);
+    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * logLumRange) + ub.adp.minLogLum);
 
     //float awaitedLuminance = ub.weights.z;
     //float howClose = weightedAvgLum - awaitedLuminance;
@@ -60,7 +62,7 @@ void main() {
     // The new stored value will be interpolated using the last frames value
     // to prevent sudden shifts in the exposure.
     float lumLastFrame = ssbo.averageLuminance;
-    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ub.timeCoeff;
+    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ub.adp.timeCoeff;
 
     ssbo.averageLuminance = adaptedLum;
     //ssbo.averageLuminance = 1 / (9.6 * adaptedLum + 0.0001);

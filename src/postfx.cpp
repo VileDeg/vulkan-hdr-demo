@@ -12,7 +12,7 @@ PostFX::PostFX()
 	lumPixelLowerBound = 0.2f;
 	lumPixelUpperBound = 0.95f;
 
-	maxLogLuminance = 4.7f;
+	//maxLogLuminance = 4.7f;
 	eyeAdaptationTimeCoefficient = 2.2f;
 
 	localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion

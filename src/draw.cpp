@@ -246,8 +246,10 @@ void Engine::loadDataToGPU()
 		//uint tmp_sum = 0;
 		uint li = 0;
 		uint ui = MAX_LUMINANCE_BINS - 1;
-		float lb = _postfx.lumPixelLowerBound * _postfx.ub.totalPixelNum;
-		float ub = _postfx.lumPixelUpperBound * _postfx.ub.totalPixelNum;
+
+		uint32_t totalPixelNum = _viewport.width * _viewport.height;
+		float lb = _postfx.lumPixelLowerBound * totalPixelNum;
+		float ub = _postfx.lumPixelUpperBound * totalPixelNum;
 
 		//uint sum_skipped = 0;
 
@@ -272,14 +274,14 @@ void Engine::loadDataToGPU()
 			}
 		}
 
-		_postfx.ub.logLumRange = _postfx.maxLogLuminance - _postfx.ub.minLogLum;
-		_postfx.ub.oneOverLogLumRange = 1.f / _postfx.ub.logLumRange;
-		_postfx.ub.totalPixelNum = _viewport.width * _viewport.height;
-		_postfx.ub.timeCoeff = 1 - std::exp(-_deltaTime * _postfx.eyeAdaptationTimeCoefficient);
-		_postfx.ub.lumLowerIndex = li;
-		_postfx.ub.lumUpperIndex = ui;
+		//_postfx.ub.logLumRange = _postfx.maxLogLuminance - _postfx.ub.minLogLum;
+		//_postfx.ub.oneOverLogLumRange = 1.f / _postfx.ub.logLumRange;
+		//_postfx.ub.totalPixelNum = _viewport.width * _viewport.height;
+		_postfx.ub.adp.timeCoeff = 1 - std::exp(-_deltaTime * _postfx.eyeAdaptationTimeCoefficient);
+		_postfx.ub.adp.lumLowerIndex = li;
+		_postfx.ub.adp.lumUpperIndex = ui;
 		float avg = (_viewport.width + _viewport.height) / 2;
-		_postfx.ub.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
+		_postfx.ub.durand.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
 		
 		memcpy(_gpu.compUB, &_postfx.ub, sizeof(GPUCompUB));
 

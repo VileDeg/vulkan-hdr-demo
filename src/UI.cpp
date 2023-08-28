@@ -232,7 +232,7 @@ void Engine::ui_Update()
 			// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
 			ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
 			ui_Scene();
-			ui_HDR();
+			ui_PostFX();
 			ui_RenderContext();
 			ui_DebugDisplay();
 			ImGui::PopItemWidth();
@@ -456,15 +456,15 @@ void Engine::ui_Scene()
 	}
 }
 
-void Engine::ui_HDR()
+void Engine::ui_PostFX()
 {
-	if (ImGui::TreeNodeEx("HDR", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("PostFX", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 		if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
 
 			//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
-			ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloomWeight, 0.001, 0.5f);
+			ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloom.weight, 0.001, 0.5f);
 			//ImGui::SliderInt("Bloom Mips", &_postfx.numOfBloomMips, 1, _postfx.ub.numOfViewportMips);
 			//ImGui::DragFloat("Bloom Blur Radius Multiplier", &_postfx.ub.bloomBlurRadiusMultiplier, 0.001, 0.05f, 10.f);
 
@@ -480,9 +480,9 @@ void Engine::ui_HDR()
 
 			const char* items[] = {
 				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = _postfx.ub.toneMappingMode;
+			static int item_current = _postfx.ub.gtm.mode;
 			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
-				_postfx.ub.toneMappingMode = item_current;
+				_postfx.ub.gtm.mode = item_current;
 			}
 
 			ImGui::TreePop();
@@ -502,26 +502,26 @@ void Engine::ui_HDR()
 			}
 
 			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::DragFloat("Base Scale", &_postfx.ub.baseScale, 0.001f, 0.001f, 1.f);
-				ImGui::DragFloat("Base Offset", &_postfx.ub.baseOffset, 0.1f, 0.f, 100.f);
+				ImGui::DragFloat("Base Scale", &_postfx.ub.durand.baseScale, 0.001f, 0.001f, 1.f);
+				ImGui::DragFloat("Base Offset", &_postfx.ub.durand.baseOffset, 0.1f, 0.f, 100.f);
 
 				//ImGui::SliderFloat3("Normalization Color", &_postfx.ub.normalizationColor[0], 0.f, 1.f);
 
 				//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
-				ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durandBilateralRadius, 1, 25);
+				ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durand.bilateralRadius, 1, 25);
 
-				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.sigmaS);
-				ImGui::SliderFloat("Range sigma", &_postfx.ub.sigmaR, 0.1f, 2.0f);
+				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.durand.sigmaS);
+				ImGui::SliderFloat("Range sigma", &_postfx.ub.durand.sigmaR, 0.1f, 2.0f);
 
 				ImGui::TreePop();
 			}
 
 			if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.shadowsExposure, 0, 10);
+				ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.fusion.shadowsExposure, 0, 10);
 				//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
-				ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.highlightsExposure, -20, 0);
+				ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.fusion.highlightsExposure, -20, 0);
 
-				ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.exposednessWeightSigma, 0.01, 10);
+				ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.fusion.exposednessWeightSigma, 0.01, 10);
 
 				ImGui::TreePop();
 			}
@@ -534,7 +534,7 @@ void Engine::ui_HDR()
 			{ // Gamma correction
 				ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
 
-				ImGui::SliderFloat("Gamma", &_postfx.ub.gamma, 0.5f, 3.f);
+				ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);
 			}
 
 			ImGui::TreePop();
@@ -549,13 +549,13 @@ void Engine::ui_HDR()
 
 				ImGui::Separator();
 
-				ImGui::SliderFloat("Min log luminance", &_postfx.ub.minLogLum, -10.f, 0.f);
-				ImGui::SliderFloat("Max log luminance", &_postfx.maxLogLuminance, 1.f, 20.f);
+				ImGui::SliderFloat("Min log luminance", &_postfx.ub.adp.minLogLum, -10.f, 0.f);
+				ImGui::SliderFloat("Max log luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
 
-				ImGui::SliderFloat("Histogram index weight", &_postfx.ub.weights.x, 0.f, 2.f);
+				ImGui::SliderFloat("Histogram index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
 				//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
-				ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.weights.z, 0.f, 100.f);
-				ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.weights.w, 0.f, 5.f);
+				ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
+				ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);
 
 				ImGui::TreePop();
 			}
@@ -566,9 +566,9 @@ void Engine::ui_HDR()
 				ImGui::SliderFloat("Upper", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
 
 				ImGui::Separator();
-				ImGui::Text("Total pixels: %u", _postfx.ub.totalPixelNum);
+				ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
 				ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
-				ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.lumLowerIndex, _postfx.ub.lumUpperIndex);
+				ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.adp.lumLowerIndex, _postfx.ub.adp.lumUpperIndex);
 
 				ImGui::TreePop();
 			}
@@ -657,8 +657,8 @@ void Engine::ui_HDR()
 
 						ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
 
-						uint32_t start_i = _postfx.ub.lumLowerIndex;
-						uint32_t end_i   = _postfx.ub.lumUpperIndex;
+						uint32_t start_i = _postfx.ub.adp.lumLowerIndex;
+						uint32_t end_i   = _postfx.ub.adp.lumUpperIndex;
 
 						std::vector<uint32_t> xs1(end_i - start_i);
 						std::iota(xs1.begin(), xs1.end(), start_i);

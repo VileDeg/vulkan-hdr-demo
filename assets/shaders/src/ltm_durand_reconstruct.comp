@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 #if DURAND_CONVERT_LAB == 1
 	#include "incl/color_spaces.glsl"
 #endif
@@ -34,7 +35,7 @@ void main() {
 		float base   = imageLoad(inBaseFreqImage, coords).r;
 		float detail = imageLoad(inDetailImage, coords).r;
 		
-		float offsetBase = (base + ub.baseOffset) * ub.baseScale;
+		float offsetBase = (base + ub.durand.baseOffset) * ub.durand.baseScale;
 		//float offsetBase = base * ub.baseScale + ub.baseOffset;
 		
 		float lumReconstruct = offsetBase + detail;

@@ -14,8 +14,6 @@
 #include "camera.h"
 #include "vk_descriptors.h"
 
-struct ImGuiInputTextCallbackData;
-
 class Engine {
 public:
     Engine();
@@ -65,15 +63,10 @@ private: /* Secondary methods */
 
     void initUploadContext();
 
-    //void updatePostFXStagesDescriptorSets();
-
-
     bool loadModelFromObj(const std::string assignedName, const std::string path);
-
 
     Attachment* loadTextureFromFile(const char* path);
     
-
     void uploadMesh(Mesh& mesh);
     void createMeshBuffer(Mesh& mesh, bool isVertexBuffer);
 
@@ -111,7 +104,6 @@ private: /* Secondary methods */
     void updateShadowCubemapFace(FrameData& f, uint32_t lightIndex, uint32_t faceIndex);
 
     void loadDataToGPU();
-
 
     void bloom(FrameData& f, int imageIndex);
     void durand2002(VkCommandBuffer& cmd, int imageIndex);
@@ -155,7 +147,7 @@ private:  // UI
     void ui_OnRenderPassEnd(VkCommandBuffer cmdBuffer);
 
     void ui_Scene();
-    void ui_HDR();
+    void ui_PostFX();
     void ui_RenderContext();
     void ui_Viewport();
     void ui_DebugDisplay();
@@ -191,8 +183,6 @@ private:
     void endCmdDebugLabel(VkCommandBuffer cmd);
 
 private:
-    
-
     uint32_t modelLoaderGlobalDiffuseTexIndex = 0;
     uint32_t modelLoaderGlobalBumpTexIndex = 0;
 

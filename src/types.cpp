@@ -63,7 +63,7 @@ void RenderContext::Init(CreateSceneData data)
 	enableSkybox = true;
 	displayLightSourceObjects = false;
 
-	fovY = 120.f; // degrees
+	fovY = 90.f; // degrees
 	zNear = 0.1f;
 	zFar = 64.0f;
 
@@ -207,37 +207,35 @@ VertexInputDescription Vertex::getDescription()
 }
 
 
-namespace {
-	template<typename T>
-	T* _getCache(const std::string& name, std::unordered_map<std::string, T>& map)
-	{
-		//search for the object, and return nullptr if not found
-		auto it = map.find(name);
-		if (it == map.end()) {
-			//ASSERT(false);
-			return nullptr;
-		} else {
-			return &(*it).second;
-		}
+template<typename T>
+static T* get_cache(const std::string& name, std::unordered_map<std::string, T>& map)
+{
+	//search for the object, and return nullptr if not found
+	auto it = map.find(name);
+	if (it == map.end()) {
+		//ASSERT(false);
+		return nullptr;
+	} else {
+		return &(*it).second;
 	}
 }
 
 Material* Engine::getMaterial(const std::string& name)
 {
-	return _getCache(name, _materials);
+	return get_cache(name, _materials);
 }
 
 Mesh* Engine::getMesh(const std::string& name)
 {
-	return _getCache(name, _meshes);
+	return get_cache(name, _meshes);
 }
 
 Attachment* Engine::getTexture(const std::string& name)
 {
-	return _getCache(name, _textures);
+	return get_cache(name, _textures);
 }
 
 Model* Engine::getModel(const std::string& name)
 {
-	return _getCache(name, _models);
+	return get_cache(name, _models);
 }

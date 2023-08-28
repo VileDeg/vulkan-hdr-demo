@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 
 #define THREADS_X  32
 #define THREADS_Y  32
@@ -22,7 +23,7 @@ void main() {
 		vec3 bloom = imageLoad(bloomImage, coords).rgb;
 
 		// Apply bloom
-		color = mix(color, bloom, ub.bloomHighlightsWeight);
+		color = mix(color, bloom, ub.bloom.weight);
 
 		imageStore(inOutImage, coords, vec4(color, 1.0));
 	}

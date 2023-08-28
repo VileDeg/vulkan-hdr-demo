@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 #include "incl/tone_mapping.glsl"
 #include "incl/color_spaces.glsl"
 
@@ -46,9 +47,9 @@ void main() {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
 
-		vec3 highlightsColor = applyGlobalToneMapping(inpColor * exp2(ub.highlightsExposure), ub.toneMappingMode);
-		vec3 midtonesColor	 = applyGlobalToneMapping(inpColor, ub.toneMappingMode);
-		vec3 shadowsColor	 = applyGlobalToneMapping(inpColor * exp2(ub.shadowsExposure), ub.toneMappingMode);
+		vec3 highlightsColor = applyGlobalToneMapping(inpColor * exp2(ub.fusion.highlightsExposure), ub.gtm.mode);
+		vec3 midtonesColor	 = applyGlobalToneMapping(inpColor, ub.gtm.mode);
+		vec3 shadowsColor	 = applyGlobalToneMapping(inpColor * exp2(ub.fusion.shadowsExposure), ub.gtm.mode);
 
 		vec3 lums  = vec3(
 			dot(highlightsColor, RGB_TO_LUM), 
@@ -58,9 +59,9 @@ void main() {
 
 		// Compute weights of three exposures based on closedness to gray (measured with Gaussian function)
 		vec3 expos = vec3(
-			exposedness(highlightsColor, ub.exposednessWeightSigma), 
-			exposedness(midtonesColor  , ub.exposednessWeightSigma), 
-			exposedness(shadowsColor   , ub.exposednessWeightSigma)
+			exposedness(highlightsColor, ub.fusion.exposednessWeightSigma), 
+			exposedness(midtonesColor  , ub.fusion.exposednessWeightSigma), 
+			exposedness(shadowsColor   , ub.fusion.exposednessWeightSigma)
 		);
 
 #if FUSION_WEIGHT_MODE == 0

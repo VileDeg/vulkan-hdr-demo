@@ -2,6 +2,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 
 #define GROUP_SIZE 256
 #define THREADS_X  16
@@ -15,7 +16,7 @@ layout (std430, set = 0, binding = 0)
 ssbo;
 
 layout (set = 0, binding = 1) 
-#include "incl/computeUB.incl" 
+#include "incl/computeUB.incl"  
 ub;
 
 layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inHDRImage;
@@ -53,7 +54,8 @@ void main() {
   // Ignore threads that map to areas beyond the bounds of our HDR image
   if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
     vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
-    uint binIndex = colorToBin(hdrColor, ub.minLogLum, ub.oneOverLogLumRange);
+    float logLumRange = ub.adp.maxLogLum - ub.adp.minLogLum;
+    uint binIndex = colorToBin(hdrColor, ub.adp.minLogLum, 1 / logLumRange);
     // We use an atomic add to ensure we don't write to the same bin in our
     // histogram from two different threads at the same time.
     atomicAdd(histogramShared[binIndex], 1);

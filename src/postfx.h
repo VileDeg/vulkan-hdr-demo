@@ -91,7 +91,7 @@ struct PostFX {
     float lumPixelLowerBound;
     float lumPixelUpperBound;
 
-    float maxLogLuminance;
+    //float maxLogLuminance;
     float eyeAdaptationTimeCoefficient;
 
     LTM localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion

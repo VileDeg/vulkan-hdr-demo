@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 
 #define GROUP_SIZE 1024
 #define THREADS_X  32
@@ -27,7 +28,6 @@ void main() {
 			return;
 		}
 
-		//ivec2 coordsLower = borderClamp(coords >> 1, imageSize(inLum[i+1]).xy);
 		ivec2 coordsLower = coords >> 1;
 		// Multiply by 4 to not loose color value when blurring 
 		// because we only store every 2nd pixel since we're upsampling from lower res

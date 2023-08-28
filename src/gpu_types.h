@@ -131,38 +131,72 @@ struct GPUCompSSBO {
     uint32_t luminance[MAX_LUMINANCE_BINS]{};
 };
 
-struct GPUCompUB {
+
+
+
+struct ExposureAdaptation {
     float minLogLum = -4.f;
-    float logLumRange = 6.7f;
-    float oneOverLogLumRange;
-    uint32_t totalPixelNum;
-
+    float maxLogLum = 4.7f;
+    //float logLumRange;
+    //float oneOverLogLumRange;
+    unsigned int totalPixelNum; // unused
     float timeCoeff = 1.f;
-    uint32_t lumLowerIndex;
-    uint32_t lumUpperIndex;
-    float gamma = 2.2f;
 
-    glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index w, y - unused, z - awaited lum, w - awaited lum w
+    unsigned int lumLowerIndex;
+    unsigned int lumUpperIndex;
+    int _pad0;
+    int _pad1;
 
-    float bloomThreshold = 0.5f;
-    int toneMappingMode = 3;
-    int gammaMode = 0; // 0 - off, 1 - on, 2 - inverse
-    float baseScale = 1.0;
+    glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
+};
 
+struct Bloom {
+    float threshold = 0.5f; // unused
+    float weight = 0.03;
+    float blurRadiusMultiplier = 0.5f; // unused
+    int _pad0;
+};
+
+struct Durand2002 {
     float baseOffset = 0;
-    float sigmaS = 20; // Is automatically set to 2% of image size
+    float baseScale = 1.0;
+    float sigmaS = 20;
     float sigmaR = 0.2;
-    int numOfViewportMips;
 
+    int bilateralRadius = 5;
+    int _pad0;
+    int _pad1;
+    int _pad2;
+
+    glm::vec4 normalizationColor = { 1,1,1,1 }; // unused
+};
+
+struct ExposureFusion {
     float shadowsExposure = 3.3;
-    float midtonesExposure = 0.0; // Unused
+    float midtonesExposure = 0.0f; // unused
     float highlightsExposure = -7;
     float exposednessWeightSigma = 5;
+};
 
-    float bloomWeight = 0.03f;
-    int durandBilateralRadius = 5; // Controls how coarse the bilateral filter will be
-    float bloomBlurRadiusMultiplier = 0.5f;
+struct GlobalToneMapping {
+    int mode = 3;
+};
+
+struct GammaCorrection {
+    float gamma = 2.2f;
+    int mode = 0; // unused
+};
+
+struct GPUCompUB {
+    int numOfViewportMips;
     int _pad0;
+    int _pad1;
+    int _pad2;
 
-    glm::vec4 normalizationColor = { 1,1,1,1 };
+    ExposureAdaptation adp;
+    Bloom bloom;
+    Durand2002 durand;
+    ExposureFusion fusion;
+    GlobalToneMapping gtm;
+    GammaCorrection gamma;
 };

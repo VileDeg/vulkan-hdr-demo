@@ -1,6 +1,7 @@
 #version 460
 
 #include "incl/defs.glsl"
+#include "incl/compute_structs.glsl"
 
 #define THREADS_X  32
 #define THREADS_Y  32

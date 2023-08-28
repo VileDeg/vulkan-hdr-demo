@@ -1,36 +1,13 @@
 uniform ComputeUB {
-    float minLogLum;
-    float logLumRange;
-    float oneOverLogLumRange;
-    uint totalPixelNum; // unused
-
-    float timeCoeff;
-    uint lumLowerIndex;
-    uint lumUpperIndex;
-    float gamma;
-
-    vec4 weights; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
-
-    float bloomThreshold;
-    int toneMappingMode;
-    int gammaMode; // unused
-    float baseScale;
-
-    float baseOffset;
-    float sigmaS;
-    float sigmaR;
     int numOfViewportMips;
-
-    float shadowsExposure;
-    float midtonesExposure;
-    float highlightsExposure;
-    float exposednessWeightSigma;
-
-    float bloomHighlightsWeight;
-    int durandBilateralRadius;
-    float bloomBlurRadiusMultiplier;
     int _pad0;
+    int _pad1;
+    int _pad2;
 
-    vec4 normalizationColor;
+    ExposureAdaptation adp;
+    Bloom bloom;
+    Durand2002 durand;
+    ExposureFusion fusion;
+    GlobalToneMapping gtm;
+    GammaCorrection gamma;
 }
-
