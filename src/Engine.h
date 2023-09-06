@@ -156,6 +156,8 @@ private:  // UI
     void ui_StatusBar();
     void ui_PostFXPipeline();
 
+    void ui_Plots();
+
     bool ui_LoadSkybox();
 
     bool ui_SaveScene();

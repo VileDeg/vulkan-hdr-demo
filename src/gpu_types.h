@@ -147,7 +147,7 @@ struct ExposureAdaptation {
     int _pad0;
     int _pad1;
 
-    glm::vec4 weights = { 0.65f, 128.f, 1.f, 1.f }; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
+    glm::vec4 weights = { 1.f, 1.f, 1.f, 1.f }; // x - index weight, yzw - unused
 };
 
 struct Bloom {

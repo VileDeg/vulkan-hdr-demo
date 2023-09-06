@@ -171,7 +171,6 @@ static void ui_PostFXPipelineButton(bool& flag, std::string name,
 }
 
 
-
 void Engine::ui_Update()
 {
 	// Start the Dear ImGui frame
@@ -244,6 +243,12 @@ void Engine::ui_Update()
 			ui_Viewport();
 			ImGui::PopStyleVar();
 			ImGui::PopStyleVar();
+		});
+
+		ui_Window("Plots", [this]() {
+			ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+			ui_Plots();
+			ImGui::PopItemWidth();
 		});
 
 		ui_Window("PostFX Pipeline", [this]() {
@@ -376,6 +381,7 @@ void Engine::ui_Init()
 
 	uiWindows["Config"] = true;
 	uiWindows["Viewport"] = true;
+	uiWindows["Plots"] = true;
 	uiWindows["PostFX Pipeline"] = true;
 	uiWindows["Attachment Viewer"] = true;
 }
@@ -453,6 +459,107 @@ void Engine::ui_Scene()
 		ImGui::SliderFloat("Field of view", &_renderContext.fovY, 45.f, 120.f);
 
 		ImGui::TreePop();
+	}
+}
+
+void Engine::ui_Plots()
+{
+	if (_postfx.enableAdaptation) {
+		if (ImGui::TreeNodeEx("Adaptation Window")) {
+
+			ImGui::Separator();
+
+			static RollingBuffer rdata, rdata1;
+
+			ImGui::SliderFloat("Adaptation time coefficient", &_postfx.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+
+			static float t = 0;
+			t += ImGui::GetIO().DeltaTime;
+
+			static float history = 30.0f;
+			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+
+			rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
+			rdata.Span = history;
+
+			rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
+			rdata1.Span = history;
+
+			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
+
+			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+				static float maxY = 0;
+				maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
+
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
+
+				std::string label = "Adaptation (actual)";
+				ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
+
+				label = "Adaptation (target)";
+				ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
+
+				ImPlot::EndPlot();
+			}
+
+			ImGui::TreePop();
+		}
+		if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
+			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
+				// We have to wait for GPU to finish execution because compute shader 
+				// might have not finished operating on current _gpu.compSSBO buffer
+				// even though the command was already recorded to queue.
+				// This is probably a temporary solution as it is very inefficient.
+				// If we don't use this, histogram will be very laggy most of the time.
+				vkDeviceWaitIdle(_device);
+
+				uint32_t bins = MAX_LUMINANCE_BINS;
+
+				std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
+				std::iota(xs.begin(), xs.end(), 0);
+
+
+				for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+					xs[i] = i;
+				}
+
+				uint32_t maxBin = 0;
+				for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+					if (_gpu.compSSBO->luminance[i] > maxBin) {
+						maxBin = _gpu.compSSBO->luminance[i];
+					}
+				}
+
+				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
+				ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always);
+
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
+
+
+				ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
+
+				uint32_t start_i = _postfx.ub.adp.lumLowerIndex;
+				uint32_t end_i = _postfx.ub.adp.lumUpperIndex;
+
+				std::vector<uint32_t> xs1(end_i - start_i);
+				std::iota(xs1.begin(), xs1.end(), start_i);
+
+				std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
+
+				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+				ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
+
+
+				ImPlot::EndPlot();
+			}
+			ImGui::TreePop();
+		}
 	}
 }
 
@@ -573,108 +680,6 @@ void Engine::ui_PostFX()
 				ImGui::TreePop();
 			}
 
-			ImGui::TreePop();
-		}
-	
-		if (ImGui::TreeNodeEx("Plots", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (_postfx.enableAdaptation) {
-				if (ImGui::TreeNodeEx("Adaptation Window")) {
-				
-					ImGui::Separator();
-
-					static RollingBuffer rdata, rdata1;
-
-					ImGui::SliderFloat("Adaptation time coefficient", &_postfx.eyeAdaptationTimeCoefficient, 1.f, 10.f);
-
-					static float t = 0;
-					t += ImGui::GetIO().DeltaTime;
-
-					static float history = 30.0f;
-					ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
-
-					rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
-					rdata.Span = history;
-
-					rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
-					rdata1.Span = history;
-
-					static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
-
-					if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
-						static float maxY = 0;
-						maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
-
-						ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-
-						ImPlot::SetupAxisLimits(ImAxis_X1, 0, history, ImGuiCond_Always);
-						ImPlot::SetupAxisLimits(ImAxis_Y1, 0 - 0.1f * maxY, maxY + maxY * 0.1f, ImGuiCond_Always);
-
-						std::string label = "Adaptation (actual)";
-						ImPlot::PlotLine(label.c_str(), &rdata.Data[0].x, &rdata.Data[0].y, rdata.Data.size(), 0, 0, 2 * sizeof(float));
-
-						label = "Adaptation (target)";
-						ImPlot::PlotLine(label.c_str(), &rdata1.Data[0].x, &rdata1.Data[0].y, rdata1.Data.size(), 0, 0, 2 * sizeof(float));
-
-						ImPlot::EndPlot();
-					}
-
-					ImGui::TreePop();
-				}
-				if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
-					if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-						// We have to wait for GPU to finish execution because compute shader 
-						// might have not finished operating on current _gpu.compSSBO buffer
-						// even though the command was already recorded to queue.
-						// This is probably a temporary solution as it is very inefficient.
-						// If we don't use this, histogram will be very laggy most of the time.
-						vkDeviceWaitIdle(_device);
-
-						uint32_t bins = MAX_LUMINANCE_BINS;
-
-						std::array<uint32_t, MAX_LUMINANCE_BINS> xs;
-						std::iota(xs.begin(), xs.end(), 0);
-					
-
-						for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-							xs[i] = i;
-						}
-
-						uint32_t maxBin = 0;
-						for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-							if (_gpu.compSSBO->luminance[i] > maxBin) {
-								maxBin = _gpu.compSSBO->luminance[i];
-							}
-						}
-
-						ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
-						ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-
-						ImPlot::SetupAxisLimits(ImAxis_X1, 0, bins);
-						ImPlot::SetupAxisLimits(ImAxis_Y1, 0, maxBin, ImPlotCond_Always);
-
-						ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
-
-
-						ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
-
-						uint32_t start_i = _postfx.ub.adp.lumLowerIndex;
-						uint32_t end_i   = _postfx.ub.adp.lumUpperIndex;
-
-						std::vector<uint32_t> xs1(end_i - start_i);
-						std::iota(xs1.begin(), xs1.end(), start_i);
-
-						std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
-
-						ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-						ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
-
-
-						ImPlot::EndPlot();
-					}
-					ImGui::TreePop();
-				}
-			}
-			
 			ImGui::TreePop();
 		}
 		

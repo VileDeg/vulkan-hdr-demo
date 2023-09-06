@@ -20,10 +20,10 @@ PostFX::PostFX()
 	gamma = 2.2f;
 	gammaMode = 0; // 0 - forward, 1 - inverse
 
-	enableBloom = true;
+	enableBloom = false;
 	enableGlobalToneMapping = false;
 	enableGammaCorrection = false;
-	enableAdaptation = false;
+	enableAdaptation = true;
 	enableLocalToneMapping = false;
 
 	effectPrefixMap[EXPADP] = "expadp_";
