@@ -9,6 +9,7 @@
 #endif
 
 #include "types.h"
+#include "ui.h"
 #include "postfx.h"
 
 #include "camera.h"
@@ -46,16 +47,11 @@ private: /* Methods used from Init directly */
     void cleanupScene();
 
 private: /* Secondary methods */
-
-    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-    static void cursorCallback(GLFWwindow* window, double xpos, double ypos);
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
-
     void loadInstanceExtensionFunctions();
     void loadDeviceExtensionFunctions();
 
     void recreateSwapchain();
-    void cleanupSwapchainResources();
+    void cleanupSwapchainResources();   
 
     void recreateViewport(uint32_t extentX, uint32_t extentY);
     void cleanupViewportResources();
@@ -135,7 +131,6 @@ private:
     void loadSkybox(std::string skyboxDirName);
 
 private:  // UI
-
     void ui_InitImGui();
     void ui_Init();
 
@@ -148,11 +143,12 @@ private:  // UI
 
     void ui_Scene();
     void ui_PostFX();
-    void ui_RenderContext();
+    void ui_Lighting();
     void ui_Viewport();
     void ui_DebugDisplay();
     void ui_MenuBar();
     void ui_AttachmentViewer();
+    void ui_Controls();
     void ui_StatusBar();
     void ui_PostFXPipeline();
 
@@ -162,11 +158,8 @@ private:  // UI
 
     bool ui_SaveScene();
     bool ui_LoadScene();
-
-    void ui_Window(std::string name, std::function<void()> func, int flags = 0);
-    bool& ui_GetWindowFlag(std::string name);
-
-    std::map<std::string, bool> uiWindows;
+    
+    std::vector<UiWindow> uiWindows;
 
     bool _saveShortcutPressed = false;
     bool _loadShortcutPressed = false;
@@ -183,6 +176,11 @@ private:
     void beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color);
 
     void endCmdDebugLabel(VkCommandBuffer cmd);
+
+private:
+    static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void cursorCallback(GLFWwindow* window, double xpos, double ypos);
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
 private:
     uint32_t modelLoaderGlobalDiffuseTexIndex = 0;

@@ -135,7 +135,8 @@ void RenderContext::Init(CreateSceneData data)
 	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
 }
 
-glm::mat4 RenderObject::Transform() {
+glm::mat4 RenderObject::Transform() 
+{
 	ASSERT(model != nullptr);
 	glm::vec3 scales = scale;
 	if (model != nullptr) {
@@ -150,7 +151,8 @@ glm::mat4 RenderObject::Transform() {
 		glm::scale(glm::mat4(1.f), scales);
 }
 
-bool RenderObject::HasMoved() {
+bool RenderObject::HasMoved() 
+{
 	bool hasMoved = pos != _prevPos;
 	_prevPos = pos;
 

@@ -4,9 +4,9 @@
     {
       "intensity": 4.0,
       "position": [
-        0.0,
-        -14.5,
-        5.0
+        0.20000000298023224,
+        -3.0999999046325684,
+        4.0
       ]
     },
     {
@@ -35,6 +35,11 @@
     }
   ],
   "model_name": "sibenik/sibenik.obj",
+  "model_position": [
+    0.0,
+    1.0,
+    9.0
+  ],
   "model_scale": 15.0,
   "skybox": "furry_clouds"
 }

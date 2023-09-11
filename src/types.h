@@ -168,8 +168,6 @@ struct SwapchainPass {
     uint32_t height;
 };
 
-
-
 struct ShadowPass {
     // Texture properties
     static constexpr int TEX_DIM = 512; //1024
@@ -305,6 +303,7 @@ struct CreateSceneData {
     float intensity[MAX_LIGHTS];
     glm::vec3 position[MAX_LIGHTS];
 
+    glm::vec3 modelPos;
     float modelScale;
     float bumpStrength;
 
@@ -316,6 +315,7 @@ struct RenderContext {
     GPUSceneUB sceneData{};
     
     // Using shared ptr because it takes pointers of vector elements which is unsafe if vector gets resized
+    std::shared_ptr<RenderObject> mainObject;
     std::vector<std::shared_ptr<RenderObject>> lightObjects;
 
     std::array<glm::mat4, 6> lightView; // Matrices of 6 sides of light

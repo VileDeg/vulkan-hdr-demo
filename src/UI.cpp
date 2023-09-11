@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "ui.h"
 #include "engine.h"
 
 #include "imgui/imgui.h"
@@ -171,102 +172,6 @@ static void ui_PostFXPipelineButton(bool& flag, std::string name,
 }
 
 
-void Engine::ui_Update()
-{
-	// Start the Dear ImGui frame
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	static bool opt_fullscreen = true;
-	static bool opt_padding = false;
-	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
-
-	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-	if (opt_fullscreen) {
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(viewport->WorkPos);
-		ImGui::SetNextWindowSize(viewport->WorkSize);
-		ImGui::SetNextWindowViewport(viewport->ID);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
-			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-	} else {
-		dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
-	}
-
-	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
-		window_flags |= ImGuiWindowFlags_NoBackground;
-	}
-
-	if (!opt_padding) {
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	}
-	static bool p_open = true;
-
-	ImGui::Begin("DockSpace", &p_open, window_flags);
-	{
-		ui_MenuBar();
-
-		if (!opt_padding) {
-			ImGui::PopStyleVar();
-		}
-
-		if (opt_fullscreen) {
-			ImGui::PopStyleVar(2);
-		}
-
-		ImGuiIO& io = ImGui::GetIO();
-
-		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
-			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
-		}
-
-		ui_Window("Config", [this]() {
-			// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
-			ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
-			ui_Scene();
-			ui_PostFX();
-			ui_RenderContext();
-			ui_DebugDisplay();
-			ImGui::PopItemWidth();
-		});
-
-		ui_Window("Viewport", [this]() {
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-			ui_Viewport();
-			ImGui::PopStyleVar();
-			ImGui::PopStyleVar();
-		});
-
-		ui_Window("Plots", [this]() {
-			ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
-			ui_Plots();
-			ImGui::PopItemWidth();
-		});
-
-		ui_Window("PostFX Pipeline", [this]() {
-			ui_PostFXPipeline();
-		});
-
-		ui_Window("Attachment Viewer", [this]() {
-			ui_AttachmentViewer();
-		});
-
-		ui_StatusBar();
-
-#if SHOW_IMGUI_METRICS == 1
-		ImGui::ShowMetricsWindow();
-#endif
-	}
-	ImGui::End();
-}
 
 void Engine::ui_InitImGui()
 {
@@ -308,8 +213,6 @@ void Engine::ui_InitImGui()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-
-
 
 	float fontScale = 0.75f;
 
@@ -379,12 +282,162 @@ void Engine::ui_Init()
 {
 	ui_InitImGui();
 
-	uiWindows["Config"] = true;
-	uiWindows["Viewport"] = true;
-	uiWindows["Plots"] = true;
-	uiWindows["PostFX Pipeline"] = true;
-	uiWindows["Attachment Viewer"] = true;
+	uiWindows = {
+		{
+			.caption = "Scene",
+			.contents = [this]() {
+				// Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
+				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+				ui_Scene();
+				ImGui::PopItemWidth();
+			}
+		},
+		{
+			.caption = "PostFX",
+			.contents = [this]() {
+				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+				ui_PostFX();
+				ImGui::PopItemWidth();
+			}
+		},
+		{
+			.caption = "Lighting",
+			.open = false,
+			.contents = [this]() {
+				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+				ui_Lighting();
+				ImGui::PopItemWidth();
+			}
+		},
+		{
+			.caption = "Debug",
+			.open = false,
+			.contents = [this]() {
+				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+				ui_DebugDisplay();
+				ImGui::PopItemWidth();
+			}
+		},
+		{
+			.caption = "Viewport",
+			.contents = [this]() {
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+				ui_Viewport();
+				ImGui::PopStyleVar();
+				ImGui::PopStyleVar();
+			}
+		},
+		{
+			.caption = "Plots",
+			.open = false,
+			.contents = [this]() {
+				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
+				ui_Plots();
+				ImGui::PopItemWidth();
+			}
+		},
+		{
+			.caption = "PostFX Pipeline",
+			.contents = [this]() {
+				ui_PostFXPipeline();
+			}
+		},
+		{
+			.caption = "Attachment Viewer",
+			.open = false,
+			.contents = [this]() {
+				ui_AttachmentViewer();
+			}
+		},
+		{
+			.caption = "Controls",
+			.open = true,
+			.contents = [this]() {
+				ui_Controls();
+			}
+		}
+	};
 }
+
+void Engine::ui_Update()
+{
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	static bool opt_fullscreen = true;
+	static bool opt_padding = false;
+	static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+	if (opt_fullscreen) {
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->WorkPos);
+		ImGui::SetNextWindowSize(viewport->WorkSize);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+	} else {
+		dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
+	}
+
+	if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
+		window_flags |= ImGuiWindowFlags_NoBackground;
+	}
+
+	if (!opt_padding) {
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	}
+	static bool p_open = true;
+
+	ImGui::Begin("DockSpace", &p_open, window_flags);
+	{
+		ui_MenuBar();
+
+		if (!opt_padding) {
+			ImGui::PopStyleVar();
+		}
+
+		if (opt_fullscreen) {
+			ImGui::PopStyleVar(2);
+		}
+
+		ImGuiIO& io = ImGui::GetIO();
+
+		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+			ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+		}
+
+		for (auto& window : uiWindows) {
+			if (!window.open) {
+				continue;
+			}
+			ImGui::Begin(window.caption.c_str(), &window.open, (ImGuiWindowFlags)0);
+			{
+				window.contents();
+			}
+			ImGui::End();
+		}
+
+
+
+		ui_StatusBar();
+
+#if SHOW_IMGUI_METRICS == 1
+		ImGui::ShowMetricsWindow();
+#endif
+	}
+	ImGui::End();
+}
+
 
 void Engine::ui_RegisterTextures()
 {
@@ -436,30 +489,27 @@ void Engine::ui_UnregisterTextures()
 
 void Engine::ui_Scene()
 {
-	if (ImGui::TreeNodeEx("Scene configs", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::SeparatorText("Shadow"); {
-			ImGui::Checkbox("Enable Shadows", &_renderContext.sceneData.enableShadows);
-			ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
+	ImGui::SeparatorText("Shadow"); {
+		ImGui::Checkbox("Enable Shadows", &_renderContext.sceneData.enableShadows);
+		ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
 
-			ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
-		}
-		ImGui::Separator();
-		ImGui::Checkbox("Enable bump mapping", &_renderContext.sceneData.enableBumpMapping);
-		ImGui::SliderFloat("Bump Strength", &_renderContext.sceneData.bumpStrength, 0.f, 5.f);
-		ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f");
-		ImGui::SliderFloat("Bump UV Factor", &_renderContext.sceneData.bumpUVFactor, 0.0001f, 0.005f, "%.4f");
-
-		ImGui::Separator();
-		ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
-		if (ImGui::Checkbox("Display light sources", &_renderContext.displayLightSourceObjects)) {
-			setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
-		}
-
-		ImGui::Separator();
-		ImGui::SliderFloat("Field of view", &_renderContext.fovY, 45.f, 120.f);
-
-		ImGui::TreePop();
+		ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
 	}
+	ImGui::Separator();
+	ImGui::Checkbox("Enable bump mapping", &_renderContext.sceneData.enableBumpMapping);
+	ImGui::SliderFloat("Bump Strength", &_renderContext.sceneData.bumpStrength, 0.f, 5.f);
+	ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f");
+	ImGui::SliderFloat("Bump UV Factor", &_renderContext.sceneData.bumpUVFactor, 0.0001f, 0.005f, "%.4f");
+
+	ImGui::Separator();
+	ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
+	if (ImGui::Checkbox("Display light sources", &_renderContext.displayLightSourceObjects)) {
+		setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
+	}
+	ImGui::Separator();
+	ImGui::DragFloat3("Main model position", glm::value_ptr(_renderContext.mainObject->pos), 0.1f, -100.f, 100.f);
+	ImGui::Separator();
+	ImGui::SliderFloat("Field of view", &_renderContext.fovY, 45.f, 120.f);
 }
 
 void Engine::ui_Plots()
@@ -565,225 +615,212 @@ void Engine::ui_Plots()
 
 void Engine::ui_PostFX()
 {
-	if (ImGui::TreeNodeEx("PostFX", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
 
-		if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
+		//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
+		ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloom.weight, 0.001, 0.5f);
+		//ImGui::SliderInt("Bloom Mips", &_postfx.numOfBloomMips, 1, _postfx.ub.numOfViewportMips);
+		//ImGui::DragFloat("Bloom Blur Radius Multiplier", &_postfx.ub.bloomBlurRadiusMultiplier, 0.001, 0.05f, 10.f);
 
-			//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
-			ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloom.weight, 0.001, 0.5f);
-			//ImGui::SliderInt("Bloom Mips", &_postfx.numOfBloomMips, 1, _postfx.ub.numOfViewportMips);
-			//ImGui::DragFloat("Bloom Blur Radius Multiplier", &_postfx.ub.bloomBlurRadiusMultiplier, 0.001, 0.05f, 10.f);
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (ImGui::Checkbox("Enable global tone mapping", &_postfx.enableGlobalToneMapping)) {
+			if (_postfx.enableGlobalToneMapping) {
+				_postfx.enableLocalToneMapping = false;
+			}
+		}
+
+		const char* items[] = {
+			"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
+		static int item_current = _postfx.ub.gtm.mode;
+		if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
+			_postfx.ub.gtm.mode = item_current;
+		}
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (ImGui::Checkbox("Enable local tone mapping", &_postfx.enableLocalToneMapping)) {
+			if (_postfx.enableLocalToneMapping) {
+				_postfx.enableGlobalToneMapping = false;
+			}
+		}
+
+		const char* items[] = { "Durand 2002", "Exposure fusion" };
+		static int item_current = (int)_postfx.localToneMappingMode;
+		if (ImGui::Combo("LTM Mode", &item_current, items, IM_ARRAYSIZE(items))) {
+			_postfx.localToneMappingMode = (PostFX::LTM)item_current;
+		}
+
+		if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::DragFloat("Base Scale", &_postfx.ub.durand.baseScale, 0.001f, 0.001f, 1.f);
+			ImGui::DragFloat("Base Offset", &_postfx.ub.durand.baseOffset, 0.1f, 0.f, 100.f);
+
+			//ImGui::SliderFloat3("Normalization Color", &_postfx.ub.normalizationColor[0], 0.f, 1.f);
+
+			//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
+			ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durand.bilateralRadius, 1, 25);
+
+			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.durand.sigmaS);
+			ImGui::SliderFloat("Range sigma", &_postfx.ub.durand.sigmaR, 0.1f, 2.0f);
 
 			ImGui::TreePop();
 		}
 
-		if (ImGui::TreeNodeEx("Global tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable global tone mapping", &_postfx.enableGlobalToneMapping)) {
-				if (_postfx.enableGlobalToneMapping) {
-					_postfx.enableLocalToneMapping = false;
-				}
-			}
+		if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.fusion.shadowsExposure, 0, 10);
+			//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
+			ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.fusion.highlightsExposure, -20, 0);
 
-			const char* items[] = {
-				"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
-			static int item_current = _postfx.ub.gtm.mode;
-			if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
-				_postfx.ub.gtm.mode = item_current;
-			}
+			ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.fusion.exposednessWeightSigma, 0.01, 10);
 
 			ImGui::TreePop();
 		}
 
-		if (ImGui::TreeNodeEx("Local tone mapping", ImGuiTreeNodeFlags_DefaultOpen)) {
-			if (ImGui::Checkbox("Enable local tone mapping", &_postfx.enableLocalToneMapping)) {
-				if (_postfx.enableLocalToneMapping) {
-					_postfx.enableGlobalToneMapping = false;
-				}
-			}
+		ImGui::TreePop();
+	}
 
-			const char* items[] = { "Durand 2002", "Exposure fusion" };
-			static int item_current = (int)_postfx.localToneMappingMode;
-			if (ImGui::Combo("LTM Mode", &item_current, items, IM_ARRAYSIZE(items))) {
-				_postfx.localToneMappingMode = (PostFX::LTM)item_current;
-			}
+	if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-			if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::DragFloat("Base Scale", &_postfx.ub.durand.baseScale, 0.001f, 0.001f, 1.f);
-				ImGui::DragFloat("Base Offset", &_postfx.ub.durand.baseOffset, 0.1f, 0.f, 100.f);
+		{ // Gamma correction
+			ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
 
-				//ImGui::SliderFloat3("Normalization Color", &_postfx.ub.normalizationColor[0], 0.f, 1.f);
+			ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);
+		}
 
-				//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
-				ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durand.bilateralRadius, 1, 25);
+		ImGui::TreePop();
+	}
 
-				ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.durand.sigmaS);
-				ImGui::SliderFloat("Range sigma", &_postfx.ub.durand.sigmaR, 0.1f, 2.0f);
+	if (ImGui::TreeNodeEx("Temporal eye adaptation", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Checkbox("Enable eye adaptation", &_postfx.enableAdaptation);
 
-				ImGui::TreePop();
-			}
+		if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
+			ImGui::Text("Target average luminance: %f", _gpu.compSSBO->targetAverageLuminance);
 
-			if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.fusion.shadowsExposure, 0, 10);
-				//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
-				ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.fusion.highlightsExposure, -20, 0);
+			ImGui::Separator();
 
-				ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.fusion.exposednessWeightSigma, 0.01, 10);
+			ImGui::SliderFloat("Min log luminance", &_postfx.ub.adp.minLogLum, -10.f, 0.f);
+			ImGui::SliderFloat("Max log luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
 
-				ImGui::TreePop();
-			}
+			ImGui::SliderFloat("Histogram index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
+			//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
+			ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
+			ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);
 
 			ImGui::TreePop();
 		}
 
-		if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (ImGui::TreeNodeEx("Histogram bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-			{ // Gamma correction
-				ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
+			ImGui::SliderFloat("Lower", &_postfx.lumPixelLowerBound, 0.f, 0.45f);
+			ImGui::SliderFloat("Upper", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
 
-				ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);
-			}
-
-			ImGui::TreePop();
-		}
-
-		if (ImGui::TreeNodeEx("Temporal eye adaptation", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Checkbox("Enable eye adaptation", &_postfx.enableAdaptation);
-
-			if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
-				ImGui::Text("Target average luminance: %f", _gpu.compSSBO->targetAverageLuminance);
-
-				ImGui::Separator();
-
-				ImGui::SliderFloat("Min log luminance", &_postfx.ub.adp.minLogLum, -10.f, 0.f);
-				ImGui::SliderFloat("Max log luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
-
-				ImGui::SliderFloat("Histogram index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
-				//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
-				ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
-				ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);
-
-				ImGui::TreePop();
-			}
-
-			if (ImGui::TreeNodeEx("Histogram bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
-
-				ImGui::SliderFloat("Lower", &_postfx.lumPixelLowerBound, 0.f, 0.45f);
-				ImGui::SliderFloat("Upper", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
-
-				ImGui::Separator();
-				ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
-				ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
-				ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.adp.lumLowerIndex, _postfx.ub.adp.lumUpperIndex);
-
-				ImGui::TreePop();
-			}
+			ImGui::Separator();
+			ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
+			ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
+			ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.adp.lumLowerIndex, _postfx.ub.adp.lumUpperIndex);
 
 			ImGui::TreePop();
 		}
-		
+
 		ImGui::TreePop();
 	}
 }
 
-void Engine::ui_RenderContext()
+void Engine::ui_Lighting()
 {
-	if (ImGui::TreeNodeEx("Scene lighting")) {
-		float amb = _renderContext.sceneData.ambientColor.x;
-		if (ImGui::SliderFloat("Ambient factor", &amb, 0.f, 1.f)) {
-			_renderContext.sceneData.ambientColor = { amb, amb, amb };
-		}
+	float amb = _renderContext.sceneData.ambientColor.x;
+	if (ImGui::SliderFloat("Ambient factor", &amb, 0.f, 1.f)) {
+		_renderContext.sceneData.ambientColor = { amb, amb, amb };
+	}
 
-		if (ImGui::SliderFloat("Radius brightness treshold", &_renderContext.lightRadiusTreshold, 0.f, 0.25f)) {
-			for (int i = 0; i < MAX_LIGHTS; ++i) {
+	if (ImGui::SliderFloat("Radius brightness treshold", &_renderContext.lightRadiusTreshold, 0.f, 0.25f)) {
+		for (int i = 0; i < MAX_LIGHTS; ++i) {
+			_renderContext.UpdateLightRadius(i);
+		}
+	}
+
+	ImGui::Spacing();
+	for (int i = 0; i < MAX_LIGHTS; ++i) {
+
+		if (ImGui::TreeNodeEx((void*)(intptr_t)i, ImGuiTreeNodeFlags_DefaultOpen, "Light source %d", i)) {
+			GPULight& l = _renderContext.sceneData.lights[i];
+
+			ImGui::Checkbox("Enabled", &l.enabled);
+
+			glm::vec3 tmpPos = l.position;
+			if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.1f, -100.f, 100.f)) {
+				_renderContext.UpdateLightPosition(i, tmpPos);
+			}
+
+			if (ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f)) {
 				_renderContext.UpdateLightRadius(i);
 			}
-		}
 
-		ImGui::Spacing();
-		for (int i = 0; i < MAX_LIGHTS; ++i) {
+			if (ImGui::Button("Reset Intensity")) {
+				l.intensity = 1.f;
+			}
 
-			if (ImGui::TreeNodeEx((void*)(intptr_t)i, ImGuiTreeNodeFlags_DefaultOpen, "Light source %d", i)) {
-				GPULight& l = _renderContext.sceneData.lights[i];
+			static float atten = 0.1f;
+			if (ImGui::DragFloat("Attenuation", &atten, 0.01f, 0.f, 1.f, "%.5f")) {
+				l.linear = (0.7 - 0.0014) * atten;
+				l.quadratic = (0.44 - 0.000007) * atten;
 
-				ImGui::Checkbox("Enabled", &l.enabled);
+				_renderContext.UpdateLightRadius(i);
+			}
 
-				glm::vec3 tmpPos = l.position;
-				if (ImGui::DragFloat3("Position", glm::value_ptr(tmpPos), 0.01f, -100.f, 100.f)) {
-					_renderContext.UpdateLightPosition(i, tmpPos);
-				}
+			ImGui::Text("Radius %f", l.radius);
 
-				if (ImGui::DragFloat("Intensity", &l.intensity, 1.f, 1.f, 10000.f)) {
-					_renderContext.UpdateLightRadius(i);
-				}
-
-				if (ImGui::Button("Reset Intensity")) {
-					l.intensity = 1.f;
-				}
-
-				static float atten = 0.1f;
-				if (ImGui::DragFloat("Attenuation", &atten, 0.01f, 0.f, 1.f, "%.5f")) {
-					l.linear = (0.7 - 0.0014) * atten;
-					l.quadratic = (0.44 - 0.000007) * atten;
-
-					_renderContext.UpdateLightRadius(i);
-				}
-
-				ImGui::Text("Radius %f", l.radius);
-
-				if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
-					ImGui::PushItemWidth(100.f);
-					ImGui::ColorPicker3("Color", glm::value_ptr(l.color));
-					ImGui::PopItemWidth();
-					ImGui::TreePop();
-				}
-
+			if (ImGui::TreeNode((void*)(intptr_t)(i + 1), "Color")) {
+				ImGui::PushItemWidth(100.f);
+				ImGui::ColorPicker3("Color", glm::value_ptr(l.color));
+				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}
-		}
 
-		ImGui::TreePop();
+			ImGui::TreePop();
+		}
 	}
 }
 
 void Engine::ui_DebugDisplay()
 {
-	if (ImGui::TreeNodeEx("Debug display")) {
-		if (ImGui::TreeNodeEx("Shadow cubemap")) {
-			ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
+	if (ImGui::TreeNodeEx("Shadow cubemap")) {
+		ImGui::Checkbox("Display shadow map", &_renderContext.sceneData.showShadowMap);
 
-			int& light_i = _renderContext.sceneData.shadowMapDisplayIndex;
-			if (ImGui::Button("<")) {
-				light_i = std::clamp(--light_i, 0, MAX_LIGHTS - 1);
-			}
-			ImGui::SameLine();
-			ImGui::Text("Shadow map %d", light_i);
-			ImGui::SameLine();
-			if (ImGui::Button(">")) {
-				light_i = std::clamp(++light_i, 0, MAX_LIGHTS - 1);
-			}
-			ImGui::TreePop();
-
-			ImGui::SliderFloat("Shadow Display Brightness", &_renderContext.sceneData.shadowMapDisplayBrightness, 1.f, 10.f);
+		int& light_i = _renderContext.sceneData.shadowMapDisplayIndex;
+		if (ImGui::Button("<")) {
+			light_i = std::clamp(--light_i, 0, MAX_LIGHTS - 1);
 		}
-
-		ImGui::Checkbox("Show normals", &_renderContext.sceneData.showNormals);
-
-
-		static bool imgui_demo = false;
-		ImGui::Checkbox("Show ImGui demo window", &imgui_demo);
-		if (imgui_demo) {
-			ImGui::ShowDemoWindow(&imgui_demo);
+		ImGui::SameLine();
+		ImGui::Text("Shadow map %d", light_i);
+		ImGui::SameLine();
+		if (ImGui::Button(">")) {
+			light_i = std::clamp(++light_i, 0, MAX_LIGHTS - 1);
 		}
-
-		static bool implot_demo = false;
-		ImGui::Checkbox("Show ImPlot demo window", &implot_demo);
-		if (implot_demo) {
-			ImPlot::ShowDemoWindow(&implot_demo);
-		}
-
 		ImGui::TreePop();
+
+		ImGui::SliderFloat("Shadow Display Brightness", &_renderContext.sceneData.shadowMapDisplayBrightness, 1.f, 10.f);
+	}
+
+	ImGui::Checkbox("Show normals", &_renderContext.sceneData.showNormals);
+
+
+	static bool imgui_demo = false;
+	ImGui::Checkbox("Show ImGui demo window", &imgui_demo);
+	if (imgui_demo) {
+		ImGui::ShowDemoWindow(&imgui_demo);
+	}
+
+	static bool implot_demo = false;
+	ImGui::Checkbox("Show ImPlot demo window", &implot_demo);
+	if (implot_demo) {
+		ImPlot::ShowDemoWindow(&implot_demo);
 	}
 }
 
@@ -819,11 +856,11 @@ void Engine::ui_MenuBar()
 		}
 
 		for (auto& wnd : uiWindows) {
-			if (wnd.second) {
+			if (wnd.open) {
 				continue;
 			}
-			if (ImGui::BeginMenu(wnd.first.c_str())) {
-				wnd.second = true;
+			if (ImGui::BeginMenu(wnd.caption.c_str())) {
+				wnd.open = true;
 
 				ImGui::EndMenu();
 			}
@@ -957,6 +994,14 @@ void Engine::ui_AttachmentViewer()
 	}
 }
 
+void Engine::ui_Controls()
+{
+	ImGui::Text("Foward, Left, Back, Right: W A S D");
+	ImGui::Text("Rotate Camera: Mouse movement");
+	ImGui::Text("Toggle cursor: C");
+	ImGui::Text("Close Application: Esc");
+}
+
 void Engine::ui_StatusBar()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -970,6 +1015,10 @@ void Engine::ui_StatusBar()
 	if (ImGui::BeginViewportSideBar("##SecondaryMenuBar", NULL, ImGuiDir_Down, height, window_flags)) {
 		if (ImGui::BeginMenuBar()) {
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			glm::vec3 p = _camera.GetPos();
+			ImGui::Text(" | ");
+			ImGui::Text("Player position (%.2f, %.2f, %.2f)", p.x, p.y, p.z);
+
 			ImGui::EndMenuBar();
 		}
 	}
@@ -1060,26 +1109,6 @@ bool Engine::ui_SaveScene()
 
 	return saved;
 }
-
-
-
-bool& Engine::ui_GetWindowFlag(std::string name) {
-	ASSERT(uiWindows.contains(name));
-	return uiWindows[name];
-}
-
-
-void Engine::ui_Window(std::string name, std::function<void()> func, int flags/* = 0*/)
-{
-	if (ui_GetWindowFlag(name)) {
-		ImGui::Begin(name.c_str(), &ui_GetWindowFlag(name), (ImGuiWindowFlags)flags);
-		{
-			func();
-		}
-		ImGui::End();
-	}
-}
-
 
 
 void Engine::ui_OnDrawStart()

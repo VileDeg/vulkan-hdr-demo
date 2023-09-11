@@ -47,11 +47,16 @@ struct ExposureFusion {
 
 struct GlobalToneMapping {
     int mode;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 struct GammaCorrection {
     float gamma;
     int mode; // unused
+    int _pad0;
+    int _pad1;
 };
 
 #endif //_COMPUTE_STRUCTS_GLSL_

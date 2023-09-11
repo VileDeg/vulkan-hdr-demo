@@ -132,18 +132,18 @@ void Engine::createScene(CreateSceneData data)
 		setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
 	}
 
-	
-
 	if (getModel("main")) {
 		_renderables.push_back(std::make_shared<RenderObject>(
 			RenderObject{
+				.tag = "main",
 				.model = getModel("main"),
-				.pos = glm::vec3(0, -5.f, 0),
+				.pos = data.modelPos, //glm::vec3(0, -5.f, 0)
 				.rot = glm::vec3(0, 90, 0),
 				//.scale = glm::vec3(15.f)
 				.scale = glm::vec3(data.modelScale)
 			}
 		));
+		_renderContext.mainObject = _renderables.back();
 	}
 
 	_deletionStack.push([this]() {
@@ -510,18 +510,20 @@ void Engine::uploadMesh(Mesh& mesh)
 
 
 
-void Engine::loadScene(std::string fullScenePath)
+void Engine::loadScene(std::string sceneFullPath)
 {
 	using namespace nlohmann;
 
 	std::string scene_name = "dobrovic-sponza";
-	std::ifstream in(fullScenePath);
+	std::ifstream in(sceneFullPath);
 	ASSERT(in.good());
 
 	json j;
 	j << in;
 
+	auto& mp = j["model_position"];
 	CreateSceneData data = {
+		.modelPos = { mp[0], mp[1], mp[2] },
 		.modelScale = j["model_scale"],
 		.bumpStrength = j["bump_strength"],
 		.modelPath = j["model_name"],
@@ -540,7 +542,7 @@ void Engine::loadScene(std::string fullScenePath)
 	createScene(data);
 }
 
-void Engine::saveScene(std::string fullScenePath)
+void Engine::saveScene(std::string sceneFullPath)
 {
 	using namespace nlohmann;
 
@@ -549,6 +551,18 @@ void Engine::saveScene(std::string fullScenePath)
 
 	json j;
 	j["model_name"] = rc.modelName;
+
+	// Retrieve main model position
+	/*glm::vec3 mp = { -1, -1, -1 };
+	for (auto& r : _renderables) {
+		if (r->tag == "main") {
+			mp = r->pos;
+		}
+	}
+	ASSERT(mp != glm::vec3( -1, -1, -1 ));*/
+	glm::vec3 mp = rc.mainObject->pos;
+
+	j["model_position"] = { mp.x, mp.y, mp.z };
 	j["model_scale"] = rc.modelScale;
 	j["bump_strength"] = sd.bumpStrength;
 
@@ -568,7 +582,7 @@ void Engine::saveScene(std::string fullScenePath)
 	j["lights"] = arr;
 	j["skybox"] = rc.skyboxName;
 
-	std::ofstream out(fullScenePath);
+	std::ofstream out(sceneFullPath);
 	ASSERT(out.good());
 
 	out << std::setw(2) << j;

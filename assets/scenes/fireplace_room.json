@@ -1,13 +1,12 @@
 {
-  "model_scale": 40.0,
   "bump_strength": 2.5,
   "lights": [
     {
       "intensity": 10.0,
       "position": [
-        -6.659999847412109,
-        1.1299999952316284,
-        -7.25
+        7.320000171661377,
+        0.5400000214576721,
+        15.970000267028809
       ]
     },
     {
@@ -36,5 +35,11 @@
     }
   ],
   "model_name": "fireplace_room/fireplace_room.obj",
+  "model_position": [
+    20.600000381469727,
+    -10.300000190734863,
+    29.399999618530273
+  ],
+  "model_scale": 40.0,
   "skybox": "small_cave"
 }

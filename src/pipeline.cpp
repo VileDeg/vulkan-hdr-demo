@@ -24,7 +24,11 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
 }
 
 
-void Engine::createGraphicsPipeline(const std::string& name, const std::string vertBinName, const std::string fragBinName, VkShaderStageFlags pushConstantsStages, uint32_t pushConstantsSize, std::vector<VkDescriptorSetLayout> setLayouts, VkFormat colorFormat, VkFormat depthFormat, int cullMode)
+void Engine::createGraphicsPipeline(
+    const std::string& name, const std::string vertBinName, const std::string fragBinName, 
+    VkShaderStageFlags pushConstantsStages, uint32_t pushConstantsSize, 
+    std::vector<VkDescriptorSetLayout> setLayouts, 
+    VkFormat colorFormat, VkFormat depthFormat, int cullMode)
 {
     PipelineShaders shaders = loadShaders(_device, vertBinName, fragBinName);
 
@@ -138,8 +142,6 @@ void Engine::createGraphicsPipeline(const std::string& name, const std::string v
 void Engine::createPipelines()
 {
     // Find a suitable depth format
-    VkBool32 validDepthFormat = vk_utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
-    assert(validDepthFormat);
 
     {
         createGraphicsPipeline(

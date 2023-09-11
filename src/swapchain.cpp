@@ -139,14 +139,14 @@ void Engine::createSwapchain()
         .oldSwapchain = _swapchain.handle
     };
 
-    uint32_t queueFamilyIndices[] = { _graphicsQueueFamily, _presentQueueFamily };
+    /*uint32_t queueFamilyIndices[] = { _graphicsQueueFamily, _presentQueueFamily };
     if (_graphicsQueueFamily != _presentQueueFamily) {
         swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         swapchainInfo.queueFamilyIndexCount = 2;
         swapchainInfo.pQueueFamilyIndices = queueFamilyIndices;
     } else {
         swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
+    }*/
 
     VkSwapchainKHR newSwapchain{};
     VK_ASSERT(vkCreateSwapchainKHR(_device, &swapchainInfo, nullptr, &newSwapchain));

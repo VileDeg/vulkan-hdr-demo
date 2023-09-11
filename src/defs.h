@@ -42,15 +42,15 @@
 #define HASSERTMSG(_x, _tru, _msg) do{ if ((_x) != _tru) { PRERR(_msg); TRAP(); } }while(0)
 
 //Assert macros for functions returning bool
-#define ASSERT(_x) HASSERT(_x, true)
-#define ASSERT_MSG(_x, _msg) HASSERTMSG(_x, true, _msg)
+#define ASSERT(_x) HASSERT((_x), true)
+#define ASSERT_MSG(_x, _msg) HASSERTMSG((_x), true, _msg)
 
 //Assert macros for functions returning VkResult
-#define VK_ASSERT(_x) HASSERT(_x, VK_SUCCESS)
-#define VK_ASSERTMSG(_x, _msg) HASSERTMSG(_x, VK_SUCCESS, _msg)
+#define VK_ASSERT(_x) HASSERT((_x), VK_SUCCESS)
+#define VK_ASSERTMSG(_x, _msg) HASSERTMSG((_x), VK_SUCCESS, _msg)
 
 //Assert macros for functions returning GLFWbool
-#define GLFWASSERTMSG(_x, _msg) HASSERTMSG(_x, GLFW_TRUE, _msg)
+#define GLFWASSERTMSG(_x, _msg) HASSERTMSG((_x), GLFW_TRUE, _msg)
 
 //Macro for dynamic load of extension functions
 #define DYNAMIC_LOAD(_varname, _instance)\

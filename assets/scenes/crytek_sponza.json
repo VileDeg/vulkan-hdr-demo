@@ -35,6 +35,11 @@
       ]
     }
   ],
-  "model_name": "sponza/sponza.obj",
+  "model_name": "crytek_sponza/sponza.obj",
+  "model_position": [
+    0.0,
+    0.0,
+    0.0
+  ],
   "skybox": "burnt_warehouse"
 }

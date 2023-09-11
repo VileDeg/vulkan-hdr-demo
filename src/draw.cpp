@@ -518,12 +518,22 @@ void Engine::shadowPass(FrameData& f, int imageIndex)
 	beginCmdDebugLabel(f.cmd, "SHADOW_PASS");
 	cmdSetViewportScissor(f.cmd, _shadow.width, _shadow.height);
 
+	// Recalculate shadow only for the lights that moved this frame.
+	// If main model was moved, all shadows must be recalculated, which is equal to all light being moved.
 	bool anyMoved = false;
+	std::vector<int> movedLightIndices = {};
+
 	for (int i = 0; i < MAX_LIGHTS; ++i) {
-		if (!_renderContext.sceneData.lights[i].enabled ||
-			!_renderContext.lightObjects[i]->HasMoved()) {
-			continue;
+		if (_renderContext.mainObject->HasMoved()	   || 
+			_renderContext.sceneData.lights[i].enabled &&
+			_renderContext.lightObjects[i]->HasMoved()   ) 
+		{
+			movedLightIndices.push_back(i);
+			anyMoved = true;
 		}
+	}
+
+	for (auto i : movedLightIndices) {
 		// Update light view matrices based on lights current position
 		glm::vec3 p = _renderContext.sceneData.lights[i].position;
 		_renderContext.lightView = {
@@ -542,9 +552,7 @@ void Engine::shadowPass(FrameData& f, int imageIndex)
 
 		for (uint32_t face = 0; face < 6; ++face) {
 			updateShadowCubemapFace(f, i, face);
-
 		}
-		anyMoved = true;
 	}
 
 	if (anyMoved) {

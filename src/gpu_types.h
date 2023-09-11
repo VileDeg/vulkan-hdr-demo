@@ -63,10 +63,10 @@ struct GPULight {
 
 struct GPUSceneUB {
     glm::vec3 cameraPos{};
-    int _pad0; // 16
+    int _pad0;
 
     glm::vec3 ambientColor{};
-    int _pad1; // 32
+    int _pad1;
 
     GPUBool showNormals = false;
     float exposure{ 0.0f };
@@ -180,11 +180,16 @@ struct ExposureFusion {
 
 struct GlobalToneMapping {
     int mode = 3;
+    int _pad0;
+    int _pad1;
+    int _pad2;
 };
 
 struct GammaCorrection {
     float gamma = 2.2f;
     int mode = 0; // unused
+    int _pad0;
+    int _pad1;
 };
 
 struct GPUCompUB {
