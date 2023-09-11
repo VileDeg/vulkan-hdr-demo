@@ -9,15 +9,15 @@ static PipelineShaders loadShaders(VkDevice device, const std::string& vertName,
     shaders.frag.code = vk_utils::readShaderBinary(SHADER_PATH + fragName);
 
     if (vk_utils::createShaderModule(device, shaders.vert.code, &shaders.vert.module)) {
-        std::cout << "Vertex shader successfully loaded." << std::endl;
+        std::cout << "Vertex shader [" << vertName << "] successfully loaded." << std::endl;
     } else {
-        PRWRN("Failed to load vertex shader");
+        PRWRN("Failed to load vertex shader [" << vertName << "]!");
     }
 
     if (vk_utils::createShaderModule(device, shaders.frag.code, &shaders.frag.module)) {
-        std::cout << "Fragment shader successfully loaded." << std::endl;
+        std::cout << "Fragment shader [" << fragName << "] successfully loaded." << std::endl;
     } else {
-        PRWRN("Failed to load fragment shader");
+        PRWRN("Failed to load fragment shader [" << fragName << "]!");
     }
 
     return shaders;

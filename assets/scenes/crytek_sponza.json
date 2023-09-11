@@ -1,16 +1,17 @@
 {
-  "model_scale": 15.0,
-  "bump_strength": 2.5,
+  "bump_strength": 0.009999999776482582,
   "lights": [
     {
+      "enabled": true,
       "intensity": 10.0,
       "position": [
-        4.730000019073486,
-        1.1299999952316284,
+        0.0,
+        1.2000000476837158,
         5.0
       ]
     },
     {
+      "enabled": false,
       "intensity": 5.0,
       "position": [
         0.0,
@@ -19,6 +20,7 @@
       ]
     },
     {
+      "enabled": false,
       "intensity": 3.0,
       "position": [
         0.20000000298023224,
@@ -27,6 +29,7 @@
       ]
     },
     {
+      "enabled": false,
       "intensity": 1.0,
       "position": [
         -5.0,
@@ -38,8 +41,9 @@
   "model_name": "crytek_sponza/sponza.obj",
   "model_position": [
     0.0,
-    0.0,
-    0.0
+    -5.0,
+    4.0
   ],
+  "model_scale": 15.0,
   "skybox": "burnt_warehouse"
 }

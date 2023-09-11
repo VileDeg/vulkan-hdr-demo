@@ -38,6 +38,60 @@ void GPUData::Reset(FrameData& fd)
 }
 
 
+RenderContext::RenderContext()
+{
+	enableSkybox = true;
+	displayLightSourceObjects = false;
+
+	fovY = 90.f; // degrees
+	zNear = 0.1f;
+	zFar = 64.0f;
+
+	showNormals = false;
+
+	// Treshold to calculate light's effective radius for optimization
+	lightRadiusTreshold = 1.f / 255.f;
+
+	float off = 5.f;
+	std::vector<glm::vec3> lightPos = {
+		{ off, 0., off },
+		{ off, 0., -off },
+		{ -off, 0., off },
+		{ -off, 0., -off },
+	};
+
+	std::vector<glm::vec3> lightColor = {
+		{ 1.f , 1.f , 1.f },
+		{ 1.f , 1.f , 1.f },
+		{ 1.f , 1.f , 1.f },
+		{ 1.f , 1.f , 1.f }
+	};
+
+	float amb = 0.05f;
+	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
+
+	sceneData.enableShadows = true;
+
+	sceneData.showShadowMap = false;
+	sceneData.shadowBias = 0.15f;
+	sceneData.shadowMapDisplayBrightness = 3.5f;
+
+	sceneData.enablePCF = true;
+
+	for (int i = 0; i < MAX_LIGHTS; i++) {
+		auto& l = sceneData.lights[i];
+
+		l.color = lightColor[i];
+		l.constant = 1.f;
+		l.linear = 0.22f;
+		l.quadratic = 0.2f;
+
+		UpdateLightRadius(i);
+	}
+
+	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
+}
+
 void RenderContext::UpdateLightPosition(int lightIndex, glm::vec3 newPos)
 {
 	sceneData.lights[lightIndex].position = newPos;
@@ -58,82 +112,6 @@ void RenderContext::UpdateLightRadius(int i)
 	sceneData.lights[i].radius = -Kl + std::sqrt(rootFrom);
 }
 
-void RenderContext::Init(CreateSceneData data)
-{
-	enableSkybox = true;
-	displayLightSourceObjects = false;
-
-	fovY = 90.f; // degrees
-	zNear = 0.1f;
-	zFar = 64.0f;
-
-	showNormals = false;
-
-	// Treshold to calculate light's effective radius for optimization
-	lightRadiusTreshold = 1.f / 255.f;
-
-	modelName  = data.modelPath;
-	skyboxName = data.skyboxPath;
-	modelScale = data.modelScale;
-
-	float off = 5.f;
-	std::vector<glm::vec3> lightPos = {
-		{ off, 0., off },
-		{ off, 0., -off },
-		{ -off, 0., off },
-		{ -off, 0., -off },
-	};
-
-	std::vector<glm::vec3> lightColor = {
-		{ 1.f , 1.f , 1.f },
-		{ 1.f , 1.f , 1.f },
-		{ 1.f , 1.f , 1.f },
-		{ 1.f , 1.f , 1.f }
-	};
-
-	//std::vector<float> radius = { 20.f, 10.f, 30.f, 5.f };
-	std::vector<float> intensity = { 10.f, 5.f, 3.f, 1.f };
-	//std::vector<float> intensity = { 1.f, 1.f, 1.f, 1.f };
-	std::vector<bool> enable = { true, false, false, false };
-
-
-	float amb = 0.05f;
-	sceneData.ambientColor = glm::vec4(amb, amb, amb, 1.f);
-
-	sceneData.enableShadows = true;
-
-	sceneData.showShadowMap = false;
-	sceneData.shadowBias = 0.15f;
-	sceneData.shadowMapDisplayBrightness = 3.5f;
-
-	sceneData.enablePCF = true;
-
-	sceneData.bumpStrength = data.bumpStrength;
-
-	for (int i = 0; i < MAX_LIGHTS; i++) {
-		sceneData.lights[i] = {
-			.position = data.position[i],
-
-			.color = lightColor[i],
-			.intensity = data.intensity[i],
-
-			.constant = 1.f,
-			.linear = 0.22f,
-			.quadratic = 0.2f,
-
-			.enabled = (bool)enable[i]
-		};
-
-		UpdateLightRadius(i);
-	}
-
-	//std::vector<bool> enable = { true, true, true, true };
-	//bool a = true;
-	//GPUBool b = a;
-	//b = enable[0]; // <- This produces warning
-
-	sceneData.lightProjMat = glm::perspective(glm::radians(90.f), 1.0f, zNear, zFar);
-}
 
 glm::mat4 RenderObject::Transform() 
 {

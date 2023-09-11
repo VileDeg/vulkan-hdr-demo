@@ -209,7 +209,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	}
 	baseDir += "/";
 
-	pr("Loading model at: " << path);
+	pr("\nLoading model at: " << path);
 	bool good = tinyobj::LoadObj(&inattrib, &inshapes, &materials, &warn, &err, path.c_str(), baseDir.c_str());
 
 	if (!warn.empty()) {
@@ -239,7 +239,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 	// Loop over shapes
 	for (size_t s = 0; s < shapes.size(); s++) { // Shapes
-		pr("\ttinyobj: Loading shape[" << s << "]: " << shapes[s].name);
+		pr("\tLoading shape[" << s << "]: " << shapes[s].name);
 
 		size_t faces_in_shape = shapes[s].mesh.num_face_vertices.size();
 
@@ -432,6 +432,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 	newModel.maxExtent = maxExtent;
 
+	pr("Model loaded successfully!");
 
 	return true;
 }

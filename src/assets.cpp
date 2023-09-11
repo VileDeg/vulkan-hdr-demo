@@ -5,8 +5,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
-#include "json/json.hpp"
-
 void Engine::writeTextureDescriptorSets()
 {
 	uint32_t diffuseTexBinding = 5;
@@ -64,13 +62,13 @@ void Engine::writeTextureDescriptorSets()
 	vkUpdateDescriptorSets(_device, writes.size(), writes.data(), 0, nullptr);
 }
 
-void Engine::createScene(CreateSceneData data)
+void Engine::createScene() //CreateSceneData data
 {
 	// Reset for when we load a scene at runtime
 	cleanupScene();
 
 	// Main model of the scene
-	ASSERT(loadModelFromObj("main", MODEL_PATH + data.modelPath));
+	ASSERT(loadModelFromObj("main", MODEL_PATH + _renderContext.modelPath));
 	// Sphere model of the light source
 	ASSERT(loadModelFromObj("sphere", MODEL_PATH + "sphere/sphere.obj"));
 	// Cube model for skybox
@@ -85,7 +83,7 @@ void Engine::createScene(CreateSceneData data)
 
 	writeTextureDescriptorSets();
 
-	loadSkybox(data.skyboxPath);
+	loadSkybox(_renderContext.skyboxPath);
 
 	_skyboxObject = std::make_shared<RenderObject>(
 		RenderObject{
@@ -96,8 +94,6 @@ void Engine::createScene(CreateSceneData data)
 		}
 	);
 	_skyboxObject->model->meshes[0]->material = &_materials["skybox"];
-
-	_renderContext.Init(data);
 
 	if (getModel("sphere")) {
 		Model* sphr = getModel("sphere");
@@ -137,10 +133,10 @@ void Engine::createScene(CreateSceneData data)
 			RenderObject{
 				.tag = "main",
 				.model = getModel("main"),
-				.pos = data.modelPos, //glm::vec3(0, -5.f, 0)
+				.pos = _renderContext.modelPos, //glm::vec3(0, -5.f, 0)
 				.rot = glm::vec3(0, 90, 0),
 				//.scale = glm::vec3(15.f)
-				.scale = glm::vec3(data.modelScale)
+				.scale = glm::vec3(_renderContext.modelScale)
 			}
 		));
 		_renderContext.mainObject = _renderables.back();
@@ -452,7 +448,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	});
 
 	stagingBuffer.destroy(_allocator);
-	pr("Texture loaded successfully: " << path);
+	pr("\n\tTexture loaded successfully: " << path);
 
 	
 
@@ -512,67 +508,70 @@ void Engine::uploadMesh(Mesh& mesh)
 
 void Engine::loadScene(std::string sceneFullPath)
 {
-	using namespace nlohmann;
-
 	std::string scene_name = "dobrovic-sponza";
 	std::ifstream in(sceneFullPath);
 	ASSERT(in.good());
 
-	json j;
+	nlohmann::json j;
 	j << in;
 
 	auto& mp = j["model_position"];
-	CreateSceneData data = {
-		.modelPos = { mp[0], mp[1], mp[2] },
-		.modelScale = j["model_scale"],
-		.bumpStrength = j["bump_strength"],
-		.modelPath = j["model_name"],
-		.skyboxPath = j["skybox"]
-	};
+	//CreateSceneData data = {
+	//	.modelPos = { mp[0], mp[1], mp[2] },
+	//	.modelScale = j["model_scale"],
+	//	/*.bumpStrength = j["bump_strength"],*/
+	//	.modelPath = j["model_name"],
+	//	.skyboxPath = j["skybox"]
+	//};
+	auto& rc = _renderContext;
+	rc.modelPos = { mp[0], mp[1], mp[2] };
+	rc.modelScale = j["model_scale"];		
+	rc.modelPath = j["model_name"];
+	rc.skyboxPath = j["skybox"];
+	
+
+	rc.sceneData.bumpStrength = j["bump_strength"];
 
 	for (int i = 0; i < MAX_LIGHTS; ++i) {
-		auto l = j["lights"];
-		data.intensity[i] = l[i]["intensity"];
+		auto& json_l = j["lights"][i];
+		auto& rc_l = rc.sceneData.lights[i];
+		auto p = json_l["position"];
+
+		rc_l.enabled = json_l["enabled"];
+		rc_l.intensity = json_l["intensity"];
+		rc_l.position = { p[0], p[1], p[2] };
+		/*data.intensity[i] = l[i]["intensity"];
 		auto p = l[i]["position"];
 		data.position[i].x = p[0];
 		data.position[i].y = p[1];
-		data.position[i].z = p[2];
+		data.position[i].z = p[2];*/
 	}
 
-	createScene(data);
+	createScene();
 }
 
 void Engine::saveScene(std::string sceneFullPath)
 {
-	using namespace nlohmann;
-
 	auto& rc = _renderContext;
 	auto& sd = rc.sceneData;
 
-	json j;
-	j["model_name"] = rc.modelName;
+	nlohmann::json j;
+	j["model_name"] = rc.modelPath;
 
-	// Retrieve main model position
-	/*glm::vec3 mp = { -1, -1, -1 };
-	for (auto& r : _renderables) {
-		if (r->tag == "main") {
-			mp = r->pos;
-		}
-	}
-	ASSERT(mp != glm::vec3( -1, -1, -1 ));*/
 	glm::vec3 mp = rc.mainObject->pos;
 
 	j["model_position"] = { mp.x, mp.y, mp.z };
 	j["model_scale"] = rc.modelScale;
 	j["bump_strength"] = sd.bumpStrength;
 
-	auto arr = json::array();
+	auto arr = nlohmann::json::array();
 
 	for (int i = 0; i < MAX_LIGHTS; ++i) {
 		auto& l = sd.lights[i];
 		auto& p = l.position;
 
-		auto arr1 = json::object();
+		auto arr1 = nlohmann::json::object();
+		arr1["enabled"] = (bool)l.enabled;
 		arr1["position"] = { p.x, p.y, p.z };
 		arr1["intensity"] = l.intensity;
 
@@ -580,7 +579,7 @@ void Engine::saveScene(std::string sceneFullPath)
 	}
 
 	j["lights"] = arr;
-	j["skybox"] = rc.skyboxName;
+	j["skybox"] = rc.skyboxPath;
 
 	std::ofstream out(sceneFullPath);
 	ASSERT(out.good());

@@ -22,11 +22,11 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
 
 #ifndef NDEBUG
-    pr("Available extensions: ");
+    /*pr("Available extensions: ");
     for (const auto& extensionProperty : availableExtensionProperties) {
         pr("\t" << extensionProperty.extensionName);
-    }
-    pr("Required extensions: ");
+    }*/
+    pr("Enabled instance extensions: ");
     for (const auto& reqExt : requiredExtensions) {
         pr("\t" << reqExt);
     }
@@ -94,6 +94,8 @@ static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<c
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
+
+
 
     bool allSupported = true;
     for (const auto& de : deviceExtensions) {
@@ -288,6 +290,11 @@ void Engine::pickPhysicalDevice()
 
     // print compatible devices
 #ifndef NDEBUG
+    pr("Enabled device extensions: ");
+    for (const auto& reqExt : _deviceExtensions) {
+        pr("\t" << reqExt);
+    }
+
     pr("Compatible devices:");
     for (auto& t : compatibleDevices)
         pr("\t" << get<3>(t).deviceName << " (graphics queue: " << get<1>(t)
@@ -319,17 +326,17 @@ void Engine::pickPhysicalDevice()
             bestScore = score;
         }
     }
-#ifndef NDEBUG
-    pr("Using device:\n" << "\t" << get<3>(*bestDevice).deviceName);
-#endif // NDEBUG
+    pr("Selected device:\n" << "\t" << get<3>(*bestDevice).deviceName);
 
     _physicalDevice = get<0>(*bestDevice);
     _graphicsQueueFamily = get<1>(*bestDevice);
     _presentQueueFamily = get<2>(*bestDevice);
     _gpuProperties = get<3>(*bestDevice);
 
+#ifndef NDEBUG
     pr("The GPU has a minimum buffer alignment of "
         << _gpuProperties.limits.minUniformBufferOffsetAlignment);
+#endif // NDEBUG
 }
 
 void Engine::loadDeviceExtensionFunctions()

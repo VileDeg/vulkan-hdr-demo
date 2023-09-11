@@ -43,7 +43,7 @@ private: /* Methods used from Init directly */
     void createSamplers();
 
     void writeTextureDescriptorSets();
-    void createScene(CreateSceneData data);
+    void createScene(); //CreateSceneData data
     void cleanupScene();
 
 private: /* Secondary methods */
@@ -55,7 +55,6 @@ private: /* Secondary methods */
 
     void recreateViewport(uint32_t extentX, uint32_t extentY);
     void cleanupViewportResources();
-
 
     void initUploadContext();
 

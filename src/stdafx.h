@@ -14,6 +14,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/hash.hpp>
 
+#include <json/json.hpp>
+
 #include <optional>
 #include <iostream>
 #include <vector>

@@ -53,12 +53,8 @@ struct AllocatedImage {
 };
 
 struct Attachment {
-    /*enum class Type {
-        None = -1, Diffuse, Bump
-    };*/
     uint32_t globalIndex;
     std::string tag = "";
-    //Type type = Type::None;
 
     glm::vec2 dim;
 
@@ -299,18 +295,6 @@ struct GPUData {
     void Reset(FrameData& fd);
 };
 
-struct CreateSceneData {
-    float intensity[MAX_LIGHTS];
-    glm::vec3 position[MAX_LIGHTS];
-
-    glm::vec3 modelPos;
-    float modelScale;
-    float bumpStrength;
-
-    std::string modelPath;
-    std::string skyboxPath;
-};
-
 struct RenderContext {
     GPUSceneUB sceneData{};
     
@@ -332,16 +316,15 @@ struct RenderContext {
     // Treshold to calculate light's effective radius for optimization
     float lightRadiusTreshold;
 
+    glm::vec3 modelPos;
     float modelScale;
-    std::string modelName;
-    std::string skyboxName;
+    std::string modelPath;
+    std::string skyboxPath;
 
-    void Init(CreateSceneData data);
+    RenderContext();
 
     void UpdateLightPosition(int lightIndex, glm::vec3 newPos);
     void UpdateLightRadius(int lightIndex);
 
     int GetClosestRadiusIndex(int radius);
-
- 
 };

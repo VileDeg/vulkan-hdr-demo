@@ -76,7 +76,7 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
 
     if (!firstCall) {
         if (lastCursorState != eng._cursorEnabled) {
-            PRINF("Cursor toggle.");
+            //PRINF("Cursor toggle.");
             firstCall = true;
         } else {
             firstCall = false;

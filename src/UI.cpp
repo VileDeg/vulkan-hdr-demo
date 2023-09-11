@@ -489,26 +489,31 @@ void Engine::ui_UnregisterTextures()
 
 void Engine::ui_Scene()
 {
-	ImGui::SeparatorText("Shadow"); {
-		ImGui::Checkbox("Enable Shadows", &_renderContext.sceneData.enableShadows);
-		ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
+	ImGui::Checkbox("Enable Shadows", &_renderContext.sceneData.enableShadows);
+	ImGui::Checkbox("Enable PCF", &_renderContext.sceneData.enablePCF);
 
-		ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
-	}
+	ImGui::SliderFloat("Shadow Bias", &_renderContext.sceneData.shadowBias, 0.f, 1.0f);
+
 	ImGui::Separator();
+
 	ImGui::Checkbox("Enable bump mapping", &_renderContext.sceneData.enableBumpMapping);
 	ImGui::SliderFloat("Bump Strength", &_renderContext.sceneData.bumpStrength, 0.f, 5.f);
 	ImGui::SliderFloat("Bump Step", &_renderContext.sceneData.bumpStep, 0.0001f, 0.005f, "%.4f");
 	ImGui::SliderFloat("Bump UV Factor", &_renderContext.sceneData.bumpUVFactor, 0.0001f, 0.005f, "%.4f");
 
 	ImGui::Separator();
+
 	ImGui::Checkbox("Enable skybox", &_renderContext.enableSkybox);
 	if (ImGui::Checkbox("Display light sources", &_renderContext.displayLightSourceObjects)) {
 		setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
 	}
+
 	ImGui::Separator();
+
 	ImGui::DragFloat3("Main model position", glm::value_ptr(_renderContext.mainObject->pos), 0.1f, -100.f, 100.f);
+
 	ImGui::Separator();
+
 	ImGui::SliderFloat("Field of view", &_renderContext.fovY, 45.f, 120.f);
 }
 
