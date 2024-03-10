@@ -12,32 +12,31 @@ PostFX::PostFX()
 	lumPixelLowerBound = 0.2f;
 	lumPixelUpperBound = 0.95f;
 
-	//maxLogLuminance = 4.7f;
 	eyeAdaptationTimeCoefficient = 2.2f;
 
 	localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
 
 	gamma = 2.2f;
-	gammaMode = 0; // 0 - forward, 1 - inverse
+	setGammaMode(GAMMA_MODE::INVERSE);
 
-	enableBloom = false;
+	enableAdaptation = false;
+	enableBloom = true;
 	enableGlobalToneMapping = false;
-	enableGammaCorrection = false;
-	enableAdaptation = true;
 	enableLocalToneMapping = false;
+	//enableGammaCorrection = true;
 
 	effectPrefixMap[EXPADP] = "expadp_";
 	effectPrefixMap[DURAND] = "durand_";
 	effectPrefixMap[FUSION] = "fusion_";
-	effectPrefixMap[BLOOM] = "bloom_";
-	effectPrefixMap[GTMO] = "gtmo_";
-	effectPrefixMap[GAMMA] = "gamma_";
+	effectPrefixMap[BLOOM]  = "bloom_";
+	effectPrefixMap[GTMO]   = "gtmo_";
+	effectPrefixMap[GAMMA]  = "gamma_";
 
 	std::string pref = "";
 	{
 		pref = getPrefixFromEffect(DURAND);
-		stages[pref + "lum_chrom"] = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
-		stages[pref + "bilateral"] = { .shaderName = "ltm_durand_bilateral.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
+		stages[pref + "lum_chrom"]   = { .shaderName = "ltm_durand_lum_chrom.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG} };
+		stages[pref + "bilateral"]   = { .shaderName = "ltm_durand_bilateral.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG } };
 		stages[pref + "reconstruct"] = { .shaderName = "ltm_durand_reconstruct.comp.spv", .dsetBindings = { UB, IMG, IMG, IMG, IMG } };
 
 		att[pref + "lum"] = {};
@@ -64,7 +63,9 @@ PostFX::PostFX()
 
 		att[pref + "chrom"] = {};
 
-		pyr[pref + "lum"] = pyr[pref + "weight"] = pyr[pref + "blendedLaplac"] = {};
+		pyr[pref + "lum"] = {};
+		pyr[pref + "weight"] = {};
+		pyr[pref + "blendedLaplac"] = {};
 		// Pyramid that will hold intermediate filtered images when upsampling
 		pyr[pref + "upsampled0"] = {};
 	}
@@ -107,7 +108,7 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				.UpdateImage(Att(DURAND, "lum").view, 2)
 				.UpdateImage(Att(DURAND, "chrom").view, 3)
 
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(DURAND, "bilateral")
 				// In
@@ -116,7 +117,7 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				.UpdateImage(Att(DURAND, "base").view, 2)
 				.UpdateImage(Att(DURAND, "detail").view, 3)
 
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(DURAND, "reconstruct")
 				// In
@@ -126,27 +127,27 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				// Out
 				.UpdateImage(viewportImageViews[imageIndex], 4)
 
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 
 		{ // Bloom
 			Stage(BLOOM, "threshold")
 				.UpdateImage(viewportImageViews[imageIndex], 1)
 				.UpdateImage(Pyr(BLOOM, "highlights").views[0], 2)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(BLOOM, "downsample")
 				.UpdateImagePyramid(Pyr(BLOOM, "highlights"), 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(BLOOM, "upsample")
 				.UpdateImagePyramid(Pyr(BLOOM, "highlights"), 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(BLOOM, "combine")
 				.UpdateImage(viewportImageViews[imageIndex], 1)
 				.UpdateImage(Pyr(BLOOM, "highlights").views[0], 2)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 
 		{ // Exposure fusion
@@ -156,14 +157,14 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				.UpdateImage(Att(FUSION, "chrom"), 2)
 				.UpdateImage(Pyr(FUSION, "lum").views[0], 3)
 				.UpdateImage(Pyr(FUSION, "weight").views[0], 4)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(FUSION, "downsample")
 				// In
 				.UpdateImagePyramid(Pyr(FUSION, "lum"), 0)
 				// Out
 				.UpdateImagePyramid(Pyr(FUSION, "weight"), 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 
 			int last_i = ub.numOfViewportMips - 1;
@@ -173,7 +174,7 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				.UpdateImage(Pyr(FUSION, "weight").views[last_i], 1)
 				// Out
 				.UpdateImage(Pyr(FUSION, "blendedLaplac").views[last_i], 2)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 
 			Stage(FUSION, "upsample0_sub")
@@ -182,7 +183,7 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				// Out
 				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 1)
 
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(FUSION, "upsample1_sub")
 				// In
@@ -191,21 +192,21 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				.UpdateImagePyramid(Pyr(FUSION, "weight"), 2)
 				// Out
 				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 3)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(FUSION, "upsample0_add")
 				// In
 				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 0)
 				// Out
 				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(FUSION, "upsample1_add")
 				// In
 				.UpdateImagePyramid(Pyr(FUSION, "upsampled0"), 0)
 				// Out
 				.UpdateImagePyramid(Pyr(FUSION, "blendedLaplac"), 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(FUSION, "reconstruct")
 				// In
@@ -215,29 +216,29 @@ void PostFX::UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkIma
 				// Out
 				.UpdateImage(viewportImageViews[imageIndex], 2)
 
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 
 		{ // Exposure adaptation
 			Stage(EXPADP, "histogram")
 				.UpdateImage(viewportImageViews[imageIndex], 2)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 
 			Stage(EXPADP, "eyeadp")
 				.UpdateImage(viewportImageViews[imageIndex], 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 
 		{ // Global tone mapping
 			Stage(GTMO, "0")
 				.UpdateImage(viewportImageViews[imageIndex], 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 
 		{ // Gamma correction
 			Stage(GAMMA, "0")
 				.UpdateImage(viewportImageViews[imageIndex], 1)
-				.WriteSets(imageIndex);
+				.WriteDescriptorSets(imageIndex);
 		}
 	}
 }
@@ -329,7 +330,7 @@ PostFXStage& PostFXStage::UpdateImagePyramid(AttachmentPyramid& att, uint32_t bi
 	return *this;
 }
 
-PostFXStage& PostFXStage::WriteSets(int set_i)
+PostFXStage& PostFXStage::WriteDescriptorSets(int set_i)
 {
 	if (!imageBindings.empty()) {
 		// Need to create vector for image infos to hold data until update command is executed
@@ -372,7 +373,7 @@ PostFXStage& PostFXStage::WriteSets(int set_i)
 
 PostFXStage& PostFXStage::Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i)
 {
-	WriteSets(set_i);
+	WriteDescriptorSets(set_i);
 
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &sets[set_i], 0, nullptr);
 	vkCmdDispatch(commandBuffer, groupsX, groupsY, 1);
@@ -480,9 +481,29 @@ bool PostFX::isEffectEnabled(Effect fct)
 	case GTMO: 
 		return enableGlobalToneMapping;
 	case GAMMA:
-		return enableGammaCorrection;
+		return gammaMode > GAMMA_MODE::OFF;
 	default:
 		ASSERT(false);
 		return "";
+	}
+}
+
+void PostFX::setGammaMode(GAMMA_MODE mode)
+{
+	gammaMode = mode;
+
+	switch (gammaMode)
+	{
+	case GAMMA_MODE::OFF:
+		ub.gamma.gamma = 0;
+		break;
+	case GAMMA_MODE::ON:
+		ub.gamma.gamma = 2.2;
+		break;
+	case GAMMA_MODE::INVERSE:
+		ub.gamma.gamma = 1 / 2.2;
+		break;
+	default:
+		ASSERT(false);
 	}
 }

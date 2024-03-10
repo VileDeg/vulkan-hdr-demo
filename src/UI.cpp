@@ -564,11 +564,12 @@ void Engine::ui_Plots()
 		}
 		if (ImGui::TreeNodeEx("Histogram", ImGuiTreeNodeFlags_DefaultOpen)) {
 			if (ImPlot::BeginPlot("Luminance", ImVec2(-1, 200))) {
-				// We have to wait for GPU to finish execution because compute shader 
-				// might have not finished operating on current _gpu.compSSBO buffer
-				// even though the command was already recorded to queue.
-				// This is probably a temporary solution as it is very inefficient.
-				// If we don't use this, histogram will be very laggy most of the time.
+				/* We have to wait for GPU to finish execution because compute shader
+				might have not finished operating on current _gpu.compSSBO buffer
+				even though the command was already recorded to queue.
+				   
+				This is probably a temporary solution as it is very inefficient.
+				If we don't use this, histogram will be very laggy most of the time. */
 				vkDeviceWaitIdle(_device);
 
 				uint32_t bins = MAX_LUMINANCE_BINS;
@@ -639,7 +640,7 @@ void Engine::ui_PostFX()
 		}
 
 		const char* items[] = {
-			"Reinhard Extended", "Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
+			"Reinhard", "Uncharted2", "ACES Narkowicz", "ACES Hill" };
 		static int item_current = _postfx.ub.gtm.mode;
 		if (ImGui::Combo("ToneMapping", &item_current, items, IM_ARRAYSIZE(items))) {
 			_postfx.ub.gtm.mode = item_current;
@@ -658,10 +659,12 @@ void Engine::ui_PostFX()
 		const char* items[] = { "Durand 2002", "Exposure fusion" };
 		static int item_current = (int)_postfx.localToneMappingMode;
 		if (ImGui::Combo("LTM Mode", &item_current, items, IM_ARRAYSIZE(items))) {
-			_postfx.localToneMappingMode = (PostFX::LTM)item_current;
+			_postfx.localToneMappingMode = static_cast<PostFX::LTM>(item_current);
 		}
 
-		if (ImGui::TreeNodeEx("Durand 2002", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Separator();
+
+		if (_postfx.localToneMappingMode == PostFX::LTM::DURAND) {
 			ImGui::DragFloat("Base Scale", &_postfx.ub.durand.baseScale, 0.001f, 0.001f, 1.f);
 			ImGui::DragFloat("Base Offset", &_postfx.ub.durand.baseOffset, 0.1f, 0.f, 100.f);
 
@@ -672,18 +675,12 @@ void Engine::ui_PostFX()
 
 			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.durand.sigmaS);
 			ImGui::SliderFloat("Range sigma", &_postfx.ub.durand.sigmaR, 0.1f, 2.0f);
-
-			ImGui::TreePop();
-		}
-
-		if (ImGui::TreeNodeEx("Exposure fusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+		} else {
 			ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.fusion.shadowsExposure, 0, 10);
 			//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
 			ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.fusion.highlightsExposure, -20, 0);
 
 			ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.fusion.exposednessWeightSigma, 0.01, 10);
-
-			ImGui::TreePop();
 		}
 
 		ImGui::TreePop();
@@ -692,9 +689,22 @@ void Engine::ui_PostFX()
 	if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 		{ // Gamma correction
-			ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
+			int gamma_mode = static_cast<int>(_postfx.gammaMode);
+			bool anyPressed = false;
+			anyPressed |= ImGui::RadioButton("Off (0)", &gamma_mode, 0);
+			ImGui::SameLine();
+			anyPressed |= ImGui::RadioButton("On (2.2)", &gamma_mode, 1);
+			ImGui::SameLine();
+			anyPressed |= ImGui::RadioButton("Inverse (1 / 2.2)", &gamma_mode, 2);
+			
 
-			ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);
+			if (anyPressed) {
+				_postfx.setGammaMode(static_cast<GAMMA_MODE>(gamma_mode));
+			}
+
+			/*ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
+
+			ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);*/
 		}
 
 		ImGui::TreePop();
@@ -705,30 +715,35 @@ void Engine::ui_PostFX()
 
 		if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
-			ImGui::Text("Target average luminance: %f", _gpu.compSSBO->targetAverageLuminance);
+			ImGui::Text("Target average luminance : %f", _gpu.compSSBO->targetAverageLuminance);
 
 			ImGui::Separator();
 
-			ImGui::SliderFloat("Min log luminance", &_postfx.ub.adp.minLogLum, -10.f, 0.f);
-			ImGui::SliderFloat("Max log luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
+			ImGui::SliderFloat("Min log2 luminance", &_postfx.ub.adp.minLogLum, -10.f, 0.f);
+			ImGui::SliderFloat("Max log2 luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
 
-			ImGui::SliderFloat("Histogram index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
+			ImGui::SliderFloat("Histogram bin index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
 			//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
-			ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
-			ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);
+			/*ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
+			ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);*/
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNodeEx("Histogram bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-			ImGui::SliderFloat("Lower", &_postfx.lumPixelLowerBound, 0.f, 0.45f);
-			ImGui::SliderFloat("Upper", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
+			ImGui::Text("Skip %% of darker and brighter pixels");
 
 			ImGui::Separator();
-			ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
-			ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
-			ImGui::Text("Histogram bounds indices: %u %u", _postfx.ub.adp.lumLowerIndex, _postfx.ub.adp.lumUpperIndex);
+
+			ImGui::SliderFloat("Lower bound", &_postfx.lumPixelLowerBound, 0.f, 0.45f);
+			ImGui::SliderFloat("Upper bound", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
+
+			ImGui::Separator();
+			// ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
+			//ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
+			ImGui::Text("Lower bound bin: %u", _postfx.ub.adp.lumLowerIndex);
+			ImGui::Text("Upper bound bin: %u", _postfx.ub.adp.lumUpperIndex);
 
 			ImGui::TreePop();
 		}
@@ -913,7 +928,7 @@ void Engine::ui_PostFXPipeline()
 
 	ui_PostFXPipelineButton(_postfx.enableLocalToneMapping, "Local Tone Mapping", &_postfx.enableGlobalToneMapping, false);
 
-	ui_PostFXPipelineButton(_postfx.enableGammaCorrection, "Gamma Correction");
+	/*ui_PostFXPipelineButton(_postfx.enableGammaCorrection, "Gamma Correction");*/
 }
 
 void Engine::ui_AttachmentViewer()

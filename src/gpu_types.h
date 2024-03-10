@@ -135,19 +135,17 @@ struct GPUCompSSBO {
 
 
 struct ExposureAdaptation {
-    float minLogLum = -4.f;
+    float minLogLum = -8.f;
     float maxLogLum = 4.7f;
-    //float logLumRange;
-    //float oneOverLogLumRange;
-    unsigned int totalPixelNum; // unused
     float timeCoeff = 1.f;
+    int _pad0;
 
     unsigned int lumLowerIndex;
     unsigned int lumUpperIndex;
-    int _pad0;
     int _pad1;
+    int _pad2;
 
-    glm::vec4 weights = { 1.f, 1.f, 1.f, 1.f }; // x - index weight, yzw - unused
+    glm::vec4 weights = { 1.25f, 1.f, 1.f, 1.f }; // x - index weight, yzw - unused
 };
 
 struct Bloom {
@@ -179,7 +177,7 @@ struct ExposureFusion {
 };
 
 struct GlobalToneMapping {
-    int mode = 3;
+    int mode = 2; // ACES Narkowicz
     int _pad0;
     int _pad1;
     int _pad2;

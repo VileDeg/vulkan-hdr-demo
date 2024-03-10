@@ -25,47 +25,49 @@ layout (rgba32f, set = 0, binding = 2) uniform readonly image2D inHDRImage;
 shared uint histogramShared[GROUP_SIZE];
 
 // For a given color and luminance range, return the histogram bin index
-uint colorToBin(vec3 hdrColor, float minLogLum, float inverseLogLumRange) {
-  // Convert our RGB value to Luminance, see note for RGB_TO_LUM macro above
-  float lum = dot(hdrColor, RGB_TO_LUM);
+uint colorToBin(vec3 hdrColor, float minLogLum, float maxLogLum) {
+    // Convert our RGB value to Luminance, see note for RGB_TO_LUM macro above
+    float lum = dot(hdrColor, RGB_TO_LUM);
 
-  // Avoid taking the log of zero
-  if (lum < EPSILON) {
-    return 0;
-  }
+    // Avoid taking the log of zero
+    if (lum < EPSILON) {
+        return 0;
+    }
 
-  // Calculate the log_2 luminance and express it as a value in [0.0, 1.0]
-  // where 0.0 represents the minimum luminance, and 1.0 represents the max.
-  float logLum = clamp((log2(lum) - minLogLum) * inverseLogLumRange, 0.0, 1.0);
+    // Calculate the log_2 luminance and express it as a value in [0.0, 1.0]
+    // where 0.0 represents the minimum luminance, and 1.0 represents the max.
+    float logLum = clamp((log2(lum) - minLogLum) / (maxLogLum - minLogLum), 0.0, 1.0);
 
-  // Map [0, 1] to [1, 255]. The zeroth bin is handled by the epsilon check above.
-  return uint(logLum * 254.0 + 1.0);
+    // Map [0, 1] to [1, 255]. The zeroth bin is handled by the epsilon check above.
+    return uint(logLum * 254.0 + 1.0);
 }
 
 // 16 * 16 * 1 threads per group
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-  // Initialize the bin for this thread to 0
-  histogramShared[gl_LocalInvocationIndex] = 0;
+    // Initialize the bin for this thread to 0
+    histogramShared[gl_LocalInvocationIndex] = 0;
   
-  barrier();
+    barrier();
 
-  uvec2 dim = imageSize(inHDRImage).xy;
-  // Ignore threads that map to areas beyond the bounds of our HDR image
-  if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
-    vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
-    float logLumRange = ub.adp.maxLogLum - ub.adp.minLogLum;
-    uint binIndex = colorToBin(hdrColor, ub.adp.minLogLum, 1 / logLumRange);
-    // We use an atomic add to ensure we don't write to the same bin in our
-    // histogram from two different threads at the same time.
-    atomicAdd(histogramShared[binIndex], 1);
-  }
+    uvec2 dim = imageSize(inHDRImage).xy;
+    // Ignore threads that map to areas beyond the bounds of our HDR image
+    if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
 
-  // Wait for all threads in the work group to reach this point before adding our
-  // local histogram to the global one
-  barrier();
+        vec3 hdrColor = imageLoad(inHDRImage, ivec2(gl_GlobalInvocationID.xy)).rgb;
 
-  // Technically there's no chance that two threads write to the same bin here,
-  // but different work groups might! So we still need the atomic add.
-  atomicAdd(ssbo.histogram[gl_LocalInvocationIndex], histogramShared[gl_LocalInvocationIndex]);
+        uint binIndex = colorToBin(hdrColor, ub.adp.minLogLum, ub.adp.maxLogLum);
+
+        // We use an atomic add to ensure we don't write to the same bin in our
+        // histogram from two different threads at the same time.
+        atomicAdd(histogramShared[binIndex], 1);
+    }
+
+    // Wait for all threads in the work group to reach this point before adding our
+    // local histogram to the global one
+    barrier();
+
+    // Technically there's no chance that two threads write to the same bin here,
+    // but different work groups might! So we still need the atomic add.
+    atomicAdd(ssbo.histogram[gl_LocalInvocationIndex], histogramShared[gl_LocalInvocationIndex]);
 }

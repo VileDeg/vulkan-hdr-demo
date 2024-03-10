@@ -1,6 +1,10 @@
 import os
 import sys
 
+if len(sys.argv) != 2:
+	print("Usage: python compile_shaders.py <path to cmake source dir>")
+	sys.exit(1)
+
 cmake_source_dir = sys.argv[1]
 os.chdir(cmake_source_dir)
 
@@ -21,9 +25,10 @@ for f in os.listdir(src_dir):
 	if f.endswith(src_ext):
 		src_path = os.path.join(src_dir, f)
 		dst_path = os.path.join(bin_dir, f)
-		#os.system(f"{glsl} -e main {debug_flags} -V {src_path} -o {dst_path}.spv")
 		if not os.path.exists(bin_dir):
 			os.makedirs(bin_dir)
-		os.system(f"{glsl} -g {src_path} -o {dst_path}.spv")
+		command = f"{glsl} -g {src_path} -o {dst_path}.spv"
+		print(command)
+		os.system(command)
 	else:
 		continue

@@ -8,7 +8,7 @@
 #define THREADS_X 256
 #define THREADS_Y 1
 
-#define localIndex gl_LocalInvocationIndex
+//#define localIndex gl_LocalInvocationIndex
 
 layout (std430, set = 0, binding = 0) 
 #include "incl/computeSSBO.incl" 
@@ -23,48 +23,48 @@ shared uint histogramShared[GROUP_SIZE];
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
-  // Get the count from the histogram buffer
-  uint countForThisBin = ssbo.histogram[localIndex];
+    
+    if (gl_LocalInvocationIndex >= ub.adp.lumLowerIndex && gl_LocalInvocationIndex <= ub.adp.lumUpperIndex) {
+    
+        // Get the count from the histogram buffer
+        uint countForThisBin = ssbo.histogram[gl_LocalInvocationIndex];
 
-  histogramShared[localIndex] = uint(countForThisBin * uint(localIndex * ub.adp.weights.x));
-  //histogramShared[localIndex] = uint(countForThisBin);
-
-  barrier();
-
-  // We only need to calculate this once, so only a single thread is needed.
-  if (localIndex == 0) {
-    uint sum = 0;
-    uint total_pixels = 0;
-    for (uint i = ub.adp.lumLowerIndex; i < ub.adp.lumUpperIndex+1; ++i) {
-    //for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-        sum += histogramShared[i];
-        total_pixels += ssbo.histogram[i];
+        histogramShared[gl_LocalInvocationIndex] = uint(countForThisBin * uint(gl_LocalInvocationIndex * ub.adp.weights.x));
     }
-    //total_pixels -= histogramShared[0];
 
-    // Here we take our weighted sum and divide it by the number of pixels
-    // that had luminance greater than zero (since the index == 0, we can
-    // use countForThisBin to find the number of black pixels)
-    //float weightedLogAverage = (sum / max(float(ub.totalPixelNum), 1.0)) - 1.0; //  - float(countForThisBin)
-    float weightedLogAverage = (sum / max(float(total_pixels), 1.0)) - 1.0;
+    barrier();
 
-    float logLumRange = ub.adp.maxLogLum - ub.adp.minLogLum;
-    // Map from our histogram space to actual luminance
-    float weightedAvgLum = exp2(((weightedLogAverage / 254.0) * logLumRange) + ub.adp.minLogLum);
+    // We only need to calculate this once, so only a single thread is needed.
+    if (gl_LocalInvocationIndex == 0) {
+        uint sum = 0;
+        uint total_pixels = 0;
+        for (uint i = ub.adp.lumLowerIndex; i < ub.adp.lumUpperIndex+1; ++i) {
+            //for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
+            sum += histogramShared[i];
+            total_pixels += ssbo.histogram[i];
+        }
 
-    //float awaitedLuminance = ub.weights.z;
-    //float howClose = weightedAvgLum - awaitedLuminance;
-    //weightedAvgLum = weightedAvgLum * exp2(-howClose * ub.weights.w);
+        // Divide weighted sum by the number of pixels that were taken into account. 
+        // max is used in case total_pixels is less than 1.
+        float weightedLogAverage = (sum / max(float(total_pixels), 1.0));
 
-    // Set target luminance for display and comparison
-    ssbo.targetAverageLuminance = weightedAvgLum;
+        // Map from our histogram log2 space to linear luminance
+        // - 1.0 is to account for + 1.0 that were added when converting to log space
+        float weightedAvgLum = exp2(
+            ((weightedLogAverage - 1.0) / 254.0) * 
+            (ub.adp.maxLogLum - ub.adp.minLogLum)
+            + ub.adp.minLogLum
+        );
 
-    // The new stored value will be interpolated using the last frames value
-    // to prevent sudden shifts in the exposure.
-    float lumLastFrame = ssbo.averageLuminance;
-    float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ub.adp.timeCoeff;
+        // Set target luminance for display and comparison
+        ssbo.targetAverageLuminance = weightedAvgLum;
 
-    ssbo.averageLuminance = adaptedLum;
-    //ssbo.averageLuminance = 1 / (9.6 * adaptedLum + 0.0001);
-  }
+        // The new stored value will be interpolated using the last frames value
+        // to prevent sudden shifts in the exposure.
+        float lumLastFrame = ssbo.averageLuminance;
+        float adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * ub.adp.timeCoeff;
+
+        ssbo.averageLuminance = adaptedLum;
+        //ssbo.averageLuminance = 1 / (9.6 * adaptedLum + 0.0001);
+    }
 }

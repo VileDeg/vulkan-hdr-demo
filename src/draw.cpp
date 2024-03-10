@@ -242,44 +242,38 @@ void Engine::loadDataToGPU()
 
 	{ // Load compute SSBO to GPU
 		using uint = unsigned int;
-		uint sum = 0;
-		//uint tmp_sum = 0;
-		uint li = 0;
-		uint ui = MAX_LUMINANCE_BINS - 1;
+		uint sum_pixels = 0;
+		uint lower_i = 0;
+		uint upper_i = MAX_LUMINANCE_BINS - 1;
 
 		uint32_t totalPixelNum = _viewport.width * _viewport.height;
-		float lb = _postfx.lumPixelLowerBound * totalPixelNum;
-		float ub = _postfx.lumPixelUpperBound * totalPixelNum;
-
-		//uint sum_skipped = 0;
+		float lower_bound_pixel_num = _postfx.lumPixelLowerBound * totalPixelNum;
+		float upper_bound_pixel_num = _postfx.lumPixelUpperBound * totalPixelNum;
 
 		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compSSBO->luminance[i];
+			sum_pixels += _gpu.compSSBO->luminance[i];
 
-			sum += _gpu.compSSBO->luminance[i];
-			if (sum > lb) {
-				li = i;
+			if (sum_pixels > lower_bound_pixel_num) {
+				lower_i = i;
 				break;
 			}
 		}
 
-		//sum_skipped += sum;
+		for (uint i = lower_i + 1; i < MAX_LUMINANCE_BINS; ++i) {
+			sum_pixels += _gpu.compSSBO->luminance[i];
 
-		for (uint i = li + 1; i < MAX_LUMINANCE_BINS; ++i) {
-			//tmp_sum += _gpu.compSSBO->luminance[i];
-			sum += _gpu.compSSBO->luminance[i];
-			if (sum > ub) {
-				ui = i;
+			if (sum_pixels > upper_bound_pixel_num) {
+				upper_i = i;
 				break;
 			}
 		}
 
-		//_postfx.ub.logLumRange = _postfx.maxLogLuminance - _postfx.ub.minLogLum;
-		//_postfx.ub.oneOverLogLumRange = 1.f / _postfx.ub.logLumRange;
-		//_postfx.ub.totalPixelNum = _viewport.width * _viewport.height;
+		// Inverse exponent for time adaptation
 		_postfx.ub.adp.timeCoeff = 1 - std::exp(-_deltaTime * _postfx.eyeAdaptationTimeCoefficient);
-		_postfx.ub.adp.lumLowerIndex = li;
-		_postfx.ub.adp.lumUpperIndex = ui;
+
+		_postfx.ub.adp.lumLowerIndex = lower_i;
+		_postfx.ub.adp.lumUpperIndex = upper_i;
+
 		float avg = (_viewport.width + _viewport.height) / 2;
 		_postfx.ub.durand.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
 		
@@ -684,7 +678,8 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 		endCmdDebugLabel(f.cmd);
 	}
 
-	if (_postfx.enableGammaCorrection) {
+	//if (_postfx.enableGammaCorrection) {
+	if (_postfx.gammaMode > GAMMA_MODE::OFF) {
 		beginCmdDebugLabel(f.cmd, "GAMMA_CORRECTION");
 
 		cp.Stage(GAMMA, "0").Bind(f.cmd)
@@ -812,19 +807,19 @@ void Engine::drawFrame()
 		VK_ASSERT(vkEndCommandBuffer(f.cmd));
 	}
 
-    VkSemaphore waitSemaphores[] = { f.imageAvailableSemaphore };
+    //VkSemaphore imageAvailable[] = { f.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    VkSemaphore signalSemaphores[] = { f.renderFinishedSemaphore };
+    //VkSemaphore renderFinished[] = { f.renderFinishedSemaphore };
 
 	VkSubmitInfo submitInfo{
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = waitSemaphores,
+		.pWaitSemaphores = &f.imageAvailableSemaphore,
 		.pWaitDstStageMask = waitStages,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &f.cmd,
 		.signalSemaphoreCount = 1,
-		.pSignalSemaphores = signalSemaphores
+		.pSignalSemaphores = &f.renderFinishedSemaphore
 	};
 
     VK_ASSERT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, f.inFlightFence));
@@ -833,7 +828,7 @@ void Engine::drawFrame()
     VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = signalSemaphores,
+        .pWaitSemaphores = &f.renderFinishedSemaphore,
         .swapchainCount = 1,
         .pSwapchains = swapchains,
         .pImageIndices = &imageIndex

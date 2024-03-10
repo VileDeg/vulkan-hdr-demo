@@ -47,7 +47,7 @@ struct PostFXStage {
 
     PostFXStage& UpdateImagePyramid(AttachmentPyramid& att, uint32_t binding);
 
-    PostFXStage& WriteSets(int set_i);
+    PostFXStage& WriteDescriptorSets(int set_i);
 
     PostFXStage& Dispatch(uint32_t groupsX, uint32_t groupsY, int set_i);
     void Barrier();
@@ -59,6 +59,10 @@ struct PostFXStage {
 
 enum Effect {
     INVALID = -1, EXPADP, DURAND, FUSION, BLOOM, GTMO, GAMMA
+};
+
+enum class GAMMA_MODE {
+    INVALID = -1, OFF, ON, INVERSE
 };
 
 struct PostFX {
@@ -83,6 +87,8 @@ struct PostFX {
 
     bool isEffectEnabled(Effect fct);
 
+    void setGammaMode(GAMMA_MODE mode);
+
     std::map<Effect, std::string> effectPrefixMap;
 
     GPUCompUB ub{};
@@ -97,11 +103,11 @@ struct PostFX {
     LTM localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
 
     float gamma;
-    int gammaMode; // 0 - forward, 1 - inverse
+    GAMMA_MODE gammaMode; // 0 - off, 1 - on, 2 - inverse
 
     bool enableBloom;
     bool enableGlobalToneMapping;
-    bool enableGammaCorrection;
+    //bool enableGammaCorrection;
     bool enableAdaptation;
     bool enableLocalToneMapping;
 };

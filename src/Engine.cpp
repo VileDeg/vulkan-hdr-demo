@@ -17,6 +17,7 @@ Engine::Engine()
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, // Required by dynamic rendering
+        VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, // Adds new color space for HDR formats
     };
 
     _deviceExtensions = {
@@ -32,7 +33,7 @@ Engine::Engine()
 
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, // To get rid of renderpasses and framebuffers
 
-        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME // To update desc sets after binding and to allow unused descriptors to remain invalid
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, // To update desc sets after binding and to allow unused descriptors to remain invalid
     };
 
      WIDTH = 1600;
@@ -67,8 +68,9 @@ void Engine::Init()
     createPipelines();
     
     //loadScene(SCENE_PATH + "dobrovic_sponza.json");
-    loadScene(SCENE_PATH + "fireplace_room.json");
+    //loadScene(SCENE_PATH + "fireplace_room.json");
     //loadScene(SCENE_PATH + "living_room.json");
+    loadScene(SCENE_PATH + "crytek_sponza.json");
     
     ui_Init();
 

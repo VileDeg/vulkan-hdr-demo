@@ -4,15 +4,13 @@
 struct ExposureAdaptation {
     float minLogLum;
     float maxLogLum;
-    //float logLumRange;
-    //float oneOverLogLumRange;
-    uint totalPixelNum; // unused
     float timeCoeff;
+    int _pad1;
 
     uint lumLowerIndex;
     uint lumUpperIndex;
-    int _pad0;
-    int _pad1;
+    int _pad2;
+    int _pad3;
 
     vec4 weights; // x - index weight, y - Undefined, z - await. lum. bin, w - awaited lum. weight
 };

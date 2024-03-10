@@ -25,7 +25,13 @@
     #define FUSION_WEIGHT_MODE 0
     #define FUSION_BLUR_MODE 2
 
+
+    // Extract luminance from LAB color space and then use it to restore the color 
+    // Benefit: color doesn't get oversaturated when base offset is increased
+    // Downside: makes image go grayscale a bit because color remains the same but luminance goes up/down
+    // CURRENTLY BROKEN
     #define DURAND_CONVERT_LAB 0
+
     #define DURAND_LOG_LUM 1
 #if DURAND_LOG_LUM == 1
     #define DURAND_LOG_LUM_RES 255 // Luminance will be multiplied by this constant to map 0..1 to a bigger range before taking logarithm of it

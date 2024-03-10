@@ -239,7 +239,7 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 
 	// Loop over shapes
 	for (size_t s = 0; s < shapes.size(); s++) { // Shapes
-		pr("\tLoading shape[" << s << "]: " << shapes[s].name);
+		// pr("\tLoading shape[" << s << "]: " << shapes[s].name);
 
 		size_t faces_in_shape = shapes[s].mesh.num_face_vertices.size();
 
@@ -322,8 +322,6 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 					.color = {nx, ny, nz},
 					.uv = {ux, 1 - uy}
 				};
-
-
 
 				ASSERT(currentMesh != nullptr);
 				// Add vertex only if it wasn't already added

@@ -5,7 +5,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
-void Engine::writeTextureDescriptorSets()
+void Engine::writeTextureDescriptors()
 {
 	uint32_t diffuseTexBinding = 5;
 	uint32_t bumpTexBinding = 6;
@@ -64,7 +64,7 @@ void Engine::writeTextureDescriptorSets()
 
 void Engine::createScene() //CreateSceneData data
 {
-	// Reset for when we load a scene at runtime
+	// Reset in case we load a scene at runtime
 	cleanupScene();
 
 	// Main model of the scene
@@ -80,8 +80,9 @@ void Engine::createScene() //CreateSceneData data
 			mesh->material = getMaterial("general");
 		}
 	}
+	_models["cube"].meshes[0]->material = getMaterial("skybox");
 
-	writeTextureDescriptorSets();
+	writeTextureDescriptors();
 
 	loadSkybox(_renderContext.skyboxPath);
 
@@ -93,7 +94,6 @@ void Engine::createScene() //CreateSceneData data
 			.isSkybox = true
 		}
 	);
-	_skyboxObject->model->meshes[0]->material = &_materials["skybox"];
 
 	if (getModel("sphere")) {
 		Model* sphr = getModel("sphere");
@@ -121,8 +121,8 @@ void Engine::createScene() //CreateSceneData data
 			max_intensity = std::max(max_intensity, _renderContext.sceneData.lights[i].intensity);
 		}
 
-		sphr->meshes[0]->gpuMat.ambientColor *= max_intensity;
-		sphr->meshes[0]->gpuMat.diffuseColor *= max_intensity;
+		sphr->meshes[0]->gpuMat.ambientColor  *= max_intensity;
+		sphr->meshes[0]->gpuMat.diffuseColor  *= max_intensity;
 		sphr->meshes[0]->gpuMat.specularColor *= max_intensity;
 
 		setDisplayLightSourceObjects(_renderContext.displayLightSourceObjects);
@@ -176,7 +176,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 		float* fpix = stbi_loadf(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
 		pixel_ptr = fpix;
 
-		imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+		imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT; // HDR format of assets/images/skybox .hdr images
 		
 
 		ASSERT_MSG(pixel_ptr != nullptr, "Failed to load cubemap face " + std::to_string(i) + ", path: " + path);
@@ -242,7 +242,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 	VmaAllocationCreateInfo dimg_allocinfo = {};
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-	//allocate and create the image
+	// Allocate and create the image
 	VK_ASSERT(vmaCreateImage(_allocator, &imageInfo, &dimg_allocinfo, &_skybox.allocImage.image, &_skybox.allocImage.allocation, nullptr));
 
 	immediate_submit(
@@ -315,7 +315,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 	stagingBuffer.destroy(_allocator);
 	pr("Cubemap loaded successfully: " << basePath);
 
-	// write cubemap to descriptor set
+	// Write cubemap to descriptor set
 	_skybox.allocImage.descInfo = {
 		.sampler = _linearSampler,//cubemapSampler,
 		.imageView = _skybox.view,
@@ -338,7 +338,6 @@ void Engine::loadSkybox(std::string skyboxDirName)
 		_skyboxDisposeStack.flush();
 	});
 }
-
 
 
 Attachment* Engine::loadTextureFromFile(const char* path)
@@ -392,7 +391,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	VmaAllocationCreateInfo dimg_allocinfo = {};
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-	//allocate and create the image
+	// Allocate and create the image
 	vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr);
 
 	immediate_submit(
@@ -421,7 +420,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 				VK_PIPELINE_STAGE_TRANSFER_BIT,
 				subresourceRange);
 
-			//copy the buffer into the image
+			// Copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newTexture.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 			vk_utils::imageMemoryBarrier(cmd, newTexture.allocImage.image,
@@ -448,13 +447,11 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	});
 
 	stagingBuffer.destroy(_allocator);
-	pr("\n\tTexture loaded successfully: " << path);
-
+	pr("\tTexture loaded successfully: " << path);
 	
 
 	return &_textures[path];
 }
-
 
 
 void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
@@ -505,10 +502,8 @@ void Engine::uploadMesh(Mesh& mesh)
 }
 
 
-
 void Engine::loadScene(std::string sceneFullPath)
 {
-	std::string scene_name = "dobrovic-sponza";
 	std::ifstream in(sceneFullPath);
 	ASSERT(in.good());
 
@@ -516,13 +511,7 @@ void Engine::loadScene(std::string sceneFullPath)
 	j << in;
 
 	auto& mp = j["model_position"];
-	//CreateSceneData data = {
-	//	.modelPos = { mp[0], mp[1], mp[2] },
-	//	.modelScale = j["model_scale"],
-	//	/*.bumpStrength = j["bump_strength"],*/
-	//	.modelPath = j["model_name"],
-	//	.skyboxPath = j["skybox"]
-	//};
+
 	auto& rc = _renderContext;
 	rc.modelPos = { mp[0], mp[1], mp[2] };
 	rc.modelScale = j["model_scale"];		
@@ -540,11 +529,6 @@ void Engine::loadScene(std::string sceneFullPath)
 		rc_l.enabled = json_l["enabled"];
 		rc_l.intensity = json_l["intensity"];
 		rc_l.position = { p[0], p[1], p[2] };
-		/*data.intensity[i] = l[i]["intensity"];
-		auto p = l[i]["position"];
-		data.position[i].x = p[0];
-		data.position[i].y = p[1];
-		data.position[i].z = p[2];*/
 	}
 
 	createScene();

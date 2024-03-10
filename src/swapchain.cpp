@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "engine.h"
+#include "vulkan/vk_enum_string_helper.h"
 
 struct SwapchainPropertiesSupport {
     VkSurfaceCapabilitiesKHR capabilities;
@@ -45,12 +46,14 @@ static SwapchainPropertiesSupport querySwapchainPropertiesSupport(VkPhysicalDevi
     return support;
 }
 
-static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, const VkFormat* request_formats, int request_formats_count, VkColorSpaceKHR request_color_space)
+static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, VkSurfaceKHR surface, 
+    const std::vector<VkSurfaceFormatKHR>& request_formats)
 {
+    static bool first_time_created = true;
     // Copied from file: "imgui/imgui_impl_vulkan.h", function: "ImGui_ImplVulkanH_SelectSurfaceFormat"
 
-    ASSERT(request_formats != nullptr);
-    ASSERT(request_formats_count > 0);
+    ASSERT(request_formats.size() > 0);
+    //ASSERT(request_color_space.size() > 0);
 
     // Per Spec Format and View Format are expected to be the same unless VK_IMAGE_CREATE_MUTABLE_BIT was set at image creation
     // Assuming that the default behavior is without setting this bit, there is no need for separate Swapchain image and image view format
@@ -62,30 +65,72 @@ static VkSurfaceFormatKHR pickSurfaceFormat(VkPhysicalDevice physical_device, Vk
     avail_format.resize((int)avail_count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &avail_count, avail_format.data());
 
+    if (first_time_created) {
+        std::cout << "Available surface formats:\n";
+        for (const auto& af : avail_format) {
+            auto surface_format_name = string_VkFormat(af.format);
+            auto color_space_name = string_VkColorSpaceKHR(af.colorSpace);
+
+            std::cout << "\t" << surface_format_name << "    " << color_space_name << "\n";
+        }
+        std::cout << "\n";
+    }
+
+    /*std::cout << "Available color spaces:\n";
+    for (const auto& af : avail_format) {
+
+        std::cout << "\t" << color_space_name << "\n";
+    }
+    std::cout << "\n";*/
+
     // First check if only one format, VK_FORMAT_UNDEFINED, is available, which would imply that any format is available
     if (avail_count == 1)
     {
         if (avail_format[0].format == VK_FORMAT_UNDEFINED)
         {
             VkSurfaceFormatKHR ret;
-            ret.format = request_formats[0];
-            ret.colorSpace = request_color_space;
+            ret.format = request_formats[0].format;
+            ret.colorSpace = request_formats[0].colorSpace;
             return ret;
         } else
         {
             // No point in searching another format
             return avail_format[0];
         }
-    } else
-    {
+    } else {
+        int selected_format_index = -1;
         // Request several formats, the first found will be used
-        for (int request_i = 0; request_i < request_formats_count; request_i++)
-            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++)
-                if (avail_format[avail_i].format == request_formats[request_i] && avail_format[avail_i].colorSpace == request_color_space)
-                    return avail_format[avail_i];
+        for (int request_i = 0; request_i < request_formats.size(); request_i++) {
+
+            for (uint32_t avail_i = 0; avail_i < avail_count; avail_i++) { // Look for format
+                if (avail_format[avail_i].format     == request_formats[request_i].format &&
+                    avail_format[avail_i].colorSpace == request_formats[request_i].colorSpace) { // Format found
+
+                    selected_format_index = avail_i;
+                    goto break_out;
+                }
+            }
+        }
+
+break_out:
+        ASSERT(selected_format_index != -1);
+
+        VkSurfaceFormatKHR selected_format = avail_format[selected_format_index];
+
+        if (first_time_created) {
+            auto surface_format_name = string_VkFormat(selected_format.format);
+            auto color_space_name = string_VkColorSpaceKHR(selected_format.colorSpace);
+
+            std::cout << "Selected surface format:\n";
+            std::cout << "\t" << surface_format_name << "    " << color_space_name << "\n";
+            std::cout << "\n";
+
+            first_time_created = false;
+        }
+
 
         // If none of the requested image formats could be found, use the first available
-        return avail_format[0];
+        return selected_format;
     }
 }
 
@@ -105,10 +150,32 @@ void Engine::createSwapchain()
 {
     const auto support = querySwapchainPropertiesSupport(_physicalDevice, _surface);
 
+    // Reference : 
+    // https://github.com/nxp-imx/gtec-demo-framework/blob/master/DemoApps/Vulkan/HDR04_HDRFramebuffer/source/HDR04_HDRFramebuffer_Register.cpp
+
     // Select Surface Format
-    const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    auto surfaceFormat = pickSurfaceFormat(_physicalDevice, _surface, requestSurfaceImageFormat, (size_t)ARRAY_SIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    const std::vector<VkSurfaceFormatKHR> requestSurfaceImageFormat = {
+        // HDR formats
+        { VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT }, // used VK_FORMAT_R16G16B16A16_SFLOAT
+        { VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_DCI_P3_LINEAR_EXT },
+        { VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_BT2020_LINEAR_EXT },
+
+        { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT }, // used VK_FORMAT_A2B10G10R10_UNORM_PACK32
+        { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLORSPACE_SRGB_NONLINEAR_KHR }, // PACK32 means it is stored a singled 32-bit interger, rather than uint8_t[4]
+
+        { VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR },
+        { VK_FORMAT_R8G8B8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR },
+
+        { VK_FORMAT_B8G8R8A8_SRGB, VK_COLORSPACE_SRGB_NONLINEAR_KHR },
+        { VK_FORMAT_R8G8B8A8_SRGB, VK_COLORSPACE_SRGB_NONLINEAR_KHR },
+
+        /*{ VK_FORMAT_B8G8R8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR },
+        { VK_FORMAT_R8G8B8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR }*/
+    };
+    
+    
+    auto surfaceFormat = pickSurfaceFormat(
+        _physicalDevice, _surface, requestSurfaceImageFormat); //requestSurfaceColorSpace
 
     _swapchain.colorFormat = surfaceFormat.format;
 

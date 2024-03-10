@@ -42,7 +42,7 @@ private: /* Methods used from Init directly */
     void createFrameData();
     void createSamplers();
 
-    void writeTextureDescriptorSets();
+    void writeTextureDescriptors();
     void createScene(); //CreateSceneData data
     void cleanupScene();
 

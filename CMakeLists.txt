@@ -67,6 +67,6 @@ add_dependencies(${EXNAME} glsl_shaders)
 
 add_custom_command(
     TARGET glsl_shaders
-    COMMAND python3 ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+    COMMAND python ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
     COMMENT "Compiling shaders"
 )

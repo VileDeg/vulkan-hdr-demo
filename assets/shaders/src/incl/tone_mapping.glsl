@@ -20,7 +20,7 @@ float luminance(vec3 rgb) {
     return dot(rgb, RGB_TO_LUM);
 }
 
-vec3 ReinhardExtended(vec3 v)  { //, float max_white_lum
+vec3 ReinhardExtended(vec3 v)  {
     vec3 numerator = v * (1.0 + v / (WHITE_POINT * WHITE_POINT));
     return numerator / (1.0 + v);
 }
@@ -44,7 +44,7 @@ vec3 Uncharted2Filmic(vec3 v) {
     return curr * white_scale;
 }
 
-vec3 ACESFilm(vec3 x) {
+vec3 ACES_Narkowicz(vec3 x) {
 	/* From https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/ */
 	float a = 2.51;
 	float b = 0.03;
@@ -79,7 +79,7 @@ vec3 RRTAndODTFit(vec3 v)
     return a / b;
 }
 
-vec3 ACESFitted(vec3 color)
+vec3 ACES_Hill(vec3 color)
 {
     color = color * ACESInputMat;
 
@@ -108,10 +108,10 @@ vec3 applyGlobalToneMapping(vec3 col, int mode) {
 	vec3 outCol = col;
 	switch (mode) {
         case 0: outCol = ReinhardExtended(col); break;
-        case 1: outCol = Reinhard(col); break;
-        case 2: outCol = Uncharted2Filmic(col); break;
-        case 3: outCol = ACESFilm(col); break;
-        case 4: outCol = ACESFitted(col); break;
+        //case 1: outCol = Reinhard(col); break;
+        case 1: outCol = Uncharted2Filmic(col); break;
+        case 2: outCol = ACES_Narkowicz(col); break;
+        case 3: outCol = ACES_Hill(col); break;
     }
 	return outCol;
 }
