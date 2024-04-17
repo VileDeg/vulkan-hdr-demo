@@ -1,7 +1,7 @@
 #pragma once
 
-
-#define ARRAY_SIZE(_ARR)          ((int)(sizeof(_ARR) / sizeof(*(_ARR))))     // Size of a static C-style array. Don't use on pointers!
+// Size of a static C-style array. Don't use on pointers!
+#define ARRAY_SIZE(_ARR)          ((int)(sizeof(_ARR) / sizeof(*(_ARR))))     
 
 //Macros for printing error messages
 #define HHHPR(_msg, _stream) do{ _stream << _msg << std::endl; }while(0)
@@ -15,6 +15,7 @@
 
 #define PRINF(_msg) HPRINFO(_msg, "Info");
 
+//Shortcut for simple printing
 #define pr(_msg) HHHPR(_msg, std::cout)
 
 //Exit macro
@@ -47,10 +48,10 @@
 
 //Assert macros for functions returning VkResult
 #define VK_ASSERT(_x) HASSERT((_x), VK_SUCCESS)
-#define VK_ASSERTMSG(_x, _msg) HASSERTMSG((_x), VK_SUCCESS, _msg)
+#define VK_ASSERT_MSG(_x, _msg) HASSERTMSG((_x), VK_SUCCESS, _msg)
 
 //Assert macros for functions returning GLFWbool
-#define GLFWASSERTMSG(_x, _msg) HASSERTMSG((_x), GLFW_TRUE, _msg)
+#define GLFW_ASSERT_MSG(_x, _msg) HASSERTMSG((_x), GLFW_TRUE, _msg)
 
 //Macro for dynamic load of extension functions
 #define DYNAMIC_LOAD(_varname, _instance)\
@@ -62,7 +63,7 @@
 #define V3PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << ", " << _v.z << " "
 #define V2PR(_v) " " << #_v << ": " << _v.x << ", " << _v.y << " "
 
-
+//Number of swapchain images
 #define MAX_FRAMES_IN_FLIGHT 3
 
 #define ASSET_PATH std::string("assets/")

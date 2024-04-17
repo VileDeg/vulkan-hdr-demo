@@ -22,15 +22,15 @@
             imageLoad( \
                 img, \
                 ivec2( \
-                    floor( (tc).x ) + 1, \
-                    floor( (tc).y ) + 1  \
-                ) \
-            ), \
-            imageLoad( \
-                img, \
-                ivec2( \
                     floor( (tc).x ), \
                     floor( (tc).y ) + 1 \
+                ) \
+            ), \
+            imageLoad(\
+                img, \
+                ivec2(\
+                    floor((tc).x) + 1, \
+                    floor((tc).y) + 1  \
                 ) \
             ), \
             fract( (tc).x ) \

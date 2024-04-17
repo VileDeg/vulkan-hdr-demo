@@ -175,6 +175,7 @@ static void ui_PostFXPipelineButton(bool& flag, std::string name,
 
 void Engine::ui_InitImGui()
 {
+
 	// 1: create descriptor pool for IMGUI
 	// the size of the pool is very oversize, but it's copied from imgui demo itself.
 	VkDescriptorPoolSize pool_sizes[] = {
@@ -219,8 +220,6 @@ void Engine::ui_InitImGui()
 	io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/static/CascadiaMono-Bold.ttf", 18.0f * fontScale);
 	io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/fonts/CascadiaCode/CascadiaMono.ttf", 18.0f * fontScale);
 
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
 
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
@@ -262,6 +261,8 @@ void Engine::ui_InitImGui()
 	//clear font textures from cpu data
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
+
+	
 	ui_RegisterTextures();
 
 	//add the destroy the imgui created structures
@@ -526,25 +527,28 @@ void Engine::ui_Plots()
 
 			static RollingBuffer rdata, rdata1;
 
-			ImGui::SliderFloat("Adaptation time coefficient", &_postfx.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.3f);
+				ImGui::SliderFloat("Adaptation time coefficient", &_postfx.eyeAdaptationTimeCoefficient, 1.f, 10.f);
+			
 
-			static float t = 0;
-			t += ImGui::GetIO().DeltaTime;
+				static float t = 0;
+				t += ImGui::GetIO().DeltaTime;
 
-			static float history = 30.0f;
-			ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+				static float history = 30.0f;
+				ImGui::SliderFloat("History", &history, 1, 30, "%.1f s");
+			ImGui::PopItemWidth();
 
-			rdata.AddPoint(t, _gpu.compSSBO->averageLuminance);
+			rdata.AddPoint(t, _gpudt.compSSBO->averageLuminance);
 			rdata.Span = history;
 
-			rdata1.AddPoint(t, _gpu.compSSBO->targetAverageLuminance);
+			rdata1.AddPoint(t, _gpudt.compSSBO->targetAverageLuminance);
 			rdata1.Span = history;
 
 			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
 
 			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
 				static float maxY = 0;
-				maxY = _gpu.compSSBO->targetAverageLuminance > maxY ? _gpu.compSSBO->targetAverageLuminance : maxY;
+				maxY = _gpudt.compSSBO->targetAverageLuminance > maxY ? _gpudt.compSSBO->targetAverageLuminance : maxY;
 
 				ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Outside);
 
@@ -584,8 +588,8 @@ void Engine::ui_Plots()
 
 				uint32_t maxBin = 0;
 				for (uint32_t i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-					if (_gpu.compSSBO->luminance[i] > maxBin) {
-						maxBin = _gpu.compSSBO->luminance[i];
+					if (_gpudt.compSSBO->luminance[i] > maxBin) {
+						maxBin = _gpudt.compSSBO->luminance[i];
 					}
 				}
 
@@ -598,7 +602,7 @@ void Engine::ui_Plots()
 				ImPlot::SetNextMarkerStyle(ImPlotMarker_Cross);
 
 
-				ImPlot::PlotStems("Luminance", xs.data(), _gpu.compSSBO->luminance, bins);
+				ImPlot::PlotStems("Luminance", xs.data(), _gpudt.compSSBO->luminance, bins);
 
 				uint32_t start_i = _postfx.ub.adp.lumLowerIndex;
 				uint32_t end_i = _postfx.ub.adp.lumUpperIndex;
@@ -606,7 +610,7 @@ void Engine::ui_Plots()
 				std::vector<uint32_t> xs1(end_i - start_i);
 				std::iota(xs1.begin(), xs1.end(), start_i);
 
-				std::vector<uint32_t> vals1(_gpu.compSSBO->luminance + start_i, _gpu.compSSBO->luminance + end_i);
+				std::vector<uint32_t> vals1(_gpudt.compSSBO->luminance + start_i, _gpudt.compSSBO->luminance + end_i);
 
 				ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
 				ImPlot::PlotStems("Luminance bounded", xs1.data(), vals1.data(), vals1.size());
@@ -686,7 +690,7 @@ void Engine::ui_PostFX()
 		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNodeEx("Gamma correction", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Gamma settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 		{ // Gamma correction
 			int gamma_mode = static_cast<int>(_postfx.gammaMode);
@@ -714,8 +718,8 @@ void Engine::ui_PostFX()
 		ImGui::Checkbox("Enable eye adaptation", &_postfx.enableAdaptation);
 
 		if (ImGui::TreeNodeEx("Average luminance computation", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Text("Current average luminance: %f", _gpu.compSSBO->averageLuminance);
-			ImGui::Text("Target average luminance : %f", _gpu.compSSBO->targetAverageLuminance);
+			ImGui::Text("Current average luminance: %f", _gpudt.compSSBO->averageLuminance);
+			ImGui::Text("Target average luminance : %f", _gpudt.compSSBO->targetAverageLuminance);
 
 			ImGui::Separator();
 
@@ -899,13 +903,6 @@ void Engine::ui_Viewport()
 	uint32_t usX = (uint32_t)vSize.x;
 	uint32_t usY = (uint32_t)vSize.y;
 
-	// We round up our viewport size to multiple of 4 to make mipmapping of it a lot more accurate
-	// rounding to multiple of 8, 16 etc. would be even better but that would be visible when resizing
-	/*static int step = 32;
-
-	usX = math_utils::roundUpPw2(usX, step);
-	usY = math_utils::roundUpPw2(usY, step);*/
-
 	if (_viewport.width != usX || _viewport.height != usY) {
 		// Viewport will be resized later after all rendering is finished
 		newViewportSizeX = usX;
@@ -940,7 +937,7 @@ void Engine::ui_AttachmentViewer()
 
 	ImVec2 dim = ui_ViewportTexWindowFit(_viewport.aspectRatio, true);
 
-	if (ImGui::TreeNodeEx("Images", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Single images", ImGuiTreeNodeFlags_DefaultOpen)) {
 		int i = 0;
 		for (auto& att : _postfx.att) {
 
@@ -973,7 +970,7 @@ void Engine::ui_AttachmentViewer()
 		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNodeEx("Pyramids", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Image pyramids", ImGuiTreeNodeFlags_DefaultOpen)) {
 		int i = 0;
 		for (auto& pyr : _postfx.pyr) {
 			size_t undersc = pyr.first.find_first_of("_") + 1;

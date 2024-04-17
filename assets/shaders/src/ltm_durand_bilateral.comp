@@ -11,37 +11,42 @@ layout (set = 0, binding = 0)
 #include "incl/computeUB.incl" 
 ub;
 
-layout (rgba32f, set = 0, binding = 1) uniform readonly image2D inlogLumImage;
+layout (rgba32f, set = 0, binding = 1) uniform readonly  image2D inlogLumImage;
 
 layout (rgba32f, set = 0, binding = 2) uniform writeonly image2D baseFreqImage;
 layout (rgba32f, set = 0, binding = 3) uniform writeonly image2D detailImage;
 
-#define _D ub.durand
+// Partially based on https://www.shadertoy.com/view/4dfGDH
 
 layout (local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
 void main() {
 	uvec2 dim = imageSize(inlogLumImage).xy;
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+
 	// Ignore threads that map to areas beyond the bounds of our image
 	if (gl_GlobalInvocationID.x < dim.x && gl_GlobalInvocationID.y < dim.y) {
 
         vec3 c = imageLoad(inlogLumImage, coords).rgb;
 		
-		const int kSize = (_D.bilateralRadius-1)/2;
+		const int kSize = (ub.durand.bilateralRadius-1)/2;
 
 		vec3 outColor = vec3(0);
 		float weight_sum = 0;
 
 		for (int i = -kSize; i <= kSize; ++i) {
 			for (int j = -kSize; j <= kSize; ++j) {
+
 				vec3 cc = imageLoad(inlogLumImage, coords + ivec2(i, j)).rgb;
-				float dist = (i*i + j*j) / (2 * _D.sigmaS * _D.sigmaS);
-				float intense = pow(length(c-cc), 2) / (2 * _D.sigmaR * _D.sigmaR);
+
+				float dist = (i*i + j*j) / (2 * ub.durand.sigmaS * ub.durand.sigmaS);
+
+				float intense = pow(length(c-cc), 2) / (2 * ub.durand.sigmaR * ub.durand.sigmaR);
 
 				float w = exp(-dist - intense);
 
 				outColor += w * cc;
 				weight_sum += w;
+
 			}
 		}
 

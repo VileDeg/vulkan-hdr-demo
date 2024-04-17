@@ -209,14 +209,14 @@ void Engine::loadDataToGPU()
 	{
 		for (int i = 0; i < objects.size(); i++) {
 			glm::mat4 modelMat = objects[i]->Transform();
-			_gpu.ssbo->objects[i] = {
+			_gpudt.ssbo->objects[i] = {
 				.modelMatrix = modelMat,
 				.normalMatrix = glm::mat3(glm::transpose(glm::inverse(modelMat)))
 				//.color = objects[i]->color
 			};
 
 			for (int m = 0; m < objects[i]->model->meshes.size(); ++m) {
-				_gpu.ssbo->objects[i].mat[m] = objects[i]->model->meshes[m]->gpuMat;
+				_gpudt.ssbo->objects[i].mat[m] = objects[i]->model->meshes[m]->gpuMat;
 			}
 		}
 	}
@@ -226,14 +226,14 @@ void Engine::loadDataToGPU()
 		_renderContext.sceneData.cameraPos = _camera.GetPos();
 		_renderContext.sceneData.lightFarPlane = _renderContext.zFar;
 
-		memcpy(_gpu.scene, &_renderContext.sceneData, sizeof(GPUSceneUB));
+		memcpy(_gpudt.scene, &_renderContext.sceneData, sizeof(GPUSceneUB));
 	}
 
 	{ // Load UNIFORM BUFFER of camera to GPU
 		glm::mat4 viewMat = _camera.GetViewMat();
 		glm::mat4 projMat = _camera.GetProjMat(_renderContext.fovY, _viewport.width, _viewport.height);
 
-		*_gpu.camera = {
+		*_gpudt.camera = {
 			.view = viewMat,
 			.proj = projMat,
 			.viewproj = projMat * viewMat,
@@ -251,7 +251,7 @@ void Engine::loadDataToGPU()
 		float upper_bound_pixel_num = _postfx.lumPixelUpperBound * totalPixelNum;
 
 		for (uint i = 0; i < MAX_LUMINANCE_BINS; ++i) {
-			sum_pixels += _gpu.compSSBO->luminance[i];
+			sum_pixels += _gpudt.compSSBO->luminance[i];
 
 			if (sum_pixels > lower_bound_pixel_num) {
 				lower_i = i;
@@ -260,7 +260,7 @@ void Engine::loadDataToGPU()
 		}
 
 		for (uint i = lower_i + 1; i < MAX_LUMINANCE_BINS; ++i) {
-			sum_pixels += _gpu.compSSBO->luminance[i];
+			sum_pixels += _gpudt.compSSBO->luminance[i];
 
 			if (sum_pixels > upper_bound_pixel_num) {
 				upper_i = i;
@@ -277,10 +277,10 @@ void Engine::loadDataToGPU()
 		float avg = (_viewport.width + _viewport.height) / 2;
 		_postfx.ub.durand.sigmaS = avg * 0.02; //Set spatial sigma to equal 2% of viewport size
 		
-		memcpy(_gpu.compUB, &_postfx.ub, sizeof(GPUCompUB));
+		memcpy(_gpudt.compUB, &_postfx.ub, sizeof(GPUCompUB));
 
 		// Reset luminance from previous frame
-		memset(_gpu.compSSBO->luminance, 0, sizeof(_gpu.compSSBO->luminance));
+		memset(_gpudt.compSSBO->luminance, 0, sizeof(_gpudt.compSSBO->luminance));
 	}
 }
 
@@ -780,7 +780,7 @@ void Engine::drawFrame()
 
 	// Since we have descriptor set copies for each frame in flight,
 	// we set the pointers to current frame's descriptor set buffers
-	_gpu.Reset(f);
+	_gpudt.Reset(f);
 	
 	// Needs to be part of drawFrame because drawFrame is called from onFramebufferResize callback
 	ui_Update();
@@ -840,7 +840,7 @@ void Engine::drawFrame()
 		return;
     }
     else {
-        VK_ASSERTMSG(result, "failed to present swap chain image!");
+        VK_ASSERT_MSG(result, "failed to present swap chain image!");
     }
 
 	_currentFrameInFlight = (_currentFrameInFlight + 1) % MAX_FRAMES_IN_FLIGHT;

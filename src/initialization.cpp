@@ -22,10 +22,7 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
 
 #ifndef NDEBUG
-    /*pr("Available extensions: ");
-    for (const auto& extensionProperty : availableExtensionProperties) {
-        pr("\t" << extensionProperty.extensionName);
-    }*/
+    
     pr("Enabled instance extensions: ");
     for (const auto& reqExt : requiredExtensions) {
         pr("\t" << reqExt);
@@ -94,8 +91,6 @@ static bool checkDeviceExtensionSupport(VkPhysicalDevice pd, const std::vector<c
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensionProperties(extensionCount);
     vkEnumerateDeviceExtensionProperties(pd, nullptr, &extensionCount, availableExtensionProperties.data());
-
-
 
     bool allSupported = true;
     for (const auto& de : deviceExtensions) {
@@ -203,7 +198,7 @@ void Engine::loadInstanceExtensionFunctions()
 {
     DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
 
-    if (ENABLE_VALIDATION) {
+    if (ENABLE_VALIDATION_LAYERS) {
         DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
         DYNAMIC_LOAD(vkDestroyDebugUtilsMessengerEXT, _instance);
         DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
@@ -223,7 +218,7 @@ void Engine::createInstance()
         throw std::runtime_error("There are unsupported instance extensions.");
     }
 
-    ASSERT_MSG(!ENABLE_VALIDATION || checkValidationLayerSupport(_enabledValidationLayers),
+    ASSERT_MSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
         "Not all requested validation layers are available!");
 
     VkApplicationInfo appInfo{
@@ -234,7 +229,7 @@ void Engine::createInstance()
     };
 
     VkDebugUtilsMessengerCreateInfoEXT dbgMessengerInfo;
-    if (ENABLE_VALIDATION) {
+    if (ENABLE_VALIDATION_LAYERS) {
         dbgMessengerInfo = {
             .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
@@ -249,7 +244,7 @@ void Engine::createInstance()
     VkInstanceCreateInfo instanceInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         // Pass debug messenger info to instance info to enable validation for instance creation and destruction
-        .pNext = ENABLE_VALIDATION ? &dbgMessengerInfo : nullptr,
+        .pNext = ENABLE_VALIDATION_LAYERS ? &dbgMessengerInfo : nullptr,
         .pApplicationInfo = &appInfo,
         .enabledLayerCount = (uint32_t)_enabledValidationLayers.size(),
         .ppEnabledLayerNames = _enabledValidationLayers.data(),
@@ -262,7 +257,7 @@ void Engine::createInstance()
 
     loadInstanceExtensionFunctions();
 
-    if (ENABLE_VALIDATION) {
+    if (ENABLE_VALIDATION_LAYERS) {
         VK_ASSERT(vkCreateDebugUtilsMessengerEXT(_instance, &dbgMessengerInfo, nullptr, &_debugMessenger));
 
         _deletionStack.push([&]() {
@@ -273,7 +268,7 @@ void Engine::createInstance()
 
 void Engine::createSurface()
 {
-    VK_ASSERTMSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
+    VK_ASSERT_MSG(glfwCreateWindowSurface(_instance, _window, nullptr, &_surface),
         "GLFW: Failed to create window surface");
 
     _deletionStack.push([&]() { vkDestroySurfaceKHR(_instance, _surface, nullptr); });
@@ -401,8 +396,8 @@ void Engine::createLogicalDevice()
         .pNext = &deviceFeatures,
         .queueCreateInfoCount = _graphicsQueueFamily == _presentQueueFamily ? uint32_t(1) : uint32_t(2),
         .pQueueCreateInfos = queueCreateInfos.data(),
-        .enabledLayerCount = ENABLE_VALIDATION ? (uint32_t)_enabledValidationLayers.size() : 0,
-        .ppEnabledLayerNames = ENABLE_VALIDATION ? _enabledValidationLayers.data() : nullptr,
+        .enabledLayerCount = ENABLE_VALIDATION_LAYERS ? (uint32_t)_enabledValidationLayers.size() : 0,
+        .ppEnabledLayerNames = ENABLE_VALIDATION_LAYERS ? _enabledValidationLayers.data() : nullptr,
         .enabledExtensionCount = (uint32_t)_deviceExtensions.size(),
         .ppEnabledExtensionNames = _deviceExtensions.data()
     };

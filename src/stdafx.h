@@ -1,5 +1,9 @@
 #pragma once
 
+// Precompiled header.
+// Must be included in every .cpp file. 
+// Contains commonly used headers. 
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -39,5 +43,3 @@
 #include "vk_initializers.h"
 
 #include "vk_utils.h"
-#include "cpp_utils.h"
-#include "math_utils.h"

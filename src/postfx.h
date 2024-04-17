@@ -70,10 +70,6 @@ struct PostFX {
         DURAND = 0, FUSION
     };
 
-    std::map<std::string, PostFXStage> stages;
-    std::map<std::string, Attachment> att;
-    std::map<std::string, AttachmentPyramid> pyr;
-
     PostFX();
 
     void UpdateStagesDescriptorSets(int numOfFrames, const std::vector<VkImageView>& viewportImageViews);
@@ -88,6 +84,10 @@ struct PostFX {
     bool isEffectEnabled(Effect fct);
 
     void setGammaMode(GAMMA_MODE mode);
+
+    std::map<std::string, PostFXStage> stages;
+    std::map<std::string, Attachment> att;
+    std::map<std::string, AttachmentPyramid> pyr;
 
     std::map<Effect, std::string> effectPrefixMap;
 

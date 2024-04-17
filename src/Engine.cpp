@@ -4,16 +4,16 @@
 Engine::Engine()
 {
     _enabledValidationLayers = {
-#if ENABLE_VALIDATION == 1
+#if ENABLE_VALIDATION_LAYERS == 1
         "VK_LAYER_KHRONOS_validation",
-#if ENABLE_VALIDATION_SYNC == 1
+#if ENABLE_VALIDATION_LAYERS_SYNC == 1
         "VK_LAYER_KHRONOS_synchronization2"
 #endif
 #endif
     };
 
     _instanceExtensions = {
-#if ENABLE_VALIDATION == 1
+#if ENABLE_VALIDATION_LAYERS == 1
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, // Required by dynamic rendering
@@ -100,6 +100,20 @@ void Engine::Run()
             ui_RegisterTextures();
 
             _wasViewportResized = false;
+        }
+
+        if (_measureFPS) {
+            _howLongFPSMeasured += _deltaTime;
+            ++_numFramesMeasured;
+
+            if (_howLongFPSMeasured > MEASURE_FPS_INTERVAL) {
+                float avgFPS = _numFramesMeasured / MEASURE_FPS_INTERVAL;
+                pr("[FPS] Measured for " << MEASURE_FPS_INTERVAL << "s. Average: " << avgFPS);
+
+                _measureFPS = false;
+                _howLongFPSMeasured = 0.f;
+                _numFramesMeasured = 0;
+            }
         }
     }
 }
@@ -193,12 +207,6 @@ void Engine::createAttachmentPyramid(
 
     att.tag = debugName;
     att.dim = { extent.width, extent.height };
-
-    /*att.allocImage.descInfo = {
-        .sampler = _linearSampler,
-        .imageView = att.view,
-        .imageLayout = layout
-    };*/
 
     immediate_submit([&](VkCommandBuffer cmd) {
         vk_utils::setImageLayout(cmd, att.allocImage.image, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout);
@@ -651,7 +659,7 @@ void Engine::createFrameData()
     }
 }
 
-#if ENABLE_VALIDATION == 1
+#if ENABLE_VALIDATION_LAYERS == 1
 
 void Engine::setDebugName(VkObjectType type, void* handle, const std::string name)
 {

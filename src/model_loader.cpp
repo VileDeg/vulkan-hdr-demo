@@ -385,21 +385,21 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 		// Texname empty means there's no texture
 		if (mp->diffuse_texname.length() > 0) {
 			loadModelTexture(baseDir, mp->diffuse_texname, &newModel.meshes[mesh_i]->diffuseTex);
-			newModel.meshes[mesh_i]->diffuseTex->globalIndex = modelLoaderGlobalDiffuseTexIndex;
+			newModel.meshes[mesh_i]->diffuseTex->globalIndex = _modelLoaderGlobalDiffuseTexIndex;
 			//newModel.meshes[mesh_i]->diffuseTex->type = Attachment::Type::Diffuse;
 			_diffTexInsertionOrdered.push_back(newModel.meshes[mesh_i]->diffuseTex);
 
-			++modelLoaderGlobalDiffuseTexIndex;
+			++_modelLoaderGlobalDiffuseTexIndex;
 		}
 
 		// Texname empty means there's no texture
 		if (mp->bump_texname.length() > 0) {
 			loadModelTexture(baseDir, mp->bump_texname, &newModel.meshes[mesh_i]->bumpTex);
-			newModel.meshes[mesh_i]->bumpTex->globalIndex = modelLoaderGlobalBumpTexIndex;
+			newModel.meshes[mesh_i]->bumpTex->globalIndex = _modelLoaderGlobalBumpTexIndex;
 			//newModel.meshes[mesh_i]->bumpTex->type = Attachment::Type::Bump;
 			_bumpTexInsertionOrdered.push_back(newModel.meshes[mesh_i]->bumpTex);
 
-			++modelLoaderGlobalBumpTexIndex;
+			++_modelLoaderGlobalBumpTexIndex;
 		}
 
 		// Set material lighting colors for use in Phong lighting model

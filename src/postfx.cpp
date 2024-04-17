@@ -16,8 +16,8 @@ PostFX::PostFX()
 
 	localToneMappingMode = LTM::DURAND; // 0 - Durand2002, 1 - Exposure fusion
 
-	gamma = 2.2f;
-	setGammaMode(GAMMA_MODE::INVERSE);
+	gamma = 1.0f;
+	setGammaMode(GAMMA_MODE::OFF);
 
 	enableAdaptation = false;
 	enableBloom = true;

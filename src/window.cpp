@@ -13,18 +13,12 @@ static void toggle(bool& x) {
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
     Engine& e = *reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
-    //eng._framebufferResized = true;
 
-    ///* Need to add 2 drawFrame() calls to render the image while resizing.
-    // * First call will only recreate the swapchain, second call will render the image. */
     e.recreateSwapchain();
     // Need to reset frames counter otherwise viewport image layout error occurs on window resize
     e._currentFrameInFlight = 0;
 
     e.drawFrame();
-    //eng.drawFrame();
-
-    //eng._framebufferResized = false;
 }
 
 void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -41,11 +35,13 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
             glfwSetInputMode(window, GLFW_CURSOR,
                 eng._cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
-        case GLFW_KEY_T: // Toggle tone mapping
-            toggle(eng._postfx.enableGlobalToneMapping);
-            break;
-        case GLFW_KEY_E: // Toggle exposure
-            toggle(eng._renderContext.sceneData.enableExposure);
+        case GLFW_KEY_T: // Start FPS measurment
+            if (!eng._measureFPS) {
+                eng._measureFPS = true;
+                eng._numFramesMeasured = 0;
+
+                pr("[FPS] Measurement for " << MEASURE_FPS_INTERVAL << "s. started");
+            }
             break;
         }
     }
@@ -76,7 +72,6 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
 
     if (!firstCall) {
         if (lastCursorState != eng._cursorEnabled) {
-            //PRINF("Cursor toggle.");
             firstCall = true;
         } else {
             firstCall = false;
@@ -100,14 +95,11 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
         return;
     }
 
-    //glm::ivec2 extent = { eng.__windowExtent.width, eng.__windowExtent.height };
     glm::vec2 currPos = { xpos, ypos };
 
     static float sens = 0.1f;
     glm::vec2 diff = currPos - lastPos;
     diff *= sens;
-
-    //std::cout << V2PR(currPos) << V2PR(lastPos) << V2PR(diff) << std::endl;
 
     eng._camera.MouseInput(-diff.x, diff.y);
 
@@ -123,7 +115,7 @@ void Engine::createWindow()
 
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWASSERTMSG(glfwVulkanSupported(), "GLFW: Vulkan Not Supported");
+    GLFW_ASSERT_MSG(glfwVulkanSupported(), "GLFW: Vulkan Not Supported");
 
     if (ENABLE_FULLSCREEN) {
         _window = glfwCreateWindow(FS_WIDTH, FS_HEIGHT, "Vulkan", glfwGetPrimaryMonitor(), nullptr);
@@ -132,7 +124,6 @@ void Engine::createWindow()
     }
 
     glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    //inp.cursorEnabled = false;
 
     glfwSetWindowUserPointer(_window, this); // Make window data accessible inside callbacks
 

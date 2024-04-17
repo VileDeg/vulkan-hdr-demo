@@ -62,7 +62,7 @@ void Engine::writeTextureDescriptors()
 	vkUpdateDescriptorSets(_device, writes.size(), writes.data(), 0, nullptr);
 }
 
-void Engine::createScene() //CreateSceneData data
+void Engine::createScene()
 {
 	// Reset in case we load a scene at runtime
 	cleanupScene();
@@ -176,7 +176,8 @@ void Engine::loadSkybox(std::string skyboxDirName)
 		float* fpix = stbi_loadf(path.c_str(), &texW, &texH, &texChannels, STBI_rgb_alpha);
 		pixel_ptr = fpix;
 
-		imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT; // HDR format of assets/images/skybox .hdr images
+		// HDR format of assets/images/skybox .hdr images
+		imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT; 
 		
 
 		ASSERT_MSG(pixel_ptr != nullptr, "Failed to load cubemap face " + std::to_string(i) + ", path: " + path);
@@ -236,7 +237,6 @@ void Engine::loadSkybox(std::string skyboxDirName)
 	};
 
 	// This creates entry in cache
-	//_skybox = _textures[basePath];
 	_skybox.tag = basePath;
 
 	VmaAllocationCreateInfo dimg_allocinfo = {};
@@ -284,7 +284,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 				VK_PIPELINE_STAGE_TRANSFER_BIT,
 				subresourceRange);
 
-			//copy the buffer into the image
+			// Copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, _skybox.allocImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				static_cast<uint32_t>(bufferCopyRegions.size()), bufferCopyRegions.data());
 
@@ -599,8 +599,8 @@ void Engine::cleanupScene()
 	_meshes.clear();
 	_textures.clear();
 
-	modelLoaderGlobalDiffuseTexIndex = 0;
-	modelLoaderGlobalBumpTexIndex = 0;
+	_modelLoaderGlobalDiffuseTexIndex = 0;
+	_modelLoaderGlobalBumpTexIndex = 0;
 	_diffTexInsertionOrdered.clear();
 	_bumpTexInsertionOrdered.clear();
 }

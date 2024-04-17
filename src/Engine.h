@@ -1,12 +1,19 @@
 #pragma once
 
 #ifdef NDEBUG
-#define ENABLE_VALIDATION 0
-#define ENABLE_VALIDATION_SYNC 0
-#else
-#define ENABLE_VALIDATION 1
-#define ENABLE_VALIDATION_SYNC 0
-#endif
+    #define ENABLE_VALIDATION_LAYERS 0
+    #define ENABLE_VALIDATION_LAYERS_SYNC 0
+#else // NDEBUG
+    // Enable vulkan validation layers (performance overhead)
+    #define ENABLE_VALIDATION_LAYERS 1
+
+    #if ENABLE_VALIDATION_LAYERS == 1
+        // Enable vulkan validation layers for synchronization (big performance overhead)
+        #define ENABLE_VALIDATION_LAYERS_SYNC 0
+    #else // ENABLE_VALIDATION_LAYERS
+        #define ENABLE_VALIDATION_LAYERS_SYNC 0
+    #endif // ENABLE_VALIDATION_LAYERS
+#endif // NDEBUG
 
 #include "types.h"
 #include "ui.h"
@@ -46,7 +53,7 @@ private: /* Methods used from Init directly */
     void createScene(); //CreateSceneData data
     void cleanupScene();
 
-private: /* Secondary methods */
+    /* Secondary methods */
     void loadInstanceExtensionFunctions();
     void loadDeviceExtensionFunctions();
 
@@ -120,16 +127,16 @@ private: /* Secondary methods */
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-private:
+
     void setDisplayLightSourceObjects(bool display);
 
-private:
+
     void saveScene(std::string fullScenePath);
     void loadScene(std::string fullScenePath);
 
     void loadSkybox(std::string skyboxDirName);
 
-private:  // UI
+    // UI methods
     void ui_InitImGui();
     void ui_Init();
 
@@ -168,7 +175,8 @@ private:  // UI
 
     uint32_t newViewportSizeX = 0;
     uint32_t newViewportSizeY = 0;
-private:
+
+
     void setDebugName(VkObjectType type, void* handle, const std::string name);
 
     void beginCmdDebugLabel(VkCommandBuffer cmd, std::string label);
@@ -176,16 +184,16 @@ private:
 
     void endCmdDebugLabel(VkCommandBuffer cmd);
 
-private:
+
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void cursorCallback(GLFWwindow* window, double xpos, double ypos);
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-private:
-    uint32_t modelLoaderGlobalDiffuseTexIndex = 0;
-    uint32_t modelLoaderGlobalBumpTexIndex = 0;
 
-private: 
+    uint32_t _modelLoaderGlobalDiffuseTexIndex = 0;
+    uint32_t _modelLoaderGlobalBumpTexIndex = 0;
+
+
     GLFWwindow* _window;
 
     VkInstance _instance;
@@ -218,6 +226,12 @@ private:
 
     float _frameRate = 60.f; // Updated from ImGui io.framerate
     float _deltaTime = 0.016f;
+
+    bool _measureFPS = false;
+    uint32_t _numFramesMeasured = 0;
+    float _howLongFPSMeasured = 0.f;
+
+    static constexpr float MEASURE_FPS_INTERVAL = 15.0f; // seconds
 
     bool _isInitialized = false;
     DeletionStack _deletionStack{}; // Disposing resources created during initialization
@@ -254,9 +268,9 @@ private:
 
     RenderContext _renderContext;
 
-    GPUData _gpu;
+    GPUData _gpudt;
 
-private:
+
     PFN_vkCmdPushDescriptorSetKHR vkCmdPushDescriptorSetKHR;
 
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
@@ -267,12 +281,12 @@ private:
     PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
     PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
 
-private:
+
     std::vector<const char*> _enabledValidationLayers;
     std::vector<const char*> _instanceExtensions;
     std::vector<const char*> _deviceExtensions;
 
-private:
+
     uint32_t WIDTH;
     uint32_t HEIGHT;
 

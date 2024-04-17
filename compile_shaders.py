@@ -8,8 +8,7 @@ if len(sys.argv) != 2:
 cmake_source_dir = sys.argv[1]
 os.chdir(cmake_source_dir)
 
-#glsl = "glslangValidator"
-glsl = "glslc"
+glsl = os.path.join("external", "shaderc", "glslc")
 
 base_dir = os.path.join("assets", "shaders")
 
