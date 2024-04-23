@@ -6,7 +6,7 @@
 #define COMPUTE_THREADS_XY 32
 #define FUSION_DBG_PREF std::string("LTM::FUSION")
 #define DURAND_DBG_PREF std::string("LTM::DURAND")
-#define BLOOM_DBG_PREF std::string("BLOOM")
+#define BLOOM_DBG_PREF  std::string("BLOOM")
 
 constexpr VkImageSubresourceRange FULL_COLOR_RANGE = {
 	.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -67,7 +67,6 @@ void Engine::drawObject(VkCommandBuffer cmd, const std::shared_ptr<RenderObject>
 		bool hasBump = mesh->bumpTex != nullptr;
 		GPUScenePC pc = {
 			.lightAffected = model->lightAffected,
-			//.isCubemap = obj.isSkybox,
 			.objectIndex = index,
 			.meshIndex = m,
 			.useDiffTex = hasDiff,
@@ -459,7 +458,6 @@ void Engine::exposureFusion(VkCommandBuffer& cmd, int imageIndex)
 
 	beginCmdDebugLabel(cmd, FUSION_DBG_PREF + "::SUM_BLENDED_LAPLACIANS");
 	{
-		// TODO:numMips - 1 and change upsample0.comp instead
 		int first_i = _postfx.ub.numOfViewportMips - 2;
 		uint32_t w = _viewport.width >> first_i;
 		uint32_t h = _viewport.height >> first_i;
@@ -618,7 +616,6 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 		ASSERT(MAX_LUMINANCE_BINS == 256);
 
 		cp.Stage(EXPADP, "histogram").Bind(f.cmd)
-			//.UpdateImage(_viewport.imageViews[imageIndex], 2)
 			.Dispatch(groups16.x, groups16.y, imageIndex)
 			.Barrier();
 
@@ -628,7 +625,6 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 			.Barrier();
 
 		cp.Stage(EXPADP, "eyeadp").Bind(f.cmd)
-			//.UpdateImage(_viewport.imageViews[imageIndex], 1)
 			.Dispatch(groups32.x, groups32.y, imageIndex)
 			.Barrier();
 
@@ -678,7 +674,6 @@ void Engine::postfxPass(FrameData& f, int imageIndex)
 		endCmdDebugLabel(f.cmd);
 	}
 
-	//if (_postfx.enableGammaCorrection) {
 	if (_postfx.gammaMode > GAMMA_MODE::OFF) {
 		beginCmdDebugLabel(f.cmd, "GAMMA_CORRECTION");
 
@@ -694,7 +689,8 @@ void Engine::swapchainPass(FrameData& f, int imageIndex)
 {
 	beginCmdDebugLabel(f.cmd, "SWAPCHAIN_PASS");
 
-	VkRenderingAttachmentInfo colorAttachmentInfo = vkinit::rendering_attachment_info(_swapchain.imageViews[imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo colorAttachmentInfo = 
+		vkinit::rendering_attachment_info(_swapchain.imageViews[imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	VkRenderingInfo renderingInfo = vkinit::rendering_info(&colorAttachmentInfo, nullptr, _swapchain.width, _swapchain.height);
 
@@ -807,9 +803,7 @@ void Engine::drawFrame()
 		VK_ASSERT(vkEndCommandBuffer(f.cmd));
 	}
 
-    //VkSemaphore imageAvailable[] = { f.imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    //VkSemaphore renderFinished[] = { f.renderFinishedSemaphore };
 
 	VkSubmitInfo submitInfo{
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

@@ -325,6 +325,4 @@ struct RenderContext {
 
     void UpdateLightPosition(int lightIndex, glm::vec3 newPos);
     void UpdateLightRadius(int lightIndex);
-
-    int GetClosestRadiusIndex(int radius);
 };

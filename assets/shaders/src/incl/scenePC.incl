@@ -1,6 +1,5 @@
 layout(push_constant) uniform ScenePC {
     bool lightAffected;
-    //bool isCubemap;
 	int _pad0;
 	uint objectIndex;
     uint meshIndex;

@@ -1,6 +1,17 @@
 #include "stdafx.h"
 #include "vk_utils.h"
 
+/* Based on https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
+/*
+* Assorted commonly used Vulkan helper functions
+*
+* Copyright (C) 2016-2023 by Sascha Willems - www.saschawillems.de
+*
+* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
+*/
+
+/* Initial code was modified */
+
 namespace vk_utils {
 	void setImageLayout(
 		VkCommandBuffer cmdbuffer,
@@ -205,8 +216,7 @@ namespace vk_utils {
 
 	VkBool32 getSupportedDepthFormat(VkPhysicalDevice physicalDevice, VkFormat* depthFormat)
 	{
-		/* From https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
-		// Since all depth formats may be optional, we need to find a suitable depth format to use
+		// Since all depth formats may be optional, we need to find a suitable depth format to use.
 		// Start with the highest precision packed format
 		std::vector<VkFormat> formatList = {
 			//VK_FORMAT_D32_SFLOAT_S8_UINT,
@@ -232,7 +242,6 @@ namespace vk_utils {
 
 	VkBool32 getSupportedDepthStencilFormat(VkPhysicalDevice physicalDevice, VkFormat* depthStencilFormat)
 	{
-		/* From https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
 		std::vector<VkFormat> formatList = {
 			/*VK_FORMAT_D32_SFLOAT_S8_UINT,
 			VK_FORMAT_D24_UNORM_S8_UINT,*/

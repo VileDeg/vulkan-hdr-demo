@@ -141,16 +141,14 @@ void Engine::createGraphicsPipeline(
 
 void Engine::createPipelines()
 {
-    // Find a suitable depth format
-
-    {
+    { // Create graphics pipelines
         createGraphicsPipeline(
             "general",
             "scene.vert.spv", "scene.frag.spv",
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(GPUScenePC),
             { _sceneSetLayout },
             _viewport.colorFormat, _viewport.depthFormat,
-            VK_CULL_MODE_BACK_BIT
+            VK_CULL_MODE_BACK_BIT // normal culling mode
         );
 
         createGraphicsPipeline(
@@ -159,7 +157,7 @@ void Engine::createPipelines()
             VK_SHADER_STAGE_VERTEX_BIT, sizeof(GPUScenePC),
             { _sceneSetLayout },
             _viewport.colorFormat, _viewport.depthFormat,
-            VK_CULL_MODE_FRONT_BIT
+            VK_CULL_MODE_FRONT_BIT // inverted culling mode for skybox
         );
 
         createGraphicsPipeline(
@@ -168,11 +166,12 @@ void Engine::createPipelines()
             VK_SHADER_STAGE_VERTEX_BIT, sizeof(GPUShadowPC),
             { _shadowSetLayout },
             _shadow.colorFormat, _shadow.depthFormat,
-            VK_CULL_MODE_FRONT_BIT
+            VK_CULL_MODE_FRONT_BIT // inverted culling mode for the shadow pass. 
+            // Viz. https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows
         );
     }
 
-    { // Compute 
+    { // Compute pipelines
         for (auto& stage : _postfx.stages) {
             stage.second.Create(_device, _linearSampler, stage.second.shaderName, stage.second.usesPushConstants);
         }

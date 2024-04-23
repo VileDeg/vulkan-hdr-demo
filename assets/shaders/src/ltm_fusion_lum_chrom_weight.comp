@@ -47,9 +47,9 @@ void main() {
         ivec2 coords  = ivec2(gl_GlobalInvocationID.xy);
 		vec3 inpColor = imageLoad(inImage, coords).rgb;
 
-		vec3 highlightsColor = applyGlobalToneMapping(inpColor * exp2(ub.fusion.highlightsExposure), ub.gtm.mode);
-		vec3 midtonesColor	 = applyGlobalToneMapping(inpColor, ub.gtm.mode);
-		vec3 shadowsColor	 = applyGlobalToneMapping(inpColor * exp2(ub.fusion.shadowsExposure), ub.gtm.mode);
+		vec3 highlightsColor = ACES_Narkowicz(inpColor * exp2(ub.fusion.highlightsExposure));
+		vec3 midtonesColor	 = ACES_Narkowicz(inpColor);
+		vec3 shadowsColor	 = ACES_Narkowicz(inpColor * exp2(ub.fusion.shadowsExposure));
 
 		vec3 lums  = vec3(
 			dot(highlightsColor, RGB_TO_LUM), 

@@ -21,19 +21,16 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
     std::vector<VkExtensionProperties> availableExtensionProperties(propertyCount);
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
 
-#ifndef NDEBUG
-    
     pr("Enabled instance extensions: ");
     for (const auto& reqExt : requiredExtensions) {
         pr("\t" << reqExt);
     }
-#endif // NDEBUG
 
     for (const auto& requiredExtension : requiredExtensions) {
         bool extensionFound = false;
 
-        for (const auto& extensionProperty : availableExtensionProperties) {
-            if (strcmp(requiredExtension, extensionProperty.extensionName) == 0) {
+        for (const VkExtensionProperties& props : availableExtensionProperties) {
+            if (strcmp(requiredExtension, props.extensionName) == 0) {
                 extensionFound = true;
                 break;
             }
@@ -115,8 +112,34 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
     // This function is based on the code by https://github.com/pc-john/
     // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
     // Repository: https://github.com/pc-john/VulkanTutorial/
+    /* Source Code License: Public Doman (https://unlicense.org)
 
-    // find compatible devices
+    This is free and unencumbered software released into the public domain.
+
+    Anyone is free to copy, modify, publish, use, compile, sell, or
+    distribute this software, either in source code form or as a compiled
+    binary, for any purpose, commercial or non-commercial, and by any
+    means.
+
+    In jurisdictions that recognize copyright laws, the author or authors
+    of this software dedicate any and all copyright interest in the
+    software to the public domain. We make this dedication for the benefit
+    of the public at large and to the detriment of our heirs and
+    successors. We intend this dedication to be an overt act of
+    relinquishment in perpetuity of all present and future rights to this
+    software under copyright law.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+    OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+    ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+    OTHER DEALINGS IN THE SOFTWARE.
+
+    For more information, please refer to <https://unlicense.org>*/
+
+    // Find compatible devices
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
     std::vector<VkPhysicalDevice> deviceList(deviceCount);
@@ -125,13 +148,14 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
     std::vector<std::tuple<VkPhysicalDevice, uint32_t, uint32_t, VkPhysicalDeviceProperties>> compatibleDevices;
     for (VkPhysicalDevice pd : deviceList) {
 
-        if (!checkDeviceExtensionSupport(pd, deviceExtensions))
+        if (!checkDeviceExtensionSupport(pd, deviceExtensions)) {
             continue;
+        }
 
         VkPhysicalDeviceProperties deviceProperties{};
         vkGetPhysicalDeviceProperties(pd, &deviceProperties);
 
-        // select queues for graphics rendering and for presentation
+        // Select queues for graphics rendering and for presentation
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
@@ -141,7 +165,7 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
         uint32_t presentQueueFamily = UINT32_MAX;
         for (uint32_t i = 0, c = uint32_t(queueFamilyList.size()); i < c; i++) {
 
-            // test for presentation support
+            // Test for presentation support
             VkBool32 presentationSupported = false;
             vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, &presentationSupported);
 
@@ -153,17 +177,18 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
 
             if (presentationSupported) {
 
-                // test for graphics operations support
+                // Test for graphics operations support
                 if (allQSupported) {
-                    // if presentation and graphics operations are supported on the same queue,
-                    // we will use single queue
+                    // if presentation and graphics operations are supported on the same queue, we will use single queue
 
                     compatibleDevices.emplace_back(pd, i, i, deviceProperties);
                     goto nextDevice;
-                } else
+                } else {
                     // if only presentation is supported, we store the first such queue
-                    if (presentQueueFamily == UINT32_MAX)
+                    if (presentQueueFamily == UINT32_MAX) {
                         presentQueueFamily = i;
+                    }
+                }
             } else {
                 if (allQSupported)
                     // if only graphics operations are supported, we store the first such queue
@@ -172,9 +197,10 @@ findCompatibleDevices(VkInstance instance, VkSurfaceKHR surface, const std::vect
             }
         }
 
-        if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX)
+        if (graphicsQueueFamily != UINT32_MAX && presentQueueFamily != UINT32_MAX) {
             // presentation and graphics operations are supported on the different queues
             compatibleDevices.emplace_back(pd, graphicsQueueFamily, presentQueueFamily, deviceProperties);
+        }
     nextDevice:;
     }
 
@@ -196,7 +222,9 @@ static bool checkRequiredDeviceFeaturesSupport(VkPhysicalDevice physicalDevice, 
 
 void Engine::loadInstanceExtensionFunctions()
 {
+#ifndef NDEBUG
     DYNAMIC_LOAD(vkSetDebugUtilsObjectNameEXT, _instance);
+#endif
 
     if (ENABLE_VALIDATION_LAYERS) {
         DYNAMIC_LOAD(vkCreateDebugUtilsMessengerEXT, _instance);
@@ -279,12 +307,39 @@ void Engine::pickPhysicalDevice()
     // This function is based on the code by https://github.com/pc-john/
     // From his VulkanTutorial series: https://github.com/pc-john/VulkanTutorial/tree/main/05-commandSubmission
     // Repository: https://github.com/pc-john/VulkanTutorial/
+    /* Source Code License: Public Doman (https://unlicense.org)
+
+    This is free and unencumbered software released into the public domain.
+
+    Anyone is free to copy, modify, publish, use, compile, sell, or
+    distribute this software, either in source code form or as a compiled
+    binary, for any purpose, commercial or non-commercial, and by any
+    means.
+
+    In jurisdictions that recognize copyright laws, the author or authors
+    of this software dedicate any and all copyright interest in the
+    software to the public domain. We make this dedication for the benefit
+    of the public at large and to the detriment of our heirs and
+    successors. We intend this dedication to be an overt act of
+    relinquishment in perpetuity of all present and future rights to this
+    software under copyright law.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+    OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+    ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+    OTHER DEALINGS IN THE SOFTWARE.
+
+    For more information, please refer to <https://unlicense.org>*/
+
 
     auto compatibleDevices = findCompatibleDevices(_instance, _surface, _deviceExtensions);
     ASSERT_MSG(!compatibleDevices.empty(), "No compatible devices found");
 
     // print compatible devices
-#ifndef NDEBUG
+
     pr("Enabled device extensions: ");
     for (const auto& reqExt : _deviceExtensions) {
         pr("\t" << reqExt);
@@ -295,7 +350,7 @@ void Engine::pickPhysicalDevice()
         pr("\t" << get<3>(t).deviceName << " (graphics queue: " << get<1>(t)
             << ", presentation queue: " << get<2>(t)
             << ", type: " << std::to_string(get<3>(t).deviceType) << ")");
-#endif // NDEBUG
+
 
     // choose the best device
     auto bestDevice = compatibleDevices.begin();
@@ -328,10 +383,10 @@ void Engine::pickPhysicalDevice()
     _presentQueueFamily = get<2>(*bestDevice);
     _gpuProperties = get<3>(*bestDevice);
 
-#ifndef NDEBUG
+
     pr("The GPU has a minimum buffer alignment of "
         << _gpuProperties.limits.minUniformBufferOffsetAlignment);
-#endif // NDEBUG
+
 }
 
 void Engine::loadDeviceExtensionFunctions()

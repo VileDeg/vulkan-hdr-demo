@@ -31,7 +31,6 @@ struct GPUCameraUB {
 
 struct GPUScenePC {
     GPUBool lightAffected;
-    //GPUBool isCubemap;
     int _pad0;
     uint32_t objectIndex;
     uint32_t meshIndex;
@@ -130,8 +129,6 @@ struct GPUCompSSBO {
 
     uint32_t luminance[MAX_LUMINANCE_BINS]{};
 };
-
-
 
 
 struct ExposureAdaptation {

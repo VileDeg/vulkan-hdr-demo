@@ -127,9 +127,7 @@ private: /* Methods used from Init directly */
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-
     void setDisplayLightSourceObjects(bool display);
-
 
     void saveScene(std::string fullScenePath);
     void loadScene(std::string fullScenePath);

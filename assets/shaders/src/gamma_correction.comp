@@ -1,4 +1,3 @@
-// Based on https://bruop.github.io/exposure/
 #version 460
 
 #include "incl/defs.glsl"

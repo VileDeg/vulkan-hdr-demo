@@ -23,7 +23,6 @@ PostFX::PostFX()
 	enableBloom = true;
 	enableGlobalToneMapping = false;
 	enableLocalToneMapping = false;
-	//enableGammaCorrection = true;
 
 	effectPrefixMap[EXPADP] = "expadp_";
 	effectPrefixMap[DURAND] = "durand_";

@@ -1,5 +1,16 @@
 #pragma once
 
+/* Based on https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */
+/*
+* Assorted commonly used Vulkan helper functions
+*
+* Copyright (C) 2016-2023 by Sascha Willems - www.saschawillems.de
+*
+* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
+*/
+
+/* Initial code was modified */
+
 namespace vk_utils {
 	// Create an image memory barrier for changing the layout of
 	// an image and put it into an active command buffer

@@ -36,12 +36,12 @@ Engine::Engine()
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, // To update desc sets after binding and to allow unused descriptors to remain invalid
     };
 
-     WIDTH = 1600;
-     HEIGHT = 900;
+    WIDTH = 1600;
+    HEIGHT = 900;
      
-     FS_WIDTH = 1920;
-     FS_HEIGHT = 1080;
-     ENABLE_FULLSCREEN = false;
+    FS_WIDTH = 1920;
+    FS_HEIGHT = 1080;
+    ENABLE_FULLSCREEN = false;
 }
 
 void Engine::Init()
@@ -67,9 +67,6 @@ void Engine::Init()
     createFrameData();
     createPipelines();
     
-    //loadScene(SCENE_PATH + "dobrovic_sponza.json");
-    //loadScene(SCENE_PATH + "fireplace_room.json");
-    //loadScene(SCENE_PATH + "living_room.json");
     loadScene(SCENE_PATH + "crytek_sponza.json");
     
     ui_Init();
@@ -244,16 +241,16 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     _viewport.imageViews.resize(imgCount);
 
     VkImageCreateInfo img_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = _viewport.colorFormat,
-            .extent = extent3D, // Extent to whole window
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = _viewport.colorFormat,
+        .extent = extent3D, // Extent to whole window
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
 
     VmaAllocationCreateInfo img_allocinfo = {};
@@ -261,7 +258,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
 
     for (uint32_t i = 0; i < imgCount; i++)
     {
-        //allocate and create the image
+        // Allocate and create the image
         VK_ASSERT(vmaCreateImage(_allocator, &img_info, &img_allocinfo, &_viewport.images[i].image, &_viewport.images[i].allocation, nullptr));
         setDebugName(VK_OBJECT_TYPE_IMAGE, _viewport.images[i].image, "Viewport Image " + std::to_string(i));
 
@@ -272,7 +269,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
     }
 
     { // Compute attachments
-        // As defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
+        // Number of mips as defined in Merten's matlab implementation: https://github.com/Mericam/exposure-fusion
         int numOfViewportMips = std::floor(log(std::min(extentX, extentY) / log(2)));
 
         _postfx.ub.numOfViewportMips = numOfViewportMips;
@@ -347,7 +344,7 @@ void Engine::cleanupViewportResources()
 
 void Engine::prepareShadowPass()
 {
-    _shadow.width = ShadowPass::TEX_DIM;
+    _shadow.width  = ShadowPass::TEX_DIM;
     _shadow.height = ShadowPass::TEX_DIM;
 
     bool validDepthFormat = vk_utils::getSupportedDepthFormat(_physicalDevice, &_shadow.depthFormat);
@@ -373,13 +370,13 @@ void Engine::prepareShadowPass()
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    //allocate temporary buffer for holding texture data to upload
+    // Allocate temporary buffer for holding texture data to upload
     VmaAllocationCreateInfo imgAllocinfo = {
             .usage = VMA_MEMORY_USAGE_GPU_ONLY,
             .requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     };
 
-    //create cubemap image
+    // Create cubemap image
     VK_ASSERT(vmaCreateImage(_allocator, &imageCreateInfo, &imgAllocinfo,
         &cubemap.allocImage.image, &cubemap.allocImage.allocation, nullptr));
 
@@ -592,9 +589,9 @@ void Engine::createFrameData()
         }
 
         {
-            { // Camera + scene + mat buffers descriptor set
+            { // Camera + scene + object buffers descriptor set
                 f.cameraBuffer = allocateBuffer(sizeof(GPUCameraUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-                f.sceneBuffer = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                f.sceneBuffer  = allocateBuffer(sizeof(GPUSceneUB), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
                 f.objectBuffer = allocateBuffer(sizeof(GPUSceneSSBO), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
                 // Image descriptor for the shadow cube map
@@ -623,7 +620,6 @@ void Engine::createFrameData()
             { // Shadow pass descriptor set
                 DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator)
                     .bind_buffer(0, &f.sceneBuffer.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-                    //.bind_buffer(0, &f.shadowUB.descInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
                     .bind_buffer(1, &f.objectBuffer.descInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT) // SSBO
                     .build(f.shadowPassSet, _shadowSetLayout);
                 setDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, f.shadowPassSet, "DESCRIPTOR_SET::SHADOW::FRAME_" + std::to_string(frame_i));
@@ -659,7 +655,8 @@ void Engine::createFrameData()
     }
 }
 
-#if ENABLE_VALIDATION_LAYERS == 1
+// Disable all debug labels in release mode
+#ifndef NDEBUG
 
 void Engine::setDebugName(VkObjectType type, void* handle, const std::string name)
 {
@@ -705,9 +702,9 @@ void Engine::endCmdDebugLabel(VkCommandBuffer cmd)
 
 #else
 
-void Engine::setDebugName(VkObjectType type, void* handle, const std::string name);
-void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color);
-void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label);
-void Engine::endCmdDebugLabel(VkCommandBuffer cmd);
+void Engine::setDebugName(VkObjectType type, void* handle, const std::string name) {}
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label, glm::vec4 color) {}
+void Engine::beginCmdDebugLabel(VkCommandBuffer cmd, std::string label) {}
+void Engine::endCmdDebugLabel(VkCommandBuffer cmd) {}
 
 #endif

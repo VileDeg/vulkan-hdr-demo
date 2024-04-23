@@ -6,14 +6,57 @@
 #include "tinyobj/tiny_obj_loader.h"
 
 static std::string GetBaseDir(const std::string& filepath) {
-	//From https://github.com/tinyobjloader/tinyobjloader
-	if (filepath.find_last_of("/\\") != std::string::npos)
+	// Funtion taken from https://github.com/tinyobjloader/tinyobjloader
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
+	if (filepath.find_last_of("/\\") != std::string::npos) {
 		return filepath.substr(0, filepath.find_last_of("/\\"));
+	}
 	return "";
 }
 
 static bool FileExists(const std::string& abs_filename) {
-	//From https://github.com/tinyobjloader/tinyobjloader
+	// Funtion taken from https://github.com/tinyobjloader/tinyobjloader
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
 	bool ret;
 	FILE* fp = fopen(abs_filename.c_str(), "rb");
 	if (fp) {
@@ -44,7 +87,29 @@ static std::string GetFileNameNoExt(const std::string& filepath) {
 static void computeAllSmoothingNormals(tinyobj::attrib_t& attrib,
 	std::vector<tinyobj::shape_t>& shapes)
 {
-	// From https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	// Funtion taken from https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
+
 	struct vec3 {
 		float v[3];
 		vec3() {
@@ -105,9 +170,32 @@ static void computeSmoothingShape(tinyobj::attrib_t& inattrib, tinyobj::shape_t&
 	std::vector<tinyobj::shape_t>& outshapes,
 	tinyobj::attrib_t& outattrib)
 {
-	// From https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	// Funtion taken from https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
+
 	unsigned int sgroupid = sortedids[idbegin].first;
 	bool hasmaterials = inshape.mesh.material_ids.size();
+	
 	// Make a new shape from the set of faces in the range [idbegin, idend).
 	outshapes.emplace_back();
 	tinyobj::shape_t& outshape = outshapes.back();
@@ -161,6 +249,27 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 	tinyobj::attrib_t& outattrib)
 {
 	// From https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
 	for (size_t s = 0, slen = inshapes.size(); s < slen; ++s) {
 		tinyobj::shape_t& inshape = inshapes[s];
 
@@ -189,6 +298,27 @@ static void computeSmoothingShapes(tinyobj::attrib_t& inattrib,
 bool Engine::loadModelFromObj(const std::string assignedName, const std::string path)
 {
 	// Partially based on https://github.com/tinyobjloader/tinyobjloader/blob/release/examples/viewer/viewer.cc
+	/* The MIT License (MIT)
+	Copyright (c) 2012-2019 Syoyo Fujita and many contributors.
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
 
 	Model& newModel = _models[assignedName];
 	newModel.tag = assignedName;
@@ -356,6 +486,8 @@ bool Engine::loadModelFromObj(const std::string assignedName, const std::string 
 	// Lambda for convenience
 	auto loadModelTexture = [this](std::string baseDir, std::string texName, Attachment** dst) {
 		std::string texture_filename = baseDir + texName;
+		std::replace(texture_filename.begin(), texture_filename.end(), '\\', '/');
+
 		Attachment* texture = nullptr;
 		// Only load the texture if it is not already loaded
 		if (getTexture(texture_filename) == nullptr) {

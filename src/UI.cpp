@@ -12,9 +12,31 @@
 
 #define SHOW_IMGUI_METRICS 0
 
-/* utility structure for realtime plot
- * From implot.cpp */ 
 struct RollingBuffer {
+/* utility structure for realtime plot
+ * From external/imgui/implot.cpp */ 
+ // MIT License
+
+ // Copyright (c) 2022 Evan Pezent
+
+ // Permission is hereby granted, free of charge, to any person obtaining a copy
+ // of this software and associated documentation files (the "Software"), to deal
+ // in the Software without restriction, including without limitation the rights
+ // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ // copies of the Software, and to permit persons to whom the Software is
+ // furnished to do so, subject to the following conditions:
+
+ // The above copyright notice and this permission notice shall be included in all
+ // copies or substantial portions of the Software.
+
+ // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ // SOFTWARE.
+
 	float Span;
 	ImVector<ImVec2> Data;
 	RollingBuffer() {
@@ -175,9 +197,7 @@ static void ui_PostFXPipelineButton(bool& flag, std::string name,
 
 void Engine::ui_InitImGui()
 {
-
-	// 1: create descriptor pool for IMGUI
-	// the size of the pool is very oversize, but it's copied from imgui demo itself.
+	// Size of the pool is very oversize, but it's copied from imgui demo itself.
 	VkDescriptorPoolSize pool_sizes[] = {
 		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
@@ -203,9 +223,7 @@ void Engine::ui_InitImGui()
 	VkDescriptorPool imguiPool;
 	VK_ASSERT(vkCreateDescriptorPool(_device, &pool_info, nullptr, &imguiPool));
 
-	// 2: initialize imgui library
-
-	//this initializes the core structures of imgui
+	// This initializes the core structures of imgui
 	ImGui::CreateContext();
 	ImPlot::CreateContext();
 
@@ -230,10 +248,9 @@ void Engine::ui_InitImGui()
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	//this initializes imgui for SDL
 	ImGui_ImplGlfw_InitForVulkan(_window, true);
 
-	//this initializes imgui for Vulkan
+	// This initializes imgui for Vulkan
 	ImGui_ImplVulkan_InitInfo init_info{
 		.Instance = _instance,
 		.PhysicalDevice = _physicalDevice,
@@ -253,19 +270,19 @@ void Engine::ui_InitImGui()
 
 
 
-	//execute a gpu command to upload imgui font textures
+	// Execute a command to upload imgui font textures
 	immediate_submit([&](VkCommandBuffer cmd) {
 		ImGui_ImplVulkan_CreateFontsTexture(cmd);
 		});
 
-	//clear font textures from cpu data
+	// Clear font textures from cpu data
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 
 	
 	ui_RegisterTextures();
 
-	//add the destroy the imgui created structures
+	// Destroy the imgui created structures
 	_deletionStack.push([=]() {
 		ui_UnregisterTextures();
 
@@ -331,7 +348,7 @@ void Engine::ui_Init()
 		},
 		{
 			.caption = "Plots",
-			.open = false,
+			.open = true,
 			.contents = [this]() {
 				ImGui::PushItemWidth(ImGui::GetFontSize() * -13);
 				ui_Plots();
@@ -521,7 +538,7 @@ void Engine::ui_Scene()
 void Engine::ui_Plots()
 {
 	if (_postfx.enableAdaptation) {
-		if (ImGui::TreeNodeEx("Adaptation Window")) {
+		if (ImGui::TreeNodeEx("Adaptation Window", ImGuiTreeNodeFlags_DefaultOpen)) {
 
 			ImGui::Separator();
 
@@ -546,7 +563,7 @@ void Engine::ui_Plots()
 
 			static ImPlotAxisFlags flags = ImPlotAxisFlags_NoTickLabels;
 
-			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { //, ImPlotFlags_CanvasOnly)
+			if (ImPlot::BeginPlot("##Rolling", ImVec2(-1, 200))) { 
 				static float maxY = 0;
 				maxY = _gpudt.compSSBO->targetAverageLuminance > maxY ? _gpudt.compSSBO->targetAverageLuminance : maxY;
 
@@ -628,10 +645,7 @@ void Engine::ui_PostFX()
 	if (ImGui::TreeNodeEx("Bloom", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Checkbox("Enable bloom", &_postfx.enableBloom);
 
-		//ImGui::SliderFloat("Bloom Threshold", &_postfx.ub.bloomThreshold, 0.1, 10);
 		ImGui::SliderFloat("Bloom Weight", &_postfx.ub.bloom.weight, 0.001, 0.5f);
-		//ImGui::SliderInt("Bloom Mips", &_postfx.numOfBloomMips, 1, _postfx.ub.numOfViewportMips);
-		//ImGui::DragFloat("Bloom Blur Radius Multiplier", &_postfx.ub.bloomBlurRadiusMultiplier, 0.001, 0.05f, 10.f);
 
 		ImGui::TreePop();
 	}
@@ -672,16 +686,12 @@ void Engine::ui_PostFX()
 			ImGui::DragFloat("Base Scale", &_postfx.ub.durand.baseScale, 0.001f, 0.001f, 1.f);
 			ImGui::DragFloat("Base Offset", &_postfx.ub.durand.baseOffset, 0.1f, 0.f, 100.f);
 
-			//ImGui::SliderFloat3("Normalization Color", &_postfx.ub.normalizationColor[0], 0.f, 1.f);
-
-			//ImGui::SliderFloat("Spacial sigma", &_postfx.ub.sigmaS, 3.f, 50.0f);
 			ImGui::SliderInt("Bilateral Radius", &_postfx.ub.durand.bilateralRadius, 1, 25);
 
 			ImGui::Text("Spacial sigma(2%% of viewport size) %f", _postfx.ub.durand.sigmaS);
 			ImGui::SliderFloat("Range sigma", &_postfx.ub.durand.sigmaR, 0.1f, 2.0f);
 		} else {
 			ImGui::SliderFloat("Shadows Exposure", &_postfx.ub.fusion.shadowsExposure, 0, 10);
-			//ImGui::SliderFloat("Midtones Exposure", &_postfx.ub.midtonesExposure, -10, 5);
 			ImGui::SliderFloat("Highlights Exposure", &_postfx.ub.fusion.highlightsExposure, -20, 0);
 
 			ImGui::SliderFloat("Exposedness Weight Sigma", &_postfx.ub.fusion.exposednessWeightSigma, 0.01, 10);
@@ -706,9 +716,6 @@ void Engine::ui_PostFX()
 				_postfx.setGammaMode(static_cast<GAMMA_MODE>(gamma_mode));
 			}
 
-			/*ImGui::Checkbox("Enable Gamma Correction", &_postfx.enableGammaCorrection);
-
-			ImGui::SliderFloat("Gamma", &_postfx.ub.gamma.gamma, 0.5f, 3.f);*/
 		}
 
 		ImGui::TreePop();
@@ -727,9 +734,6 @@ void Engine::ui_PostFX()
 			ImGui::SliderFloat("Max log2 luminance", &_postfx.ub.adp.maxLogLum, 1.f, 20.f);
 
 			ImGui::SliderFloat("Histogram bin index weight", &_postfx.ub.adp.weights.x, 0.f, 2.f);
-			//ImGui::SliderFloat("Weight Y", &_renderContext.cmp.weights.y, 0.f, 255.f);
-			/*ImGui::SliderFloat("Awaited luminance (bin)", &_postfx.ub.adp.weights.z, 0.f, 100.f);
-			ImGui::SliderFloat("Awaited luminance weight", &_postfx.ub.adp.weights.w, 0.f, 5.f);*/
 
 			ImGui::TreePop();
 		}
@@ -744,8 +748,6 @@ void Engine::ui_PostFX()
 			ImGui::SliderFloat("Upper bound", &_postfx.lumPixelUpperBound, 0.55f, 1.f);
 
 			ImGui::Separator();
-			// ImGui::Text("Total pixels: %u", _postfx.ub.adp.totalPixelNum);
-			//ImGui::Text("Histogram bounds: %f %f", _postfx.lumPixelLowerBound, _postfx.lumPixelUpperBound);
 			ImGui::Text("Lower bound bin: %u", _postfx.ub.adp.lumLowerIndex);
 			ImGui::Text("Upper bound bin: %u", _postfx.ub.adp.lumUpperIndex);
 
@@ -924,8 +926,6 @@ void Engine::ui_PostFXPipeline()
 	ImGui::SameLine();
 
 	ui_PostFXPipelineButton(_postfx.enableLocalToneMapping, "Local Tone Mapping", &_postfx.enableGlobalToneMapping, false);
-
-	/*ui_PostFXPipelineButton(_postfx.enableGammaCorrection, "Gamma Correction");*/
 }
 
 void Engine::ui_AttachmentViewer()
@@ -1016,6 +1016,7 @@ void Engine::ui_Controls()
 	ImGui::Text("Foward, Left, Back, Right: W A S D");
 	ImGui::Text("Rotate Camera: Mouse movement");
 	ImGui::Text("Toggle cursor: C");
+	ImGui::Text("Measure FPS: T");
 	ImGui::Text("Close Application: Esc");
 }
 
@@ -1029,6 +1030,29 @@ void Engine::ui_StatusBar()
 	float height = ImGui::GetFrameHeight();
 
 	// Function from imgui_internal.h. Issue: https://github.com/ocornut/imgui/issues/3518
+	/*The MIT License (MIT)
+
+	Copyright (c) 2014-2023 Omar Cornut
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+	*/
+
 	if (ImGui::BeginViewportSideBar("##SecondaryMenuBar", NULL, ImGuiDir_Down, height, window_flags)) {
 		if (ImGui::BeginMenuBar()) {
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);

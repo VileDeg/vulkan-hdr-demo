@@ -133,9 +133,8 @@ void Engine::createScene()
 			RenderObject{
 				.tag = "main",
 				.model = getModel("main"),
-				.pos = _renderContext.modelPos, //glm::vec3(0, -5.f, 0)
+				.pos = _renderContext.modelPos,
 				.rot = glm::vec3(0, 90, 0),
-				//.scale = glm::vec3(15.f)
 				.scale = glm::vec3(_renderContext.modelScale)
 			}
 		));
@@ -150,8 +149,19 @@ void Engine::createScene()
 
 void Engine::loadSkybox(std::string skyboxDirName)
 {
-	// Partially based on Sascha Willems' cubemap demo: 
+	// Function is partially based on Sascha Willems' cubemap demo: 
 	// https://github.com/SaschaWillems/Vulkan/blob/master/examples/texturecubemap/texturecubemap.cpp
+	/*
+	* Vulkan Example - Cube map texture loading and displaying
+	*
+	* This sample shows how to load and render a cubemap. A cubemap is a textures that contains 6 images, one per cube face.
+	* The sample displays the cubemap as a skybox (background) and as a reflection on a selectable object
+	*
+	* Copyright (C) 2016-2023 by Sascha Willems - www.saschawillems.de
+	*
+	* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
+	*/
+
 	_skyboxDisposeStack.flush();
 
 	constexpr const char* suff[6] = { "px", "nx", "py", "ny", "pz", "nz" };
@@ -188,8 +198,8 @@ void Engine::loadSkybox(std::string skyboxDirName)
 
 			imageSize = (VkDeviceSize)baseTexW * (VkDeviceSize)baseTexH * 4 * 4;
 
-			VkDeviceSize bufferSize = imageSize * 6;
 			// Allocate temporary buffer for holding texture data to upload
+			VkDeviceSize bufferSize = imageSize * 6;
 			stagingBuffer = allocateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 		} else {
 			// Make sure all the faces of cubemap have exactly the same dimensions and color channels
@@ -236,7 +246,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
 
-	// This creates entry in cache
+	// This creates entry in cache!
 	_skybox.tag = basePath;
 
 	VmaAllocationCreateInfo dimg_allocinfo = {};
@@ -247,7 +257,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
-			// Setup buffer copy regions for each face including all of its miplevels
+			// Setup buffer copy regions for each face including all of its mip levels
 			std::vector<VkBufferImageCopy> bufferCopyRegions;
 			VkDeviceSize offset = 0;
 
@@ -317,7 +327,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 
 	// Write cubemap to descriptor set
 	_skybox.allocImage.descInfo = {
-		.sampler = _linearSampler,//cubemapSampler,
+		.sampler = _linearSampler, 
 		.imageView = _skybox.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
@@ -342,7 +352,29 @@ void Engine::loadSkybox(std::string skyboxDirName)
 
 Attachment* Engine::loadTextureFromFile(const char* path)
 {
-	/* Based on https://github.com/vblanco20-1/vulkan-guide */
+	/* Function is based on https://github.com/vblanco20-1/vulkan-guide */
+	/* The MIT License (MIT)
+
+	Copyright (c) 2016 Patrick Marsceill
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in
+	all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	THE SOFTWARE.
+	*/
 
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -572,7 +604,8 @@ void Engine::saveScene(std::string sceneFullPath)
 }
 
 
-void Engine::createSamplers() {
+void Engine::createSamplers() 
+{
 	// Create samplers for textures
 	VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_LINEAR);
 	VkSamplerCreateInfo samplerInfo1 = vkinit::sampler_create_info(VK_FILTER_NEAREST);

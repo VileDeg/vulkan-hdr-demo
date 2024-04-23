@@ -59,8 +59,8 @@ private:
 
     glm::vec3 _pos{0.f, 0.f, 0.f};
 
-    float _yaw{90.f}; //rotation around y axis
-    float _pitch{}; //rotation around x axis
+    float _yaw{90.f}; // Rotation around y axis
+    float _pitch{}; // Rotation around x axiss
 
     float _movSpeed{ 10.f };
     float _rotSpeed{ 1.f };

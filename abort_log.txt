@@ -1,0 +1,24 @@
+Log entry: 
+Time: 23:37:40
+Date: 22/4/2024
+Message: 
+	[main15] 
+
+Log entry: 
+Time: 23:40:9
+Date: 22/4/2024
+Message: 
+	[main 15 ] 
+
+Log entry: 
+Time: 23:45:17
+Date: 22/4/2024
+Message: 
+	ASSERTION FAILED at [C:\dev\Vulkan\vulkan-hdr-demo\src\main.cpp main 15]
+
+Log entry: 
+Time: 23:46:58
+Date: 22/4/2024
+Message: 
+	ASSERTION FAILED at [C:\dev\Vulkan\vulkan-hdr-demo\src\main.cpp main 15]
+

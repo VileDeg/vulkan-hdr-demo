@@ -85,10 +85,9 @@ void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)
     static glm::vec2 lastPos{};
 
     if (firstCall) {
-        /**
-        *  If cursor was just enabled simply set lastPos to current pos.
-        *  This is needed to prevent camera from cursor from jumping from old position to the new one instantly.
-        */
+        // If cursor was just enabled simply set lastPos to current pos.
+        // This is needed to prevent camera from cursor from jumping from old position to the new one instantly.
+        
         firstCall = false;
         lastPos = { xpos, ypos };
         lastCursorState = eng._cursorEnabled;

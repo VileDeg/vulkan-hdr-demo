@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.24)
+cmake_minimum_required (VERSION 3.22)
 project(vulkan-hdr-demo)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,7 +15,7 @@ set(EXNAME "vkdemo")
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
 
 # Add ImGUI source files
-set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
+set(IMGUI_DIR  ${PROJECT_SOURCE_DIR}/external/imgui)
 set(IMPLOT_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
 
 set(SRC_FILES
@@ -37,27 +37,31 @@ set(SRC_FILES
     ${IMPLOT_DIR}/implot_items.cpp
 )
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "./")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "./")
+
 add_executable (${EXNAME} ${SRC_FILES})
 
-set_target_properties(
-    ${EXNAME} PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_target_properties(${EXNAME} PROPERTIES 
+    DEBUG_OUTPUT_NAME "${EXNAME}-debug"
+    # RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
 
 target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 
 target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/external)
 
 target_link_libraries(${EXNAME} 
-    ${Vulkan_LIBRARIES}   glfw
+    ${Vulkan_LIBRARIES} 
+    glfw
 )
 
 set(SHADER_DIR "${PROJECT_SOURCE_DIR}/assets/shaders/src")
-set(SPV_DIR "${PROJECT_SOURCE_DIR}/assets/shaders/bin")
+set(SPV_DIR    "${PROJECT_SOURCE_DIR}/assets/shaders/bin")
 
 set(SHADER_SRC ${SPV_DIR}/*)
 
-#Compile shaders in assets/shaders folder
-
+# Compile shaders in assets/shaders folder
 add_custom_target(glsl_shaders ALL
   DEPENDS ${SHADER_SRC}
   COMMENT "Shaders to compile"
@@ -65,8 +69,18 @@ add_custom_target(glsl_shaders ALL
 
 add_dependencies(${EXNAME} glsl_shaders)
 
-add_custom_command(
-    TARGET glsl_shaders
-    COMMAND python ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
-    COMMENT "Compiling shaders"
-)
+# Find Python
+find_package(Python COMPONENTS Interpreter)
+
+if(Python_FOUND)
+    message(STATUS "Python found: ${Python_EXECUTABLE}")
+
+    # Compile shaders
+    add_custom_command(
+        TARGET glsl_shaders
+        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+        COMMENT "Compiling shaders"
+    )
+else()
+    message(WARNING "Python not found, custom command will not be executed.")
+endif()

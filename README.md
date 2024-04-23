@@ -5,57 +5,73 @@
 </p>
 
 ## About
-This repository contains a 3D renderer, that uses Vulkan API and is written in C++.
+This repository contains a 3D renderer Vulkan demo application for Windows OS. It serves purpose to demonstrate several HDR rendering techniques such as: uniform (global) and spatially-variany tone mapping, dynamic exposure adaptaion, exposure fusion and bloom.
 
-**Note: Project is still actively being worked on, thus it may contain a lot of commented code sections, lack appropriate comments and can be unintuitive to use**.
+The project is written in C++20 and uses ImGUI for the user interface.
 
 ### Current functionality:
 * Camera movement `W, A, S, D, Shift(down), Space(up)`
 * Model loading: `.obj` with `materials` and `diffuse textures`.
-* Texture loading: `RGBA`.
-* HDR skybox cubemap loading: `32-bit float`.
-* Phong lighting model: `several point lights with configurable position, intensity, attenuation etc`.
-* Several global tone mapping algorithms: `Reinhard`, `ACES`, `Uncharted2` etc.
+* Several global tone mapping algorithms: `Reinhard`, `ACES`, `Uncharted2`.
 * Dynamic exposure adaptation: `using luminance histogram`.
+* `Exposure Fusion`.
+* Smooth Bloom effect: `computed by blurring the image on multiple mip levels and them recursively upsapmpling`.
 * UI for scene configuration: `ImGui`.
 * Dynamic shadows: `omnidirectional shadow mapping`.
 * Scene Save/Load: `JSON format`.
+* HDR skybox cubemap loading: `32-bit float`.
+* Phong lighting model: `several point lights with configurable position, intensity, attenuation etc`.
 * Bump mapping: `bump maps`.
+* etc.
 
 ## Compilation
-For cross-platform compilation it uses CMake build system. Platforms currently supported: `Windows, Linux`.
+For the project configuration CMake build system is used. Platforms currently supported: `Windows`.
+
+* To make things easy, there is a python script `build-n-run.py` that will configure, build and run the application.
 
 ### Configure the project with CMake:
 ```
-cmake -S . -B build
+cmake -S . -B .
 ```
+
+* `CMake will try to find Vulkan on your system`. For configuration to be successful, it is essential that you have Vulkan installed on your system. 
 
 ### Compile:
 
-On Linux:
-```
-cd build
-make
-```
 On Windows:
 
-Open generated Visual Studio solution and build the project or open `x64 Native Tools Command Prompt for VS 20XX` and run:
-```
-msbuild vulkan-hdr-demo.sln
-```
-then to run:
-```
-build\Debug\vkdemo.exe
-```
-But be aware that the solution or executable name may change in future.
+Open generated Visual Studio `solution` and build the project or use `msbuild.exe` to build the project from command line. 
 
-All shaders are compiled automatically when the project is built using the python script `compile_shaders.py`.
+* If `msbuild` is not in your PATH variable or you don't know where msbuild is located on your device, try running it from `x64 Native Tools Command Prompt for VS 20XX`. Also, usually `MsBuild.exe` is located at path: `C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MsBuild.exe`
+
+Build the program in release mode:
+```
+msbuild vulkan-hdr-demo.sln /t:Build /p:Configuration=Release
+```
+
+* But be aware that the solution or executable name might change in the future.
+
+* All shaders are compiled automatically every time the project is built using the python script `compile_shaders.py`. Pay attention (!) to the build output to see if there are any `errors` when shaders are built. 
+If the script fails try to run it manually or manually compile the shaders using `glslc` at `.\external\shaderc\glslc.exe`. 
 ## Usage
-The compiled executable is `vkdemo` or `vkdemo.exe`.
 
-**You must run it from `root folder` otherwise the paths to assets will be wrong!**
+You can run the program from command line, or from Visual Studio. 
 
-You can run it from command line, or on Windows also from Visual Studio.
+To execute run:
+```
+.\vkdemo.exe
+```
+
+* **You must run the application executable from the `project root folder` otherwise the working directory will be invalid and the program will fail to open the assets!** Make sure to run the executable from the same folder, where `assets/` are located!
+* You can also supply the `working directory` with command line argument, see section below.
+
+### Arguments:
+
+```
+vkdemo <WORK_DIR>
+
+    WORK_DIR - if this OPTIONAL argument is supplied, the working directory will be set to <WORK_DIR>. Otherwise the working directory is by default set to the folder from which the executable was run. 
+```
 
 ## Libraries/Resources Used
 ### Libraries
@@ -70,7 +86,7 @@ You can run it from command line, or on Windows also from Visual Studio.
 * [JSON for Modern C++](https://github.com/nlohmann/json)
 
 ### Web pages
-As this is mainly a personal learning project, a lot of resources where used to learn Vulkan API.
+A lot of resources where used to learn Vulkan API.
 
 Here are the main ones:
 * [vulkan-guide by vblanco20-1](https://vkguide.dev/)
@@ -78,19 +94,19 @@ Here are the main ones:
 * [Vulkan Tutorial by Alexander Overvoorde](https://vulkan-tutorial.com/)
 * [LearnOpenGL by Joey de Vries](https://learnopengl.com/)
 
-Following are the repositories from which some code was taken as-is or with modifications. Authors are also attributed in source code:
+Following are the repositories from which some code was taken as-is or with modifications. Authors are also attributed in the source code:
 * [vulkan-guide repository by vblanco20-1](https://github.com/vblanco20-1/vulkan-guide)
 * [VulkanTutorial repository by Jan Pečiva](https://github.com/pc-john/VulkanTutorial)
 * [Vulkan examples by Sascha Willems](https://github.com/SaschaWillems/Vulkan)
 ### Assets
-Assets used and information about them can be found in `assets` folder and subfolders.
+Assets used and information about them can be found in `assets/` folder and subfolders.
 
 Usually each model's folder contains some `(LICENSE|copyright).txt` file.
 
 ### Application screenshots
 
-![dobrovic](fig/dobrovic-sponza.png)
+![ui2](fig/att_viewer_fusion_1.jpg)
 
-![crytek](fig/crytek-sponza.png)
+![ui3](fig/drachenfels_crytek_sponza_fusion_no_bloom_FUSION_OUTPUT.jpg)
 
-![sibenik](fig/sibenik.png)
+![ui4](fig/crytek-sponza-bloom-ltm-durand.jpg)
