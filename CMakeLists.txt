@@ -7,19 +7,30 @@ IF (NOT CMAKE_VERSION VERSION_LESS 3.7.0)
 	find_package(Vulkan)
 ENDIF()
 
-IF (NOT Vulkan_FOUND)
-    set(Vulkan_LIBRARIES    "${CMAKE_SOURCE_DIR}/libs/vulkan/vulkan-1.lib")
-    set(Vulkan_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external")
-	find_library(Vulkan_LIBRARY NAMES vulkan-1 vulkan PATHS ${CMAKE_SOURCE_DIR}/libs)
-	IF (Vulkan_LIBRARY)
-		set(Vulkan_FOUND ON)
-		MESSAGE("Vulkan library not found on this device, using bundled Vulkan library version ${Vulkan_LIBRARIES}")
-	ENDIF()
+IF (UNIX AND NOT APPLE)
+	set(LINUX TRUE)
 ENDIF()
 
-IF (WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
-ENDIF()
+IF(WIN32)
+    IF (NOT Vulkan_FOUND)
+        MESSAGE("Looking for bundled version in ${CMAKE_SOURCE_DIR}/libs")
+        find_library(Vulkan_LIBRARY NAMES vulkan-1 vulkan PATHS ${CMAKE_SOURCE_DIR}/libs/vulkan)
+        IF (Vulkan_LIBRARY)
+            set(Vulkan_FOUND ON)
+            MESSAGE("Vulkan library not found on this device, using bundled Vulkan library version ${Vulkan_LIBRARIES}")
+        ENDIF()
+    ENDIF()
+ELSEIF(LINUX)
+    IF (NOT Vulkan_FOUND)
+		find_library(Vulkan_LIBRARY NAMES vulkan HINTS "$ENV{VULKAN_SDK}/lib" "${CMAKE_SOURCE_DIR}/libs/vulkan" REQUIRED)
+		IF (Vulkan_LIBRARY)
+			set(Vulkan_FOUND ON)
+			MESSAGE("Using bundled Vulkan library version")
+		ENDIF()
+	ENDIF()
+ELSEIF(APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_MACOS_MVK -DVK_EXAMPLE_XCODE_GENERATED")
+ENDIF(WIN32)
 
 IF (NOT Vulkan_FOUND)
 	message(FATAL_ERROR "Could not find Vulkan library!")
@@ -80,11 +91,10 @@ target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 target_include_directories(${EXNAME} PUBLIC 
     ${SRCDIR} 
     ${PROJECT_SOURCE_DIR}/external
-    ${Vulkan_INCLUDE_DIRS} 
 )
 
 target_link_libraries(${EXNAME} 
-    ${Vulkan_LIBRARIES} 
+    ${Vulkan_LIBRARY} 
     glfw
 )
 

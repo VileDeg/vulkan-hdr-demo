@@ -45,12 +45,17 @@
 #ifdef NDEBUG
     #define TRAP(_msg) do{ HTRAP(_msg); EXIT(1); } while(0)
 #else
-    #ifdef _MSC_VER
-        #define TRAP(_msg) do{ HTRAP(_msg); __debugbreak(); EXIT(1); } while(0)
+    #ifdef _WIN32
+        #ifdef _MSC_VER
+            #define TRAP(_msg) do{ HTRAP(_msg); __debugbreak(); EXIT(1); } while(0)
+        #else
+            #include <intrin.h>
+            #define TRAP(_msg) do{ HTRAP(_msg); __debugbreak(); EXIT(1); } while(0)
+        #endif // _MSC_VER
     #else
-        #include <intrin.h>
-        #define TRAP(_msg) do{ HTRAP(_msg); __debugbreak(); EXIT(1); } while(0)
-    #endif // _MSC_VER
+        #include <csignal>
+        #define TRAP(_msg) do { HTRAP(_msg); std::raise(SIGTRAP); EXIT(1); } while (0)
+    #endif // _WIN32
 #endif // NDEBUG
 //////////////////////////////////////////////////////////////////////////////////////////
 
