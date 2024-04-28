@@ -66,7 +66,7 @@ void main() {
 
 		float lum = dot(c, RGB_TO_LUM);
 
-#if   DURAND_DETAIL_ABS == 0
+#if   DURAND_DETAIL_ABS == 0 // <-- See defs.glsl
 		vec3 detail = lum - base;
 #elif DURAND_DETAIL_ABS == 1
 		vec3 detail = abs(lum - base);

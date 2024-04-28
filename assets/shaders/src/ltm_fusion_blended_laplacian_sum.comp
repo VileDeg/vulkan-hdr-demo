@@ -23,7 +23,7 @@ void main() {
 
 	if (coords.x < dim.x && coords.y < dim.y) {
 		vec4 sum = imageLoad(blendedLaplacianSum[mip_i], coords);
-#if   FUSION_BLUR_MODE == 0
+#if   FUSION_BLUR_MODE == 0 // <-- See defs.glsl
 		vec4 blurred = f3x3tent(inUpsampledBlendedLaplacian[mip_i], coords);
 #elif FUSION_BLUR_MODE == 1
 		vec4 blurred = f9x9tent(inUpsampledBlendedLaplacian[mip_i], coords);

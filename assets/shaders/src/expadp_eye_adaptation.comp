@@ -44,11 +44,9 @@ void main() {
 
         float avg = ssbo.averageLuminance;
 #if 1        
-        //float lum = dot(outColor, RGB_TO_LUM);
         float key = 1.03 - 2 / (log(avg+1)+2);
 
-        // float compensation = 0.0;
-        float exposure = key / (avg); // - compensation
+        float exposure = key / (avg);
         outColor *= exposure;
 #else        
         outColor = outColor / (9.6 * ssbo.averageLuminance + 0.0001);

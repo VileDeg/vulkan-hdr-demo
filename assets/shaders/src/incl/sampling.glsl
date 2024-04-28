@@ -1,3 +1,7 @@
+/*
+* Manually implemented different sampling methods for image2D
+*/
+
 // 2x2 billinear filtering for image2D
 #define bilinear(img, tc) \
     mix( \
@@ -38,7 +42,7 @@
         fract( (tc).y ) \
     )
 
-// wut ?
+// what ?
 #define quadlinear(img, tc) (\
     (\
         bilinear(img, vec2(tc) + vec2(-0.5, -0.5)) + \

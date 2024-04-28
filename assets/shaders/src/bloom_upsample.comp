@@ -31,7 +31,7 @@ void main() {
 
 		ivec2 coordsHigher = coords >> 1;
 		
-	#if	  BLOOM_BLUR_MODE == 0 
+	#if	  BLOOM_BLUR_MODE == 0 // <-- See defs.glsl
 		vec4 px = f3x3tent(image[mip_i+1], coordsHigher);
 	#elif BLOOM_BLUR_MODE == 1
 		vec4 px = f5x5tent(image[mip_i+1], coordsHigher);

@@ -35,7 +35,11 @@ void main()
     vec2 bumpUV = uv;
 
     if (sd.enableBumpMapping && pc.useBumpTex) {
-        bumpMapping(bump[pc.bumpTexIndex], sd.bumpStep, mat3(ssbo.objects[pc.objectIndex].normalMatrix), sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV);
+        bumpMapping(
+            bump[pc.bumpTexIndex], sd.bumpStep, 
+            mat3(ssbo.objects[pc.objectIndex].normalMatrix), 
+            sd.bumpStrength, sd.bumpUVFactor, bumpNormal, bumpUV
+        );
     }
 
     if (sd.showNormals) {

@@ -33,7 +33,7 @@ void main()
 	mat4 modelMat = ssbo.objects[gl_BaseInstance].model;
 	
 	fragPos = modelMat * vec4(vPosition, 1.0);	
-	//lightPos = ubo.lightPos.xyz; 
+	
     lightPos = sd.lights[pc.lightIndex].pos;
 	
 	gl_Position = sd.lightProjMat * pc.view * 

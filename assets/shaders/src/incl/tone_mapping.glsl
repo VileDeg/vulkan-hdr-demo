@@ -6,6 +6,8 @@ vec3 Reinhard(vec3 color) {
 
 float sRGBtoLin(float colorChannel) {
 	// From: https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
+    // CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+    // 
 	// Send this function a decimal sRGB gamma encoded color value
 	// between 0.0 and 1.0, and it returns a linearized value.
 
@@ -46,6 +48,7 @@ vec3 Uncharted2Filmic(vec3 v) {
 
 vec3 ACES_Narkowicz(vec3 x) {
 	/* From https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/ */
+    // free to use under public domain CC0 or MIT license
 	float a = 2.51;
 	float b = 0.03;
 	float c = 2.43;
@@ -56,7 +59,22 @@ vec3 ACES_Narkowicz(vec3 x) {
 }
 
 
+/////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
+// 
 // Based on https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
+
+//=================================================================================================
+//
+//  Baking Lab
+//  by MJP and David Neubelt
+//  http://mynameismjp.wordpress.com/
+//
+//  All code licensed under the MIT license
+//
+//=================================================================================================
+
+// (!) Initial code was modified
 
 // sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
 const mat3 ACESInputMat = mat3(
@@ -94,6 +112,9 @@ vec3 ACES_Hill(vec3 color)
     return color;
 }
 
+/////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
+
 float howCloseToHalf(float val) {
     float sigma = 0.2;
     return exp(-pow(val-0.5, 2) / 2*pow(sigma,2));
@@ -108,7 +129,6 @@ vec3 applyGlobalToneMapping(vec3 col, int mode) {
 	vec3 outCol = col;
 	switch (mode) {
         case 0: outCol = ReinhardExtended(col); break;
-        //case 1: outCol = Reinhard(col); break;
         case 1: outCol = Uncharted2Filmic(col); break;
         case 2: outCol = ACES_Narkowicz(col); break;
         case 3: outCol = ACES_Hill(col); break;

@@ -36,18 +36,17 @@ void main() {
 		float detail = imageLoad(inDetailImage, coords).r;
 		
 		float offsetBase = (base + ub.durand.baseOffset) * ub.durand.baseScale;
-		//float offsetBase = base * ub.baseScale + ub.baseOffset;
 		
 		float lumReconstruct = offsetBase + detail;
 
-#if DURAND_LOG_LUM == 1
+#if DURAND_LOG_LUM == 1 // <-- See defs.glsl
 		// Bring luminance back to linear
 		lumReconstruct = exp2(lumReconstruct);
 		lumReconstruct -= 1;
 		lumReconstruct /= DURAND_LOG_LUM_RES;
 #endif
 		// Reconstruct color from luminance
-#if DURAND_CONVERT_LAB == 0
+#if DURAND_CONVERT_LAB == 0 // <-- See defs.glsl
 		vec3 outColor = lumReconstruct * chrom;
 #else
 		// X corresponds to luminance in Lab space
@@ -61,7 +60,7 @@ void main() {
 		outColor *= fac / maxf;
 #endif
 
-#if DURAND_APPLY_GTMO == 1
+#if DURAND_APPLY_GTMO == 1 // <-- See defs.glsl
 		outColor = applyGlobalToneMapping(outColor, ub.toneMappingMode);
 #endif
 

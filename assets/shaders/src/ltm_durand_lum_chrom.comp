@@ -27,16 +27,15 @@ void main() {
 
 		float lum = dot(inpColor, RGB_TO_LUM);
 
-#if DURAND_CONVERT_LAB == 0
+#if DURAND_CONVERT_LAB == 0 // <-- See defs.glsl
 		vec3 chrom = inpColor / lum;
 #else
 		vec3 chrom = rgb2lab(inpColor);
 #endif
 
-#if DURAND_LOG_LUM == 1
+#if DURAND_LOG_LUM == 1 // <-- See defs.glsl
 		lum = lum * DURAND_LOG_LUM_RES + 1;
 		lum = log2(lum);
-		//lum = (lum-1) / 255;
 #endif
 		
 		imageStore(logLumImage, coords, vec4(vec3(lum), 1.0));
