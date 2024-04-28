@@ -1,5 +1,9 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
+#include "vk_initializers.h"
+#include "vk_utils.h"
+
 
 Engine::Engine()
 {

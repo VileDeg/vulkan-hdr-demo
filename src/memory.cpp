@@ -1,5 +1,7 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
+#include "vk_initializers.h"
 
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>

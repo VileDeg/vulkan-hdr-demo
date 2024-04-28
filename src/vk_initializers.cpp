@@ -25,6 +25,7 @@ THE SOFTWARE.*/
 /* Initial code was modified */
 
 #include "stdafx.h"
+#include "defs.h"
 #include "vk_initializers.h"
 
 namespace vkinit {

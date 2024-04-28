@@ -1,5 +1,7 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
+
 #include "vulkan/vk_enum_string_helper.h"
 
 struct SwapchainPropertiesSupport {

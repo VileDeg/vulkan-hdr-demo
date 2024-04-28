@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "defs.h"
 
 #include "engine.h"
 
@@ -11,6 +12,9 @@ int main(int argc, char* argv[])
         std::filesystem::current_path(work_dir); 
         pr("Setting working directory to: " << work_dir << "\n\n");
     }
+
+
+    ASSERT_MSG(false, "CRASH_TEST");
 
     Engine engine;
 

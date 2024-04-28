@@ -1,5 +1,7 @@
 #pragma once
 
+#include "defs.h"
+
 struct ComputeStageImageBinding {
     std::vector<VkImageView> views;
     uint32_t binding;

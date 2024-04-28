@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
 
 #include "types.h"

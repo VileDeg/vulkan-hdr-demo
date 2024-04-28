@@ -1,9 +1,7 @@
 #include "abort_log.h"
 
 void dump_to_log_file(std::string message) {
-    std::string log_file_name = "ABORT_LOG.txt";
-
-    std::ofstream log_file(log_file_name, std::ios::app);
+    std::ofstream log_file(STR_ABORT_LOG_FILENAME, std::ios::app);
 
     if (log_file.is_open()) {
         log_file << "Log entry: " << std::endl;
@@ -17,7 +15,7 @@ void dump_to_log_file(std::string message) {
         log_file << "\t" << message << std::endl;
         log_file << std::endl;
     } else {
-        std::cerr << "Failed to open log file: " << log_file_name << std::endl;
+        std::cerr << "Failed to open log file: " << STR_ABORT_LOG_FILENAME << std::endl;
     }
 
     log_file.close();

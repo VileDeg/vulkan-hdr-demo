@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "vk_utils.h"
 
 /* Based on https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.cpp */

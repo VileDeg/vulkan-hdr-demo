@@ -1,6 +1,8 @@
 #include "stdafx.h"
-
+#include "defs.h"
 #include "engine.h"
+#include "vk_utils.h"
+#include "vk_initializers.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"

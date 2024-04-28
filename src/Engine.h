@@ -1,26 +1,27 @@
 #pragma once
 
-#ifdef NDEBUG
-    #define ENABLE_VALIDATION_LAYERS 0
-    #define ENABLE_VALIDATION_LAYERS_SYNC 0
-#else // NDEBUG
-    // Enable vulkan validation layers (performance overhead)
-    #define ENABLE_VALIDATION_LAYERS 1
-
-    #if ENABLE_VALIDATION_LAYERS == 1
-        // Enable vulkan validation layers for synchronization (big performance overhead)
-        #define ENABLE_VALIDATION_LAYERS_SYNC 0
-    #else // ENABLE_VALIDATION_LAYERS
-        #define ENABLE_VALIDATION_LAYERS_SYNC 0
-    #endif // ENABLE_VALIDATION_LAYERS
-#endif // NDEBUG
-
 #include "types.h"
 #include "ui.h"
 #include "postfx.h"
 
 #include "camera.h"
 #include "vk_descriptors.h"
+
+#ifdef NDEBUG
+#define ENABLE_VALIDATION_LAYERS 0
+#define ENABLE_VALIDATION_LAYERS_SYNC 0
+#else // NDEBUG
+// Enable vulkan validation layers (performance overhead)
+#define ENABLE_VALIDATION_LAYERS 1
+
+#if ENABLE_VALIDATION_LAYERS == 1
+    // Enable vulkan validation layers for synchronization (big performance overhead)
+#define ENABLE_VALIDATION_LAYERS_SYNC 0
+#else // ENABLE_VALIDATION_LAYERS
+#define ENABLE_VALIDATION_LAYERS_SYNC 0
+#endif // ENABLE_VALIDATION_LAYERS
+#endif // NDEBUG
+
 
 class Engine {
 public:

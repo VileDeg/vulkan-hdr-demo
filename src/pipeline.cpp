@@ -1,5 +1,8 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
+#include "vk_utils.h"
+#include "vk_initializers.h"
 
 static PipelineShaders loadShaders(VkDevice device, const std::string& vertName, const std::string& fragName)
 {

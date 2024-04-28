@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "defs.h"
 #include "engine.h"
 
 #define VKDEMO_USE_postfx 1

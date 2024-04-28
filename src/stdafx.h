@@ -22,6 +22,7 @@
 
 #include <optional>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <unordered_map>
 #include <map>
@@ -37,9 +38,3 @@
 #include <cstring>
 #include <filesystem>
 #include <numeric>
-
-#include "defs.h"
-
-#include "vk_initializers.h"
-
-#include "vk_utils.h"

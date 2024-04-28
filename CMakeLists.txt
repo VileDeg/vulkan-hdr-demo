@@ -37,6 +37,7 @@ set(SRC_FILES
     ${IMPLOT_DIR}/implot_items.cpp
 )
 
+# Make sure that the executable is in the root directory where "assets/" is located
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "./")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "./")
 
@@ -44,7 +45,6 @@ add_executable (${EXNAME} ${SRC_FILES})
 
 set_target_properties(${EXNAME} PROPERTIES 
     DEBUG_OUTPUT_NAME "${EXNAME}-debug"
-    # RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
 
 target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
@@ -82,5 +82,5 @@ if(Python_FOUND)
         COMMENT "Compiling shaders"
     )
 else()
-    message(WARNING "Python not found, custom command will not be executed.")
+    message(WARNING "Python not found, shaders will not be compiled automatically. Please compile shaders manually.")
 endif()
