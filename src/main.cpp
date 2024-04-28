@@ -13,9 +13,6 @@ int main(int argc, char* argv[])
         pr("Setting working directory to: " << work_dir << "\n\n");
     }
 
-
-    ASSERT_MSG(false, "CRASH_TEST");
-
     Engine engine;
 
     try {
