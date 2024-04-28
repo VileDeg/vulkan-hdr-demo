@@ -1,22 +1,50 @@
 cmake_minimum_required (VERSION 3.22)
 project(vulkan-hdr-demo)
 
+# Use FindVulkan module added with CMAKE 3.7
+IF (NOT CMAKE_VERSION VERSION_LESS 3.7.0)
+	message(STATUS "Looking for Vulkan on installed on device...")
+	find_package(Vulkan)
+ENDIF()
+
+IF (NOT Vulkan_FOUND)
+    set(Vulkan_LIBRARIES    "${CMAKE_SOURCE_DIR}/libs/vulkan/vulkan-1.lib")
+    set(Vulkan_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/external")
+	find_library(Vulkan_LIBRARY NAMES vulkan-1 vulkan PATHS ${CMAKE_SOURCE_DIR}/libs)
+	IF (Vulkan_LIBRARY)
+		set(Vulkan_FOUND ON)
+		MESSAGE("Vulkan library not found on this device, using bundled Vulkan library version ${Vulkan_LIBRARIES}")
+	ENDIF()
+ENDIF()
+
+IF (WIN32)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
+ENDIF()
+
+IF (NOT Vulkan_FOUND)
+	message(FATAL_ERROR "Could not find Vulkan library!")
+ELSE()
+	message(STATUS ${Vulkan_LIBRARY})
+ENDIF()
+
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SRCDIR "${PROJECT_SOURCE_DIR}/src")
-set(PCH_SRC "${SRCDIR}/stdafx.h")
-
-find_package(Vulkan REQUIRED)
 add_subdirectory(external)
 
 set(EXNAME "vkdemo")
+
+set(SRCDIR "${PROJECT_SOURCE_DIR}/src")
+set(PCH_SRC "${SRCDIR}/stdafx.h")
 
 # Add project source files
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRCDIR}/*.cpp" "${SRCDIR}/*.h")
 
 # Add ImGUI source files
-set(IMGUI_DIR  ${PROJECT_SOURCE_DIR}/external/imgui)
-set(IMPLOT_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
+set(IMGUI_DIR  "${PROJECT_SOURCE_DIR}/external/imgui")
+set(IMPLOT_DIR "${PROJECT_SOURCE_DIR}/external/imgui")
 
 set(SRC_FILES
     ${SRC_FILES}
@@ -49,7 +77,11 @@ set_target_properties(${EXNAME} PROPERTIES
 
 target_precompile_headers(${EXNAME} PRIVATE ${PCH_SRC})
 
-target_include_directories(${EXNAME} PUBLIC ${SRCDIR} ${Vulkan_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/external)
+target_include_directories(${EXNAME} PUBLIC 
+    ${SRCDIR} 
+    ${PROJECT_SOURCE_DIR}/external
+    ${Vulkan_INCLUDE_DIRS} 
+)
 
 target_link_libraries(${EXNAME} 
     ${Vulkan_LIBRARIES} 
@@ -72,7 +104,7 @@ add_dependencies(${EXNAME} glsl_shaders)
 # Find Python
 find_package(Python COMPONENTS Interpreter)
 
-if(Python_FOUND)
+IF (Python_FOUND)
     message(STATUS "Python found: ${Python_EXECUTABLE}")
 
     # Compile shaders
@@ -81,6 +113,6 @@ if(Python_FOUND)
         COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
         COMMENT "Compiling shaders"
     )
-else()
+ELSE()
     message(WARNING "Python not found, shaders will not be compiled automatically. Please compile shaders manually.")
-endif()
+ENDIF()
