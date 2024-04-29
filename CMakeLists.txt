@@ -77,8 +77,9 @@ set(SRC_FILES
 )
 
 # Make sure that the executable is in the root directory where "assets/" is located
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "./")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "./")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY         ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_BINARY_DIR})
 
 add_executable (${EXNAME} ${SRC_FILES})
 
@@ -120,7 +121,7 @@ IF (Python_FOUND)
     # Compile shaders
     add_custom_command(
         TARGET glsl_shaders
-        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/compile_shaders.py ${PROJECT_SOURCE_DIR}
+        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/compile_shaders.py ${PROJECT_SOURCE_DIR}
         COMMENT "Compiling shaders"
     )
 ELSE()

@@ -5,7 +5,7 @@
 </p>
 
 ## About
-This repository contains a 3D renderer Vulkan demo application for Windows OS. It serves purpose to demonstrate several HDR rendering techniques such as: uniform (global) and spatially-variany tone mapping, dynamic exposure adaptaion, exposure fusion and bloom.
+This repository contains a 3D renderer Vulkan demo application. It serves purpose to demonstrate several HDR rendering techniques such as: uniform (global) and spatially-variany tone mapping, dynamic exposure adaptaion, exposure fusion and bloom.
 
 The project is written in C++20 and uses ImGUI for the user interface.
 
@@ -25,16 +25,19 @@ The project is written in C++20 and uses ImGUI for the user interface.
 * etc.
 
 ## Compilation
-For the project configuration CMake build system is used. Platforms currently supported: `Windows`.
+For the project configuration CMake build system is used. 
 
-* To make things easy, there is a python script `build-n-run.py` that will configure, build and run the application.
+* To make things easy, there are python scripts to help build and run the program: `scripts/win-build-n-run.py`, `scripts/linux-build-n-run.py` that will configure, build and run the application.
+
+* `CMake will try to find Vulkan on your system`. In case it cannot find Vulkan, the bundled version that is supplied with this repository will be used. 
+
+## Manual compilation on Windows:
 
 ### Configure the project with CMake:
+
 ```
 cmake -S . -B .
 ```
-
-* `CMake will try to find Vulkan on your system`. For configuration to be successful, it is essential that you have Vulkan installed on your system. 
 
 ### Compile:
 
@@ -51,21 +54,39 @@ msbuild vulkan-hdr-demo.sln /t:Build /p:Configuration=Release
 
 * But be aware that the solution or executable name might change in the future.
 
-* All shaders are compiled automatically every time the project is built using the python script `compile_shaders.py`. Pay attention (!) to the build output to see if there are any `errors` when shaders are built. 
-If the script fails try to run it manually or manually compile the shaders using `glslc` at `.\external\shaderc\glslc.exe`. 
+* All shaders are compiled automatically every time the project is built using the python script `scripts/compile_shaders.py`. Pay attention (!) to the build output to see if there are any `errors` when shaders are built. 
+If the script fails try to run it manually or manually compile the shaders using `glslc` from `.\external\shaderc\glslc.exe`. 
+
+## Manual compilation on Linux:
+
+```
+cmake -S . -B linux-build -DCMAKE_BUILD_TYPE=Release
+cd linux-build
+make
+```
+
 ## Usage
 
-You can run the program from command line, or from Visual Studio. 
-
-To execute run:
-```
-.\vkdemo.exe
-```
+You can run the program from command line, or from Visual Studio (in case of Windows). 
 
 * **You must run the application executable from the `project root folder` otherwise the working directory will be invalid and the program will fail to open the assets!** Make sure to run the executable from the same folder, where `assets/` are located!
 * You can also supply the `working directory` with command line argument, see section below.
 
-### Arguments:
+### Windows:
+
+```
+.\vkdemo.exe
+```
+
+### Linux:
+
+```
+./vkdemo ..
+```
+
+Argument passed specifies the working directory. If the executable is located in `linux-build`, it is necessary to change the working directory to root (i.e. where `assets/` is).
+
+## Arguments:
 
 ```
 vkdemo <WORK_DIR>
@@ -84,6 +105,7 @@ vkdemo <WORK_DIR>
 * [ImGui](https://github.com/ocornut/imgui)
 * [ImPlot](https://github.com/epezent/implot)
 * [JSON for Modern C++](https://github.com/nlohmann/json)
+* TODO:
 
 ### Web pages
 A lot of resources where used to learn Vulkan API.
@@ -93,11 +115,14 @@ Here are the main ones:
 * [Vulkan Tutorial in Czech language by Jan Pečiva](https://www.root.cz/serialy/tutorial-vulkan/)
 * [Vulkan Tutorial by Alexander Overvoorde](https://vulkan-tutorial.com/)
 * [LearnOpenGL by Joey de Vries](https://learnopengl.com/)
+* TODO:
 
 Following are the repositories from which some code was taken as-is or with modifications. Authors are also attributed in the source code:
 * [vulkan-guide repository by vblanco20-1](https://github.com/vblanco20-1/vulkan-guide)
 * [VulkanTutorial repository by Jan Pečiva](https://github.com/pc-john/VulkanTutorial)
 * [Vulkan examples by Sascha Willems](https://github.com/SaschaWillems/Vulkan)
+* TODO:
+
 ### Assets
 Assets used and information about them can be found in `assets/` folder and subfolders.
 
@@ -105,8 +130,8 @@ Usually each model's folder contains some `(LICENSE|copyright).txt` file.
 
 ### Application screenshots
 
+![ui1](fig/vulkan-hdr-demo-2.JPG)
+
+![ui0](fig/vulkan-hdr-demo-1.JPG)
+
 ![ui2](fig/att_viewer_fusion_1.jpg)
-
-![ui3](fig/drachenfels_crytek_sponza_fusion_no_bloom_FUSION_OUTPUT.jpg)
-
-![ui4](fig/crytek-sponza-bloom-ltm-durand.jpg)
