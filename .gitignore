@@ -406,3 +406,4 @@ CMakeCache.txt
 !assets/**/*.obj 
 
 linux-build/
+screenshots/

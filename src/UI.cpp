@@ -855,41 +855,91 @@ void Engine::ui_MenuBar()
 {
 	if (ImGui::BeginMenuBar()) {
 		ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-		
-		if (ImGui::BeginMenu("Save Scene")) {
-			ui_SaveScene();
 
-			ImGui::EndMenu();
-		} else if (_saveShortcutPressed) {
-			ImGui::Begin("Save Scene", 0, flags); {
-				_saveShortcutPressed = !ui_SaveScene();
-			} ImGui::End();
-		}
+		{
+			static bool loadSkyboxWindowEn = false;
 
-		if (ImGui::BeginMenu("Load Scene")) {
-			ui_LoadScene();
+			if (ImGui::BeginMenu("File")) {
+				if (ImGui::MenuItem("Save Scene", "Ctrl + S")) {
+					_saveSceneWindowEn = true;
+				}
 
-			ImGui::EndMenu();
-		} else if (_loadShortcutPressed) {
-			ImGui::Begin("Load Scene", 0, flags); {
-				_loadShortcutPressed = !ui_LoadScene();
-			} ImGui::End();
-		}
+				if (ImGui::MenuItem("Load Scene", "Ctrl + D")) {
+					_loadSceneWindowEn = true;
+				}
 
-		if (ImGui::BeginMenu("Load Skybox")) {
-			ui_LoadSkybox();
-
-			ImGui::EndMenu();
-		}
-
-		for (auto& wnd : uiWindows) {
-			if (wnd.open) {
-				continue;
-			}
-			if (ImGui::BeginMenu(wnd.caption.c_str())) {
-				wnd.open = true;
+				if (ImGui::MenuItem("Load Skybox")) {
+					loadSkyboxWindowEn = true;
+				}
 
 				ImGui::EndMenu();
+			}
+
+			if (_saveSceneWindowEn) {
+				ImGui::Begin("Save Scene", &_saveSceneWindowEn, flags); {
+					if (ui_SaveScene()) {
+						_saveSceneWindowEn = false;
+					}
+
+				} ImGui::End();
+			}
+
+			if (_loadSceneWindowEn) {
+				ImGui::Begin("Load Scene", &_loadSceneWindowEn, flags); {
+					if (ui_LoadScene()) {
+						_loadSceneWindowEn = false;
+					}
+				} ImGui::End();
+			}
+
+
+			if (loadSkyboxWindowEn) {
+				ImGui::Begin("Load Skybox", &loadSkyboxWindowEn, flags); {
+					if (ui_LoadSkybox()) {
+						loadSkyboxWindowEn = false;
+					}
+				} ImGui::End();
+			}
+		}
+
+		{
+			if (ImGui::BeginMenu("Screenshot")) {
+				if (ImGui::MenuItem("Take Viewport Screenshot", "Ctrl+N")) {
+					_screenshotWindowEn = true;
+				}
+
+				ImGui::EndMenu();
+			}
+
+			if (_screenshotWindowEn) {
+				ui_Screenshot();
+            }
+		}
+
+		{
+			bool anyWndClosed = false;
+
+			for (auto& wnd : uiWindows) {
+				if (!wnd.open) {
+					anyWndClosed = true;
+					break;
+				}
+			}
+
+			if (anyWndClosed) {
+				if (ImGui::BeginMenu("Window")) {
+					for (auto& wnd : uiWindows) {
+						if (wnd.open) {
+							continue;
+						}
+
+						if (ImGui::MenuItem(wnd.caption.c_str())) {
+							wnd.open = true;
+						}
+					}
+
+					ImGui::EndMenu();
+				}
 			}
 		}
 
@@ -1015,10 +1065,13 @@ void Engine::ui_AttachmentViewer()
 void Engine::ui_Controls()
 {
 	ImGui::Text("Foward, Left, Back, Right: W A S D");
-	ImGui::Text("Rotate Camera: Mouse movement");
-	ImGui::Text("Toggle cursor: C");
+	ImGui::Text("	(Hold RMB to move faster)");
+	ImGui::Text("Rotate camera: Mouse movement");
+	ImGui::Text("Toggle cursor: Ctrl+C");
 	ImGui::Text("Measure FPS: T");
-	ImGui::Text("Close Application: Esc");
+	ImGui::Text("Save/Load scene: Ctrl+S / Ctrl+D");
+	ImGui::Text("Save screenshot of the viewport: Ctrl+N");
+	ImGui::Text("Close application: Esc");
 }
 
 void Engine::ui_StatusBar()
@@ -1114,6 +1167,108 @@ bool Engine::ui_LoadScene()
 	ImGui::PopItemWidth();
 
 	return loaded;
+}
+
+
+bool Engine::ui_Screenshot()
+{
+	bool screenshotTaken = false;
+
+	static char dstScreenshotPath[256] = "";
+	
+	static bool showSuccessPopup = false;
+	static bool showFailPopup = false;
+
+	static std::string failReason = "-NONE-";
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 15));
+
+
+	ImGui::Begin("Screenshot", &_screenshotWindowEn, ImGuiWindowFlags_AlwaysAutoResize);
+	{
+		ImGui::Text("Enter the destination path for the screenshot:");
+		ImGui::Separator();
+
+		ImGui::InputText("Destination Path", dstScreenshotPath, IM_ARRAYSIZE(dstScreenshotPath));
+
+		if (ImGui::Button("Save", ImVec2(120, 0))) {
+			std::string path_str = "./" + SCREENSHOT_PATH + std::string(dstScreenshotPath);
+
+			std::string path_str_dir  = path_str.substr(0, path_str.find_last_of("/"));
+			std::string path_str_file = path_str.substr(path_str.find_last_of("/")+1);
+
+			std::filesystem::path path;
+			try {
+				if (!std::filesystem::exists(path_str_dir)) {
+					std::filesystem::create_directories(path_str_dir);
+				}
+
+				path = std::filesystem::canonical(path_str_dir) / path_str_file;
+			} catch (std::filesystem::filesystem_error& e) {
+				failReason = "Invalid path. Please enter a valid path.\n" + std::string(e.what());
+                showFailPopup = true;
+            }
+
+			std::string extension = path.extension().string();
+			std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+			if (!std::filesystem::exists(path.parent_path())) {
+				failReason = "Invalid path. Please enter a valid path.";
+				showFailPopup = true;
+			} else if (extension != ".jpg" && extension != ".jpeg") {
+				failReason = "Invalid file format. Only JPEG is allowed.";
+				showFailPopup = true;
+			}
+
+			if (!showFailPopup) {
+				screenshotTaken = takeViewportScreenshot(path.string());
+
+				if (screenshotTaken) {
+					showSuccessPopup = true;
+				} else {
+                    failReason = "Failed to take screenshot. Internal error.";
+                    showFailPopup = true;
+                }
+			}
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+			_screenshotWindowEn = false;
+		}
+	}
+	ImGui::End();
+
+
+	if (showSuccessPopup) {
+		ImGui::Begin("Success", &showSuccessPopup, ImGuiWindowFlags_AlwaysAutoResize);
+		{
+			ImGui::Text(("Screenshot saved successfully to " + SCREENSHOT_PATH + " folder!").c_str());
+
+			if (ImGui::Button("OK", ImVec2(120, 0))) {
+				showSuccessPopup = false;
+			}
+		}
+		ImGui::End();
+	}
+
+	if (showFailPopup) {
+        ImGui::Begin("Fail", &showFailPopup, ImGuiWindowFlags_AlwaysAutoResize);
+		{
+            ImGui::Text("Failed to take screenshot.");
+			ImGui::Text(failReason.c_str());
+
+			if (ImGui::Button("Close", ImVec2(120, 0))) {
+                showFailPopup = false;
+            }
+        }
+        ImGui::End();
+    }
+
+	ImGui::PopStyleVar();
+
+	return screenshotTaken;
 }
 
 bool Engine::ui_SaveScene()

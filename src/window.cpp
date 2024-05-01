@@ -31,11 +31,7 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
         case GLFW_KEY_ESCAPE: // Close window
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
-        case GLFW_KEY_C: // Toggle cursor
-            toggle(eng._cursorEnabled);
-            glfwSetInputMode(window, GLFW_CURSOR,
-                eng._cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
-            break;
+       
         case GLFW_KEY_T: // Start FPS measurment
             if (!eng._measureFPS) {
                 eng._measureFPS = true;
@@ -47,21 +43,36 @@ void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
         }
     }
 
-    if (eng._cursorEnabled && 
+    // LEFT CONTROL
+    if (
         action == GLFW_PRESS &&
         glfwGetKey(eng._window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) 
     {
         switch (key) {
-        case GLFW_KEY_S:
-            eng._saveShortcutPressed = true;
-            eng._loadShortcutPressed = false;
+        case GLFW_KEY_C: // Toggle cursor
+            toggle(eng._cursorEnabled);
+            glfwSetInputMode(window, GLFW_CURSOR,
+                eng._cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
             break;
-        case GLFW_KEY_D:
-            eng._loadShortcutPressed = true;
-            eng._saveShortcutPressed = false;
+        case GLFW_KEY_N: // Take screenshot of the viewport
+            eng._screenshotWindowEn = true;
             break;
         }
+
+        if (eng._cursorEnabled) {
+            switch (key) {
+            case GLFW_KEY_S:
+                eng._saveSceneWindowEn = true;
+                eng._loadSceneWindowEn = false;
+                break;
+            case GLFW_KEY_D:
+                eng._loadSceneWindowEn = true;
+                eng._saveSceneWindowEn = false;
+                break;
+            }
+        }
     }
+
 }
 
 void Engine::cursorCallback(GLFWwindow* window, double xpos, double ypos)

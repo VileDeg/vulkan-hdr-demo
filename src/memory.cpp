@@ -131,7 +131,7 @@ void AllocatedBuffer::create(VmaAllocator allocator, VkBufferCreateInfo bufferIn
         allocInfo.usage == VMA_MEMORY_USAGE_GPU_TO_CPU)
     {
         hostVisible = true;
-        VK_ASSERT(vmaMapMemory(allocator, allocation, &gpu_ptr));
+        VK_ASSERT(vmaMapMemory(allocator, allocation, &memory_ptr));
     } else {
         hostVisible = false;
     }

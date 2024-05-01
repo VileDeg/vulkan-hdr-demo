@@ -5,7 +5,7 @@
 </p>
 
 ## About
-This repository contains a 3D renderer Vulkan demo application. It serves purpose to demonstrate several HDR rendering techniques such as: uniform (global) and spatially-variany tone mapping, dynamic exposure adaptaion, exposure fusion and bloom.
+This repository contains a 3D renderer Vulkan demo application. It serves purpose to demonstrate several HDR rendering techniques such as: uniform (global) and spatially-variant tone mapping, dynamic exposure adaptation, exposure fusion and bloom.
 
 The project is written in C++20 and uses ImGUI for the user interface.
 
@@ -26,6 +26,8 @@ The project is written in C++20 and uses ImGUI for the user interface.
 
 ## Compilation
 For the project configuration CMake build system is used. 
+
+* Please note that currently the program may not work correctly on `Linux`. Not enough testing was done.
 
 * To make things easy, there are python scripts to help build and run the program: `scripts/win-build-n-run.py`, `scripts/linux-build-n-run.py` that will configure, build and run the application.
 

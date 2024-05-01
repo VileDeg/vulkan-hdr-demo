@@ -6,6 +6,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
+#undef STB_IMAGE_IMPLEMENTATION
 
 void Engine::writeTextureDescriptors()
 {
@@ -209,7 +210,7 @@ void Engine::loadSkybox(std::string skyboxDirName)
 		}
 
 		// Copy data to buffer
-		void* dst = (char*)stagingBuffer.gpu_ptr + bufferOffset;
+		void* dst = (char*)stagingBuffer.memory_ptr + bufferOffset;
 		memcpy(dst, pixel_ptr, static_cast<size_t>(imageSize));
 	
 		// We no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
@@ -395,7 +396,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	AllocatedBuffer stagingBuffer = allocateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	// Copy data to buffer
-	memcpy(stagingBuffer.gpu_ptr, pixel_ptr, static_cast<size_t>(imageSize));
+	memcpy(stagingBuffer.memory_ptr, pixel_ptr, static_cast<size_t>(imageSize));
 	
 	// We no longer need the loaded data, so we can free the pixels as they are now in the staging buffer
 	stbi_image_free(pixels);
@@ -426,7 +427,7 @@ Attachment* Engine::loadTextureFromFile(const char* path)
 	dimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
 	// Allocate and create the image
-	vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr);
+	VK_ASSERT(vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &newTexture.allocImage.image, &newTexture.allocImage.allocation, nullptr));
 
 	immediate_submit(
 		[&](VkCommandBuffer cmd) {
@@ -500,9 +501,9 @@ void Engine::createMeshBuffer(Mesh& mesh, bool isVertexBuffer)
 	AllocatedBuffer stagingBuffer = allocateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	if (isVertexBuffer) {
-		memcpy(stagingBuffer.gpu_ptr, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
+		memcpy(stagingBuffer.memory_ptr, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
 	} else {
-		memcpy(stagingBuffer.gpu_ptr, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
+		memcpy(stagingBuffer.memory_ptr, mesh.indices.data(), mesh.indices.size() * sizeof(uint32_t));
 	}
 
 	VkBufferUsageFlags usg = (isVertexBuffer ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : VK_BUFFER_USAGE_INDEX_BUFFER_BIT);

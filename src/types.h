@@ -37,7 +37,7 @@ struct AllocatedBuffer {
     VmaAllocation allocation;
     VkDescriptorBufferInfo descInfo;
 
-    void* gpu_ptr;
+    void* memory_ptr;
 
     bool hostVisible;
 

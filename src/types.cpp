@@ -29,13 +29,13 @@ void Engine::setDisplayLightSourceObjects(bool display)
 
 void GPUData::Reset(FrameData& fd)
 {
-	camera	 = reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.gpu_ptr);
-	scene	 = reinterpret_cast<GPUSceneUB*>(fd.sceneBuffer.gpu_ptr);
+	camera	 = reinterpret_cast<GPUCameraUB*>(fd.cameraBuffer.memory_ptr);
+	scene	 = reinterpret_cast<GPUSceneUB*>(fd.sceneBuffer.memory_ptr);
 
-	ssbo	 = reinterpret_cast<GPUSceneSSBO*>(fd.objectBuffer.gpu_ptr);
+	ssbo	 = reinterpret_cast<GPUSceneSSBO*>(fd.objectBuffer.memory_ptr);
 			 
-	compSSBO = reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.gpu_ptr);
-	compUB	 = reinterpret_cast<GPUCompUB*>(fd.compUB.gpu_ptr);
+	compSSBO = reinterpret_cast<GPUCompSSBO*>(fd.compSSBO.memory_ptr);
+	compUB	 = reinterpret_cast<GPUCompUB*>(fd.compUB.memory_ptr);
 }
 
 

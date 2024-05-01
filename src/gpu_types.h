@@ -75,7 +75,7 @@ struct GPUSceneUB {
     glm::mat4 lightProjMat; 
 
     float lightFarPlane;
-    float shadowBias = 0.15f;
+    float shadowBias = 0.05f;
     GPUBool showShadowMap = false;
     int _pad3; 
 

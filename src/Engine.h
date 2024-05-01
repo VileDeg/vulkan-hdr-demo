@@ -63,6 +63,7 @@ private: /* Methods used from Init directly */
 
     void recreateViewport(uint32_t extentX, uint32_t extentY);
     void cleanupViewportResources();
+    bool takeViewportScreenshot(std::string dstScreenshotPath);
 
     void initUploadContext();
 
@@ -134,6 +135,7 @@ private: /* Methods used from Init directly */
     void loadScene(std::string fullScenePath);
 
     void loadSkybox(std::string skyboxDirName);
+    
 
     // UI methods
     void ui_InitImGui();
@@ -164,12 +166,16 @@ private: /* Methods used from Init directly */
     bool ui_SaveScene();
     bool ui_LoadScene();
     
+    bool ui_Screenshot();
+
+    
     std::vector<UiWindow> uiWindows;
 
-    bool _saveShortcutPressed = false;
-    bool _loadShortcutPressed = false;
-    bool _isViewportHovered = true;
+    bool _saveSceneWindowEn = false;
+    bool _loadSceneWindowEn = false;
+    bool _screenshotWindowEn = false;
 
+    bool _isViewportHovered = true;
     bool _wasViewportResized = false;
 
     uint32_t newViewportSizeX = 0;

@@ -102,3 +102,5 @@
 
 #define SHADER_PATH ASSET_PATH + std::string("shaders/bin/")
 #define SKYBOX_PATH IMAGE_PATH + std::string("skybox/")
+
+#define SCREENSHOT_PATH std::string("screenshots/")

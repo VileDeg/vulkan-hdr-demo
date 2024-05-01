@@ -1,9 +1,13 @@
 #include "stdafx.h"
 #include "defs.h"
 #include "engine.h"
+
 #include "vk_initializers.h"
 #include "vk_utils.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
+#undef STB_IMAGE_WRITE_IMPLEMENTATION
 
 Engine::Engine()
 {
@@ -85,8 +89,8 @@ void Engine::Run()
 
         drawFrame();
 
-        // Block camera movement when cursor is ON and viewport not hovered
-        if (_isViewportHovered || !_cursorEnabled) {
+        // Block camera movement when cursor is ON
+        if (!_cursorEnabled) {
             _camera.Update(_window, _deltaTime);
         }
 
@@ -253,7 +257,7 @@ void Engine::prepareViewportPass(uint32_t extentX, uint32_t extentY) {
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
 
@@ -344,6 +348,142 @@ void Engine::cleanupViewportResources()
     }
 
     _viewport.images.clear();
+}
+
+bool Engine::takeViewportScreenshot(std::string dstScreenshotPath)
+{
+    // 1. Get the current viewport image
+    AllocatedImage viewportImage = _viewport.images[_currentFrameInFlight];
+
+    VkExtent3D extent = { _viewport.width, _viewport.height, 1 };
+
+    VkImageCreateInfo img_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .extent = extent, // Extent to whole window
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VmaAllocationCreateInfo img_allocinfo = {};
+    img_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    // 2. Create a new image with the desired format
+    AllocatedImage convertedImage;
+
+    VK_ASSERT(vmaCreateImage(_allocator, &img_info, &img_allocinfo, &convertedImage.image, &convertedImage.allocation, nullptr));
+
+
+    VkImageSubresourceRange subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1
+    };
+
+    int bpp = 4; // Assuming 4 bytes per pixel. TODO:Maybe more!!
+
+    VkDeviceSize imageSize = _viewport.width * _viewport.height * bpp;
+
+    AllocatedBuffer stagingBuffer = allocateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+    
+    immediate_submit([&](VkCommandBuffer cmd) {
+
+        vk_utils::imageMemoryBarrier(cmd, convertedImage.image,
+            0, // 0
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            subresourceRange);
+
+
+        vk_utils::imageMemoryBarrier(cmd, viewportImage.image,
+            0, // 0
+            VK_ACCESS_TRANSFER_READ_BIT,
+
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, //VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            subresourceRange);
+
+
+
+        VkImageBlit blit{};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[1] = { (int32_t)_viewport.width, (int32_t)_viewport.height, 1 };
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[1] = { (int32_t)_viewport.width, (int32_t)_viewport.height, 1 };
+
+        vkCmdBlitImage(cmd, viewportImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, convertedImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST); // TODO: filter
+
+        vk_utils::imageMemoryBarrier(cmd, viewportImage.image,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, // TODO:
+
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_GENERAL, // TODO: undefined?
+
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, // TODO: maybe wrong
+            subresourceRange);
+
+
+
+        vk_utils::imageMemoryBarrier(cmd, convertedImage.image,
+            VK_ACCESS_TRANSFER_WRITE_BIT, // 0
+            VK_ACCESS_TRANSFER_READ_BIT,
+
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            subresourceRange);
+
+        VkBufferImageCopy copyRegion{
+                .bufferOffset = 0,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+                .imageExtent = extent
+        };
+
+        vkCmdCopyImageToBuffer(cmd, convertedImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer.buffer, 1, &copyRegion);
+    });
+
+
+    // Write the data to a .jpg file
+    if (stbi_write_jpg(dstScreenshotPath.c_str(), _viewport.width, _viewport.height, bpp, stagingBuffer.memory_ptr, 100) != 1) {
+        PRERR("stbi_write_jpg failed to write the screenshot to a file");
+        return false;
+    }
+
+    stagingBuffer.destroy(_allocator);
+    vmaDestroyImage(_allocator, convertedImage.image, convertedImage.allocation);
+
+
+    return true;
 }
 
 void Engine::prepareShadowPass()
@@ -541,6 +681,8 @@ void Engine::initUploadContext()
     VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_uploadContext.commandPool, 1);
 
     VK_ASSERT(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_uploadContext.commandBuffer));
+
+    setDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, _uploadContext.commandBuffer, "Immediate Submit Command Buffer");
 
     _deletionStack.push([&]() {
         vkDestroyCommandPool(_device, _uploadContext.commandPool, nullptr);
