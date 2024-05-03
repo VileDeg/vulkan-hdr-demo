@@ -408,3 +408,5 @@ CMakeCache.txt
 screenshots/
 linux-build/*
 !linux-build/vkdemo
+
+external/Makefile
