@@ -405,6 +405,8 @@ CMakeCache.txt
 # Unignore .obj models files
 !assets/**/*.obj 
 
+!assets/shaders/bin 
+
 screenshots/
 linux-build/*
 !linux-build/vkdemo
