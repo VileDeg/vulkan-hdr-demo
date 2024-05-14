@@ -153,8 +153,8 @@ struct Bloom {
 };
 
 struct Durand2002 {
-    float baseOffset = 0;
-    float baseScale = 1.0;
+    float baseOffset = 14.0;
+    float baseScale = 0.3;
     float sigmaS = 20;
     float sigmaR = 0.2;
 
