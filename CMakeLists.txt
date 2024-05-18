@@ -3,8 +3,14 @@ project(vulkan-hdr-demo)
 
 # Use FindVulkan module added with CMAKE 3.7
 IF (NOT CMAKE_VERSION VERSION_LESS 3.7.0)
-	message(STATUS "Looking for Vulkan on installed on device...")
-	find_package(Vulkan)
+ 	message(STATUS "Looking for Vulkan on installed on device...")
+  	find_package(Vulkan)
+    
+    set(VulkanFound ${Vulkan_FOUND})
+    IF (VulkanFound)
+		message(STATUS "Vulkan found on device")
+        set(VulkanLibs ${Vulkan_LIBRARIES})
+    ENDIF()
 ENDIF()
 
 IF (UNIX AND NOT APPLE)
@@ -12,16 +18,20 @@ IF (UNIX AND NOT APPLE)
 ENDIF()
 
 IF(WIN32)
-    IF (NOT Vulkan_FOUND)
-        MESSAGE("Looking for bundled version in ${CMAKE_SOURCE_DIR}/libs")
-        find_library(Vulkan_LIBRARY NAMES vulkan-1 vulkan PATHS ${CMAKE_SOURCE_DIR}/libs/vulkan)
-        IF (Vulkan_LIBRARY)
-            set(Vulkan_FOUND ON)
-            MESSAGE("Vulkan library not found on this device, using bundled Vulkan library version ${Vulkan_LIBRARIES}")
+    IF (NOT VulkanFound)
+        MESSAGE("Vulkan library not found on this device, looking for bundled version in ${CMAKE_SOURCE_DIR}/libs")
+        find_library(VulkanLibs NAMES vulkan-1 vulkan PATHS ${CMAKE_SOURCE_DIR}/libs/vulkan NO_DEFAULT_PATH)
+        IF (VulkanLibs)
+            set(VulkanFound ON)
+            MESSAGE("Using bundled Vulkan library version ${VulkanLibs}")
         ENDIF()
     ENDIF()
+
+    # Statically link the VC runtime .dll
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 ELSEIF(LINUX)
     IF (NOT Vulkan_FOUND)
+        MESSAGE("Looking for bundled version in ${CMAKE_SOURCE_DIR}/libs")
 		find_library(Vulkan_LIBRARY NAMES vulkan HINTS "$ENV{VULKAN_SDK}/lib" "${CMAKE_SOURCE_DIR}/libs/vulkan" REQUIRED)
 		IF (Vulkan_LIBRARY)
 			set(Vulkan_FOUND ON)
@@ -32,10 +42,10 @@ ELSEIF(APPLE)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_MACOS_MVK -DVK_EXAMPLE_XCODE_GENERATED")
 ENDIF(WIN32)
 
-IF (NOT Vulkan_FOUND)
+IF (NOT VulkanFound)
 	message(FATAL_ERROR "Could not find Vulkan library!")
 ELSE()
-	message(STATUS ${Vulkan_LIBRARY})
+	message(STATUS ${VulkanLibs})
 ENDIF()
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -95,7 +105,7 @@ target_include_directories(${EXNAME} PUBLIC
 )
 
 target_link_libraries(${EXNAME} 
-    ${Vulkan_LIBRARY} 
+    ${VulkanLibs} 
     glfw
 )
 
@@ -127,3 +137,5 @@ IF (Python_FOUND)
 ELSE()
     message(WARNING "Python not found, shaders will not be compiled automatically. Please compile shaders manually.")
 ENDIF()
+
+

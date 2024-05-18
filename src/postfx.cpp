@@ -274,13 +274,13 @@ void PostFXStage::Create(VkDevice device, VkSampler sampler,
 		.pPushConstantRanges = nullptr
 	};
 
-	if (usePushConstants) {
-		VkPushConstantRange pcRange = {
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(GPUCompPC),
-		};
+	VkPushConstantRange pcRange = {
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.offset = 0,
+		.size = sizeof(GPUCompPC),
+	};
 
+	if (usePushConstants) {
 		layoutInfo.pushConstantRangeCount = 1;
 		layoutInfo.pPushConstantRanges = &pcRange;
 	}
