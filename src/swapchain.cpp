@@ -173,32 +173,49 @@ void Engine::createSwapchain()
     // Reference : 
     // https://github.com/nxp-imx/gtec-demo-framework/blob/master/DemoApps/Vulkan/HDR04_HDRFramebuffer/source/HDR04_HDRFramebuffer_Register.cpp
 
+    std::vector<VkSurfaceFormatKHR> requestSurfaceImageFormat;
+
     // Select Surface Format
-    static const std::vector<VkSurfaceFormatKHR> requestSurfaceImageFormat = {
-        // HDR formats are prioritized. At least one of them should be supported on any HDR device
-        // VK_FORMAT_UNDEFINED is used as a placeholder for any available format
-        // it is supposed that device only supports combinations of VkFromat and VkColorSpace that make sense. 
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_HDR10_ST2084_EXT }, 
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT }, 
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT },
-        
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT }, 
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DCI_P3_LINEAR_EXT },
-        { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT },
 
-        // Prefered SDR formats: 
-        // BT.2020 has a wide color gamut
-        { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_BT2020_LINEAR_EXT },
+    if (_swapchainColorSpaceExtSupported) {
+        requestSurfaceImageFormat = {
+            // HDR formats are prioritized. At least one of them should be supported on any HDR device
+            // VK_FORMAT_UNDEFINED is used as a placeholder for any available format
+            // it is supposed that device only supports combinations of VkFromat and VkColorSpace that make sense. 
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_HDR10_ST2084_EXT },
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT },
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT },
 
-        { VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
-        { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT },
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_DCI_P3_LINEAR_EXT },
+            { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT },
 
-        // Combination of linear format and nonlinear color space are not prefered as they require different gamma settings 
-        // and light calculations in shaders become incorrect. 
-        { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
-        { VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
-        { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
-    };
+            // Prefered SDR formats: 
+            // BT.2020 has a wide color gamut
+            { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_BT2020_LINEAR_EXT },
+
+            { VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+
+            // Combination of linear format and nonlinear color space are not prefered as they require different gamma settings 
+            // and light calculations in shaders become incorrect. 
+            { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+        };
+    } else {
+        requestSurfaceImageFormat = {
+            // Prefered SDR formats: 
+            { VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+
+            // Combination of linear format and nonlinear color space are not prefered as they require different gamma settings 
+            // and light calculations in shaders become incorrect. 
+            { VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+            { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR },
+        };
+    }
     
     
     auto surfaceFormat = pickSurfaceFormat(

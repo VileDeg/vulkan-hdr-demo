@@ -205,6 +205,8 @@ private: /* Methods used from Init directly */
     VkDebugUtilsMessengerEXT _debugMessenger;
     VkSurfaceKHR _surface;
 
+    bool _swapchainColorSpaceExtSupported = true;
+
     VkPhysicalDevice _physicalDevice;
     VkPhysicalDeviceProperties _gpuProperties;
 

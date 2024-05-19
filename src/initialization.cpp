@@ -15,14 +15,16 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     return VK_FALSE;
 }
 
-static bool checkInstanceExtensionSupport(const std::vector<const char*>& requiredExtensions) 
+static bool checkInstanceExtensionSupport(
+    const std::vector<const char*>& requiredExtensions, 
+    std::vector<std::string>& unsupportedExtensions)
 {
     uint32_t propertyCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensionProperties(propertyCount);
     vkEnumerateInstanceExtensionProperties(nullptr, &propertyCount, availableExtensionProperties.data());
 
-    pr("Enabled instance extensions: ");
+    pr("Required instance extensions: ");
     for (const auto& reqExt : requiredExtensions) {
         pr("\t" << reqExt);
     }
@@ -38,11 +40,11 @@ static bool checkInstanceExtensionSupport(const std::vector<const char*>& requir
         }
 
         if (!extensionFound) {
-            return false;
+            unsupportedExtensions.push_back(requiredExtension);
         }
     }
 
-    return true;
+    return unsupportedExtensions.empty();
 }
 
 static bool checkValidationLayerSupport(const std::vector<const char*>& requiredLayers) 
@@ -243,8 +245,34 @@ void Engine::createInstance()
         _instanceExtensions.push_back(ext);
     }
 
-    if (!checkInstanceExtensionSupport(_instanceExtensions)) {
-        throw std::runtime_error("There are unsupported instance extensions.");
+    _swapchainColorSpaceExtSupported = true;
+
+    std::vector<std::string> unsupportedExtensions;
+    if (!checkInstanceExtensionSupport(_instanceExtensions, unsupportedExtensions)) {
+        
+        for (auto& ext : unsupportedExtensions) {
+            if ((ext == VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) && (unsupportedExtensions.size() == 1)) {
+                _swapchainColorSpaceExtSupported = false;
+
+                pr("Warning: " << VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME << 
+                    " is not supported. HDR color spaces will not be available.");
+                
+                // Remove unsupported extension from the list
+                std::remove(_instanceExtensions.begin(), _instanceExtensions.end(), ext);
+            }
+        }
+
+        if (_swapchainColorSpaceExtSupported) {
+            std::string msg = "There are unsupported instance extensions: ";
+            for (auto& ext : unsupportedExtensions) {
+                msg += ext;
+                if (&ext != &unsupportedExtensions.back()) {
+                    msg += ", ";
+                }
+            }
+
+            throw std::runtime_error(msg);
+        }
     }
 
     ASSERT_MSG(!ENABLE_VALIDATION_LAYERS || checkValidationLayerSupport(_enabledValidationLayers),
