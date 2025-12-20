@@ -56,7 +56,9 @@ void main() {
 
 #if 0
 		float maxf = 100;
-		vec3 fac = vec3(1,1,1) * (maxf-ub.baseOffset) + ub.normalizationColor.rgb * ub.baseOffset;
+		vec3 fac = vec3(1,1,1) * (maxf-ub.baseOffset) + 
+			ub.normalizationColor.rgb * ub.baseOffset;
+		
 		outColor *= fac / maxf;
 #endif
 
